@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "Карта",
+  "short_name": "Карта",
+  "description": "Карта с мессенджером, профилем и настройками в стиле рабочего стола macOS",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#eceff1",
+  "theme_color": "#eceff1",
+  "categories": ["navigation", "social"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Сообщения", "url": "./?open=messenger" },
+    { "name": "Профиль", "url": "./?open=profile" },
+    { "name": "Настройки", "url": "./?open=settings" }
+  ]
+}
