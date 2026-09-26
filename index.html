@@ -1312,7 +1312,7 @@
   /* ═══════ SUPABASE ═══════ */
   const SUPABASE_URL = 'https://zioxwmynfbrmmouduhbf.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_YBsh_W2dBbk1ZIZk1y3yBg_7X2iVE3P';
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   function isThreeAvailable() {
     return typeof window.THREE !== 'undefined' && window.THREE.WebGLRenderer;
@@ -1344,7 +1344,7 @@
 
   async function loadProfileRow(userId) {
     if (!userId) return null;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const { data, error } = await supabaseClient.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (error) { console.warn('[profiles] load:', error.message); return null; }
     return data;
   }
@@ -1352,13 +1352,13 @@
   async function isUsernameTakenRemote(uname) {
     const u = normalizeUsername(uname).toLowerCase();
     if (!u) return false;
-    const { data, error } = await supabase.from('profiles').select('id').eq('username', u).maybeSingle();
+    const { data, error } = await supabaseClient.from('profiles').select('id').eq('username', u).maybeSingle();
     if (error) { console.warn('[username check]', error.message); return false; }
     return !!data;
   }
 
   function logout() {
-    supabase.auth.signOut().finally(() => {
+    supabaseClient.auth.signOut().finally(() => {
       currentUser = null;
       profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
       document.body.classList.add('auth-locked');
@@ -1421,13 +1421,13 @@
       let email = idVal;
       if (!isEmail(idVal)) {
         const uname = normalizeUsername(idVal);
-        const { data, error } = await supabase.from('profiles').select('email').eq('username', uname).maybeSingle();
+        const { data, error } = await supabaseClient.from('profiles').select('email').eq('username', uname).maybeSingle();
         if (error || !data || !data.email) { showAuthError(err, 'Пользователь с таким username не найден.'); return; }
         email = data.email;
       }
 
       submit.disabled = true;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pw });
       submit.disabled = false;
       if (error) { showAuthError(err, 'Неверная почта/username или пароль.'); return; }
 
@@ -1465,7 +1465,7 @@
       err.hidden = true; ok.hidden = true;
       const v = email.value.trim();
       if (!isEmail(v)) { showAuthError(err, 'Введите корректную почту'); return; }
-      const { error } = await supabase.auth.resetPasswordForEmail(v, { redirectTo: location.origin + location.pathname });
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(v, { redirectTo: location.origin + location.pathname });
       if (error) { showAuthError(err, error.message); return; }
       ok.textContent = 'Если аккаунт существует, письмо отправлено.';
       ok.hidden = false;
@@ -1661,7 +1661,7 @@
         const oldLabel = submitBtn.textContent;
         submitBtn.textContent = 'Создаём…';
 
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
           email: draft.email,
           password: draft.password,
           options: { data: { name: draft.name, username: draft.username } },
@@ -1675,7 +1675,7 @@
 
         const uid = signUpData.user && signUpData.user.id;
         if (uid) {
-          const { error: profErr } = await supabase.from('profiles').upsert({
+          const { error: profErr } = await supabaseClient.from('profiles').upsert({
             id: uid, name: draft.name, username: draft.username,
             bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
             avatar: draft.avatar || '',
@@ -1736,7 +1736,7 @@
 
   /* ═══════ ЗАГРУЗКИ ИЗ SUPABASE ═══════ */
   async function loadPostsFromDB() {
-    const { data, error } = await supabase.from('posts').select('*').order('ts', { ascending: false }).limit(500);
+    const { data, error } = await supabaseClient.from('posts').select('*').order('ts', { ascending: false }).limit(500);
     if (error) { console.warn('[posts] load:', error.message); return; }
     posts = (data || []).map((r) => ({
       id: r.id, authorId: r.author_id, author: r.author_name,
@@ -1748,7 +1748,7 @@
   }
 
   async function loadWishesFromDB() {
-    const { data, error } = await supabase.from('wishes').select('*').order('ts', { ascending: false }).limit(500);
+    const { data, error } = await supabaseClient.from('wishes').select('*').order('ts', { ascending: false }).limit(500);
     if (error) { console.warn('[wishes] load:', error.message); return; }
     wishes = (data || []).map((r) => ({
       id: r.id, authorId: r.author_id, authorName: r.author_name,
@@ -1759,12 +1759,12 @@
   }
 
   async function loadGroupsFromDB() {
-    const { data: gr, error: gErr } = await supabase.from('groups').select('*').order('created_at', { ascending: false });
+    const { data: gr, error: gErr } = await supabaseClient.from('groups').select('*').order('created_at', { ascending: false });
     if (gErr) { console.warn('[groups] load:', gErr.message); return; }
     const ids = (gr || []).map((g) => g.id);
     let membersByGroup = {};
     if (ids.length) {
-      const { data: mem, error: mErr } = await supabase.from('group_members').select('*').in('group_id', ids);
+      const { data: mem, error: mErr } = await supabaseClient.from('group_members').select('*').in('group_id', ids);
       if (mErr) { console.warn('[group_members] load:', mErr.message); }
       else {
         for (const m of (mem || [])) {
@@ -1781,7 +1781,7 @@
 
   async function loadNotificationsFromDB() {
     if (!currentUser) { notifications = []; return; }
-    const { data, error } = await supabase.from('notifications')
+    const { data, error } = await supabaseClient.from('notifications')
       .select('*').eq('user_id', currentUser.id)
       .order('created_at', { ascending: false }).limit(100);
     if (error) { console.warn('[notifications] load:', error.message); notifications = []; return; }
@@ -1794,11 +1794,11 @@
 
   async function loadFriendsFromDB() {
     if (!currentUser) { friends = []; return; }
-    const { data, error } = await supabase.from('friendships').select('friend_id').eq('user_id', currentUser.id);
+    const { data, error } = await supabaseClient.from('friendships').select('friend_id').eq('user_id', currentUser.id);
     if (error) { console.warn('[friends] load:', error.message); friends = []; return; }
     const ids = (data || []).map((r) => r.friend_id);
     if (!ids.length) { friends = []; return; }
-    const { data: profs, error: pErr } = await supabase.from('profiles').select('id,name,username,avatar').in('id', ids);
+    const { data: profs, error: pErr } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', ids);
     if (pErr) { console.warn('[friends profiles]:', pErr.message); friends = []; return; }
     friends = (profs || []).map((p) => ({ id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }));
   }
@@ -1806,10 +1806,10 @@
   /* ═══════ REALTIME ═══════ */
   let rtChannels = [];
   function subscribeRealtime() {
-    rtChannels.forEach((c) => { try { supabase.removeChannel(c); } catch {} });
+    rtChannels.forEach((c) => { try { supabaseClient.removeChannel(c); } catch {} });
     rtChannels = [];
 
-    const ch1 = supabase.channel('rt:posts')
+    const ch1 = supabaseClient.channel('rt:posts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => {
         await loadPostsFromDB();
         syncPostMarkers();
@@ -1817,7 +1817,7 @@
       }).subscribe();
     rtChannels.push(ch1);
 
-    const ch2 = supabase.channel('rt:wishes')
+    const ch2 = supabaseClient.channel('rt:wishes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes' }, async () => {
         await loadWishesFromDB();
         syncWishMarkers();
@@ -1825,14 +1825,14 @@
       }).subscribe();
     rtChannels.push(ch2);
 
-    const ch3 = supabase.channel('rt:messages')
+    const ch3 = supabaseClient.channel('rt:messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'room_id=eq.general' }, (payload) => {
         chatMessages.push(payload.new);
         if (openApp === 'messenger') renderMessengerList();
       }).subscribe();
     rtChannels.push(ch3);
 
-    const ch4 = supabase.channel('rt:notifications')
+    const ch4 = supabaseClient.channel('rt:notifications')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: currentUser ? `user_id=eq.${currentUser.id}` : undefined }, (payload) => {
         notifications.unshift({
           id: String(payload.new.id), type: payload.new.type,
@@ -1844,7 +1844,7 @@
       }).subscribe();
     rtChannels.push(ch4);
 
-    const ch5 = supabase.channel('rt:dm')
+    const ch5 = supabaseClient.channel('rt:dm')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages' }, (payload) => {
         if (!currentUser) return;
         const m = payload.new;
@@ -2319,13 +2319,13 @@
         submitBtn.disabled = false; submitBtn.textContent = oldLabel;
 
         if (editing) {
-          const { error } = await supabase.from('wishes').update({
+          const { error } = await supabaseClient.from('wishes').update({
             text, place, coords, audience, group_id: groupId,
           }).eq('id', editingId);
           if (error) { console.warn('[wishes] update:', error.message); return; }
         } else {
           const id = 'w' + Date.now() + Math.random().toString(36).slice(2, 8);
-          const { error } = await supabase.from('wishes').insert({
+          const { error } = await supabaseClient.from('wishes').insert({
             id, author_id: currentUser.id, author_name: profile.name,
             text, place, coords, audience, group_id: groupId, ts: Date.now(),
           });
@@ -2397,7 +2397,7 @@
         hint.classList.remove('is-invalid');
         if (v === normalizeUsername(profile.handle)) { result.innerHTML = `<div class="empty-msg">Это ваш собственный username.</div>`; return; }
 
-        const { data: found } = await supabase.from('profiles').select('*').eq('username', v).maybeSingle();
+        const { data: found } = await supabaseClient.from('profiles').select('*').eq('username', v).maybeSingle();
         if (!found) { result.innerHTML = `<div class="empty-msg">Пользователь <b>@${escapeHtml(v)}</b> не найден.</div>`; return; }
         const isFriend = friends.some((f) => f.id === found.id);
         result.innerHTML = `
@@ -2574,7 +2574,7 @@
         delBtn.addEventListener('click', async () => {
           const ok = await confirmModal({ title: 'Удалить группу?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
           if (!ok) return;
-          const { error } = await supabase.from('groups').delete().eq('id', editingId);
+          const { error } = await supabaseClient.from('groups').delete().eq('id', editingId);
           if (error) { console.warn('[groups] delete:', error.message); return; }
           await loadGroupsFromDB();
           showGroupsScreen();
@@ -2591,11 +2591,11 @@
         const gid = editing ? editingId : 'g' + Date.now();
 
         if (editing) {
-          const { error } = await supabase.from('groups').update({ name, photo: groupPhoto, visibility }).eq('id', editingId);
+          const { error } = await supabaseClient.from('groups').update({ name, photo: groupPhoto, visibility }).eq('id', editingId);
           if (error) { console.warn('[groups] update:', error.message); return; }
-          await supabase.from('group_members').delete().eq('group_id', editingId);
+          await supabaseClient.from('group_members').delete().eq('group_id', editingId);
         } else {
-          const { error } = await supabase.from('groups').insert({
+          const { error } = await supabaseClient.from('groups').insert({
             id: gid, owner_id: currentUser.id, name, photo: groupPhoto, visibility,
           });
           if (error) { console.warn('[groups] insert:', error.message); return; }
@@ -2606,7 +2606,7 @@
             group_id: gid, user_id: m.id, name: m.name,
             username: (m.handle || '').replace(/^@/, ''), avatar: m.avatar || '',
           }));
-          const { error } = await supabase.from('group_members').insert(rows);
+          const { error } = await supabaseClient.from('group_members').insert(rows);
           if (error) console.warn('[group_members] insert:', error.message);
 
           const notifs = members
@@ -2618,7 +2618,7 @@
               text: `Вас добавили в группу «${name}»`,
             }));
           if (notifs.length) {
-            const { error: nErr } = await supabase.from('notifications').insert(notifs);
+            const { error: nErr } = await supabaseClient.from('notifications').insert(notifs);
             if (nErr) console.warn('[notifications] group insert:', nErr.message);
           }
         }
@@ -2688,7 +2688,7 @@
   let chatMessages = [];
 
   async function loadChatMessages() {
-    const { data, error } = await supabase.from('messages').select('*').eq('room_id', 'general').order('created_at', { ascending: true }).limit(300);
+    const { data, error } = await supabaseClient.from('messages').select('*').eq('room_id', 'general').order('created_at', { ascending: true }).limit(300);
     if (error) { console.warn('[messages] load:', error.message); chatMessages = []; return; }
     chatMessages = data || [];
   }
@@ -2723,7 +2723,7 @@
       e.preventDefault();
       const text = input.value.trim(); if (!text || !currentUser) return;
       input.value = '';
-      const { error } = await supabase.from('messages').insert({
+      const { error } = await supabaseClient.from('messages').insert({
         content: text, user_id: currentUser.id, author_name: profile.name, room_id: 'general',
       });
       if (error) console.warn('[messages] insert:', error.message);
@@ -2747,7 +2747,7 @@
   let supportMessages = [];
   async function loadSupportMessages() {
     if (!currentUser) { supportMessages = []; return; }
-    const { data, error } = await supabase.from('support_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true });
+    const { data, error } = await supabaseClient.from('support_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true });
     if (error) { console.warn('[support] load:', error.message); supportMessages = []; return; }
     supportMessages = data || [];
   }
@@ -2776,12 +2776,12 @@
       e.preventDefault();
       const text = input.value.trim(); if (!text || !currentUser) return;
       input.value = '';
-      const { error } = await supabase.from('support_messages').insert({
+      const { error } = await supabaseClient.from('support_messages').insert({
         content: text, user_id: currentUser.id, from_support: false,
       });
       if (error) { console.warn('[support] insert:', error.message); return; }
       setTimeout(async () => {
-        await supabase.from('support_messages').insert({
+        await supabaseClient.from('support_messages').insert({
           content: 'Спасибо за обращение! Мы получили ваш запрос и ответим в ближайшее время.',
           user_id: currentUser.id, from_support: true,
         });
@@ -2807,7 +2807,7 @@
 
   async function loadDmMessages(peerId) {
     if (!currentUser || !peerId) { dmMessages = []; return; }
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('dm_messages').select('*')
       .or(`and(from_id.eq.${currentUser.id},to_id.eq.${peerId}),and(from_id.eq.${peerId},to_id.eq.${currentUser.id})`)
       .order('created_at', { ascending: true });
@@ -2843,7 +2843,7 @@
       e.preventDefault();
       const text = input.value.trim(); if (!text || !currentUser || !currentDmPeerId) return;
       input.value = '';
-      const { error } = await supabase.from('dm_messages').insert({
+      const { error } = await supabaseClient.from('dm_messages').insert({
         from_id: currentUser.id, to_id: currentDmPeerId, content: text,
       });
       if (error) console.warn('[dm] insert:', error.message);
@@ -3064,7 +3064,7 @@
     win.focus({ preventScroll: true });
     if (id === 'settings') syncSettingsUi();
     if (id === 'notifications' && currentUser) {
-      supabase.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
+      supabaseClient.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
         .then(() => { notifications = notifications.map((n) => ({ ...n, read: true })); updateBadge(); });
     }
   }
@@ -3219,7 +3219,7 @@
   async function deletePost(postId) {
     const ok = await confirmModal({ title: 'Удалить воспоминание?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
     if (!ok) return;
-    const { error } = await supabase.from('posts').delete().eq('id', postId);
+    const { error } = await supabaseClient.from('posts').delete().eq('id', postId);
     if (error) { console.warn('[posts] delete:', error.message); return; }
     await loadPostsFromDB();
     syncPostMarkers(); closePopup(); showPlacesScreen();
@@ -3290,7 +3290,7 @@
         if (place) { try { coords = await geocodePlace(place); } catch {} }
         submitBtn.disabled = false; submitBtn.textContent = oldLabel;
         const id = 'p' + Date.now();
-        const { error } = await supabase.from('posts').insert({
+        const { error } = await supabaseClient.from('posts').insert({
           id, author_id: currentUser.id, author_name: profile.name,
           images: pendingImages, place: place || 'Без места', caption, coords, ts: Date.now(),
         });
@@ -3459,7 +3459,7 @@
         else if (previewEl.style.backgroundImage) newAvatar = profile.avatar;
         else newAvatar = '';
         profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar };
-        await supabase.from('profiles').upsert({
+        await supabaseClient.from('profiles').upsert({
           id: currentUser.id, name: newName, username: uname, bio: newBio, avatar: newAvatar,
         });
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
@@ -3501,7 +3501,7 @@
       const id = wRm.dataset.wishRemove;
       const ok = await confirmModal({ title: 'Удалить желание?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
       if (!ok) return;
-      await supabase.from('wishes').delete().eq('id', id);
+      await supabaseClient.from('wishes').delete().eq('id', id);
       await loadWishesFromDB(); syncWishMarkers(); showWishesScreen();
       return;
     }
@@ -3514,7 +3514,7 @@
       const id = delBtn.dataset.groupDelete;
       const ok = await confirmModal({ title: 'Удалить группу?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
       if (!ok) return;
-      await supabase.from('groups').delete().eq('id', id);
+      await supabaseClient.from('groups').delete().eq('id', id);
       await loadGroupsFromDB(); showGroupsScreen();
       return;
     }
@@ -3531,8 +3531,8 @@
     if (addFriendBtn) {
       const fid = addFriendBtn.dataset.addFriend;
       if (fid && fid !== currentUser.id && !friends.some((f) => f.id === fid)) {
-        await supabase.from('friendships').insert({ user_id: currentUser.id, friend_id: fid });
-        await supabase.from('notifications').insert({
+        await supabaseClient.from('friendships').insert({ user_id: currentUser.id, friend_id: fid });
+        await supabaseClient.from('notifications').insert({
           user_id: fid, type: 'message', title: 'Новый друг',
           text: `${profile.name} добавил вас в друзья`,
         });
@@ -3544,7 +3544,7 @@
     const rmFriendBtn = e.target.closest('[data-remove-friend]');
     if (rmFriendBtn) {
       const fid = rmFriendBtn.dataset.removeFriend;
-      await supabase.from('friendships').delete().eq('user_id', currentUser.id).eq('friend_id', fid);
+      await supabaseClient.from('friendships').delete().eq('user_id', currentUser.id).eq('friend_id', fid);
       await loadFriendsFromDB();
       showFriendsScreen(); return;
     }
@@ -3599,7 +3599,7 @@
     const row = e.target.closest('[data-notif-id]');
     if (row) {
       const id = row.dataset.notifId;
-      await supabase.from('notifications').update({ read: true }).eq('id', Number(id));
+      await supabaseClient.from('notifications').update({ read: true }).eq('id', Number(id));
       notifications = notifications.map((n) => n.id === id ? { ...n, read: true } : n);
       updateBadge();
     }
@@ -3636,7 +3636,7 @@
 
   /* ═══════ СТАРТ ═══════ */
   async function bootApp() {
-    const { data: { session: s } } = await supabase.auth.getSession();
+    const { data: { session: s } } = await supabaseClient.auth.getSession();
     if (s && s.user) {
       currentUser = s.user;
       const row = await loadProfileRow(currentUser.id);
@@ -3652,7 +3652,7 @@
     renderAuthLogin();
   }
 
-  supabase.auth.onAuthStateChange((event, s) => {
+  supabaseClient.auth.onAuthStateChange((event, s) => {
     if (event === 'SIGNED_OUT') {
       currentUser = null;
       document.body.classList.add('auth-locked');
