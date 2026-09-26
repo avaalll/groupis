@@ -1421,15 +1421,23 @@
       let email = idVal;
       if (!isEmail(idVal)) {
         const uname = normalizeUsername(idVal);
-        const { data, error } = await supabaseClient.from('profiles').select('email').eq('username', uname).maybeSingle();
-        if (error || !data || !data.email) { showAuthError(err, 'Пользователь с таким username не найден.'); return; }
-        email = data.email;
+        const { data: foundEmail, error: rpcErr } = await supabaseClient.rpc('get_email_by_username', { uname });
+        if (rpcErr || !foundEmail) {
+          console.error('[rpc get_email_by_username]', rpcErr);
+          showAuthError(err, 'Пользователь с таким username не найден.');
+          return;
+        }
+        email = foundEmail;
       }
 
       submit.disabled = true;
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pw });
       submit.disabled = false;
-      if (error) { showAuthError(err, 'Неверная почта/username или пароль.'); return; }
+      if (error) {
+        console.error('[signIn]', error);
+        showAuthError(err, 'Неверная почта/username или пароль.');
+        return;
+      }
 
       currentUser = data.user;
       const row = await loadProfileRow(currentUser.id);
@@ -1465,8 +1473,10 @@
       err.hidden = true; ok.hidden = true;
       const v = email.value.trim();
       if (!isEmail(v)) { showAuthError(err, 'Введите корректную почту'); return; }
-      const { error } = await supabaseClient.auth.resetPasswordForEmail(v, { redirectTo: location.origin + location.pathname });
-      if (error) { showAuthError(err, error.message); return; }
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(v, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) { console.error('[resetPassword]', error); showAuthError(err, error.message); return; }
       ok.textContent = 'Если аккаунт существует, письмо отправлено.';
       ok.hidden = false;
     });
@@ -1664,10 +1674,14 @@
         const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
           email: draft.email,
           password: draft.password,
-          options: { data: { name: draft.name, username: draft.username } },
+          options: {
+            data: { name: draft.name, username: draft.username },
+            emailRedirectTo: window.location.origin + window.location.pathname,
+          },
         });
 
         if (signUpError) {
+          console.error('[signUp]', signUpError);
           submitBtn.disabled = false; submitBtn.textContent = oldLabel;
           showAuthError(err, signUpError.message || 'Не удалось создать аккаунт');
           return;
@@ -1680,7 +1694,12 @@
             bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
             avatar: draft.avatar || '',
           });
-          if (profErr) console.warn('[profiles] upsert:', profErr.message);
+          if (profErr) {
+            console.error('[profiles] upsert error:', profErr);
+            submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+            showAuthError(err, 'Профиль не сохранён: ' + profErr.message);
+            return;
+          }
         }
 
         if (!signUpData.session) {
@@ -2397,7 +2416,8 @@
         hint.classList.remove('is-invalid');
         if (v === normalizeUsername(profile.handle)) { result.innerHTML = `<div class="empty-msg">Это ваш собственный username.</div>`; return; }
 
-        const { data: found } = await supabaseClient.from('profiles').select('*').eq('username', v).maybeSingle();
+        const { data: found, error: sErr } = await supabaseClient.from('profiles').select('*').eq('username', v).maybeSingle();
+        if (sErr) { console.error('[search profile]', sErr); }
         if (!found) { result.innerHTML = `<div class="empty-msg">Пользователь <b>@${escapeHtml(v)}</b> не найден.</div>`; return; }
         const isFriend = friends.some((f) => f.id === found.id);
         result.innerHTML = `
@@ -3459,9 +3479,14 @@
         else if (previewEl.style.backgroundImage) newAvatar = profile.avatar;
         else newAvatar = '';
         profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar };
-        await supabaseClient.from('profiles').upsert({
+        const { error: saveErr } = await supabaseClient.from('profiles').upsert({
           id: currentUser.id, name: newName, username: uname, bio: newBio, avatar: newAvatar,
         });
+        if (saveErr) {
+          console.error('[profiles] save:', saveErr);
+          alert('Не удалось сохранить профиль: ' + saveErr.message);
+          return;
+        }
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
         showProfileScreen();
       });
@@ -3531,7 +3556,12 @@
     if (addFriendBtn) {
       const fid = addFriendBtn.dataset.addFriend;
       if (fid && fid !== currentUser.id && !friends.some((f) => f.id === fid)) {
-        await supabaseClient.from('friendships').insert({ user_id: currentUser.id, friend_id: fid });
+        const { error: addErr } = await supabaseClient.rpc('add_friend', { friend_uuid: fid });
+        if (addErr) {
+          console.error('[rpc add_friend]', addErr);
+          alert('Не удалось добавить друга: ' + addErr.message);
+          return;
+        }
         await supabaseClient.from('notifications').insert({
           user_id: fid, type: 'message', title: 'Новый друг',
           text: `${profile.name} добавил вас в друзья`,
@@ -3544,7 +3574,8 @@
     const rmFriendBtn = e.target.closest('[data-remove-friend]');
     if (rmFriendBtn) {
       const fid = rmFriendBtn.dataset.removeFriend;
-      await supabaseClient.from('friendships').delete().eq('user_id', currentUser.id).eq('friend_id', fid);
+      const { error: rmErr } = await supabaseClient.rpc('remove_friend', { friend_uuid: fid });
+      if (rmErr) { console.error('[rpc remove_friend]', rmErr); }
       await loadFriendsFromDB();
       showFriendsScreen(); return;
     }
