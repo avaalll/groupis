@@ -1388,13 +1388,11 @@
     let renderer = null, scene = null, camera = null, earth = null, glow = null, linesGroup = null;
     let rafId = null, running = false, initialized = false;
     let targetQuat = new THREE.Quaternion();
-    const markers = [];        // массив { sprite, vec (единичный вектор) }
-    const segments = [];       // массив { line, fromVec, toVec }
+    const markers = [];
+    const segments = [];
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
-    // Угловой «шаг» между маркерами на сфере (в радианах)
-    const STEP_ANGLE = 0.55;   // ~31° — визуально «звено» ломаной
-    // Максимальный поворот направления на каждом шаге
-    const MAX_TURN = Math.PI / 3; // 60°
+    const STEP_ANGLE = 0.55;
+    const MAX_TURN = Math.PI / 3;
 
     function latLonToVec3(lat, lon, r) {
       const phi = (90 - lat) * Math.PI / 180;
@@ -1406,7 +1404,7 @@
       );
     }
 
-    // Прозрачная X-текстура без круга
+    // Уменьшенный крестик «X» без кольца
     function makeMarkerTexture() {
       const c = document.createElement('canvas');
       c.width = 128; c.height = 128;
@@ -1417,11 +1415,11 @@
       ctx.translate(cx, cy);
       ctx.rotate(Math.PI / 4);
       ctx.strokeStyle = '#E4EAFF';
-      ctx.lineWidth = 9;
+      ctx.lineWidth = 7;
       ctx.lineCap = 'round';
       ctx.shadowColor = '#6E7EFF';
-      ctx.shadowBlur = 18;
-      const arm = 34;
+      ctx.shadowBlur = 12;
+      const arm = 22;
       ctx.beginPath();
       ctx.moveTo(-arm, 0); ctx.lineTo(arm, 0);
       ctx.moveTo(0, -arm); ctx.lineTo(0, arm);
@@ -1439,14 +1437,13 @@
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
       const s = new THREE.Sprite(mat);
       s.position.copy(vec.clone().multiplyScalar(r));
-      s.userData.targetScale = 0.35;
+      s.userData.targetScale = 0.20;
       s.userData.bornAt = performance.now();
       s.scale.set(0, 0, 0);
       earth.add(s);
       return s;
     }
 
-    // Пересечение двух отрезков по хордам (упрощённый 3D-тест)
     function segIntersects(a, b, c, d) {
       const ab = b.clone().sub(a);
       const cd = d.clone().sub(c);
@@ -1464,39 +1461,48 @@
       return !(allPos || allNeg);
     }
 
-    // Вектор, перпендикулярный v, в плоскости, проходящей через v и произвольный
     function perpendicular(v) {
       const ref = Math.abs(v.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
       return new THREE.Vector3().crossVectors(v, ref).normalize();
     }
 
-    // Строим дугу между a и b на сфере радиуса radius, нарезаем её в пунктир
-    function makeDashedArc(a, b, radius, dashLen = 0.035, gapLen = 0.022) {
+    // Пунктирная дуга строго от a до b на радиусе radius.
+    // Штрихи подгоняются так, чтобы первый штрих начинался ровно в a,
+    // а последний заканчивался ровно в b.
+    function makeDashedArc(a, b, radius, dashLen = 0.030, gapLen = 0.020) {
       const angle = a.angleTo(b);
       const axis = new THREE.Vector3().crossVectors(a, b);
+      const mat = new THREE.LineBasicMaterial({ color: 0xCFD6FF, transparent: true, opacity: 0.95 });
+
       if (axis.lengthSq() < 1e-9) {
         return new THREE.LineSegments(
           new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(0), 3)),
-          new THREE.LineBasicMaterial({ color: 0xCFD6FF, transparent: true, opacity: 0.9 })
+          mat
         );
       }
       axis.normalize();
-      const stepsTotal = Math.max(48, Math.ceil(angle * 220));
-      // Длина дуги в единицах «как если бы радиус 1»
-      const arcLen = angle;
-      const dashCount = Math.max(1, Math.round(arcLen / (dashLen + gapLen)));
+
+      const rawCount = angle / (dashLen + gapLen);
+      let dashCount = Math.max(1, Math.floor(rawCount));
+      if (rawCount - dashCount > 0.5) dashCount += 1;
+
+      // Подгоняем длины так, чтобы ровно dashCount штрихов уложились от 0 до angle
+      const totalDesired = dashCount * dashLen + (dashCount - 1) * gapLen;
+      const scale = angle / totalDesired;
+      const d = dashLen * scale;
+      const g = gapLen * scale;
+
       const positions = [];
       const q = new THREE.Quaternion();
+      const sub = 10;
 
       for (let k = 0; k < dashCount; k++) {
-        const t0 = k * (dashLen + gapLen) / arcLen;
-        const t1 = t0 + dashLen / arcLen;
-        if (t0 >= 1) break;
-        const t1c = Math.min(1, t1);
-        const sub = 12;
+        const tStart = (k * (d + g)) / angle;
+        const tEnd = tStart + d / angle;
+        const tEndC = Math.min(1, tEnd);
         for (let i = 0; i < sub; i++) {
-          const tA = t0 + (t1c - t0) * (i / sub);
-          const tB = t0 + (t1c - t0) * ((i + 1) / sub);
+          const tA = tStart + (tEndC - tStart) * (i / sub);
+          const tB = tStart + (tEndC - tStart) * ((i + 1) / sub);
           q.setFromAxisAngle(axis, angle * tA);
           const pA = a.clone().applyQuaternion(q).multiplyScalar(radius);
           q.setFromAxisAngle(axis, angle * tB);
@@ -1507,63 +1513,56 @@
 
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const mat = new THREE.LineBasicMaterial({ color: 0xCFD6FF, transparent: true, opacity: 0.92 });
       return new THREE.LineSegments(geo, mat);
     }
 
-    // Создать линию (пунктир по дуге) и «пожирнить» её, продублировав со смещением
+    // Жирный пунктир между двумя ЕДИНИЧНЫМИ векторами a и b
     function makeThickDashedArc(a, b, radius) {
       const group = new THREE.Group();
-      const main = makeDashedArc(a, b, radius);
+      const aU = a.clone().normalize();
+      const bU = b.clone().normalize();
+
+      const main = makeDashedArc(aU, bU, radius);
       group.add(main);
-      // Дублируем со смещением по нормали сферы (чуть внутрь/наружу)
-      const offset = 0.006;
-      const aIn = a.clone().multiplyScalar((radius - offset) / radius);
-      const bIn = b.clone().multiplyScalar((radius - offset) / radius);
+
+      const offset = 0.005;
+      const aIn = aU.clone().multiplyScalar((radius - offset) / radius);
+      const bIn = bU.clone().multiplyScalar((radius - offset) / radius);
       const dup1 = makeDashedArc(aIn, bIn, radius - offset);
-      dup1.material.opacity = 0.55;
+      dup1.material.opacity = 0.5;
       group.add(dup1);
-      const aOut = a.clone().multiplyScalar((radius + offset) / radius);
-      const bOut = b.clone().multiplyScalar((radius + offset) / radius);
+
+      const aOut = aU.clone().multiplyScalar((radius + offset) / radius);
+      const bOut = bU.clone().multiplyScalar((radius + offset) / radius);
       const dup2 = makeDashedArc(aOut, bOut, radius + offset);
-      dup2.material.opacity = 0.55;
+      dup2.material.opacity = 0.5;
       group.add(dup2);
+
       return group;
     }
 
-    // Считаем новую точку по шагу от prevVec, поворачивая направление на случайный угол
     function pickNextVec(prevVec, prevDir) {
-      // prevDir — единичный касательный вектор в точке prevVec, задающий «текущее направление»
-      // Если его нет — берём любое перпендикулярное
       const dir0 = prevDir ? prevDir.clone() : perpendicular(prevVec);
-      // Нормализуем — на всякий случай
       dir0.sub(prevVec.clone().multiplyScalar(dir0.dot(prevVec))).normalize();
 
-      // Перебираем случайные углы поворота вокруг prevVec
       for (let attempt = 0; attempt < 60; attempt++) {
         const turn = (Math.random() * 2 - 1) * MAX_TURN;
-        // Поворачиваем dir0 вокруг оси prevVec
         const q = new THREE.Quaternion().setFromAxisAngle(prevVec, turn);
         const dir = dir0.clone().applyQuaternion(q).normalize();
-        // Идём по сфере на STEP_ANGLE в направлении dir
         const q2 = new THREE.Quaternion().setFromAxisAngle(
           new THREE.Vector3().crossVectors(prevVec, dir).normalize(),
           STEP_ANGLE
         );
         const nextVec = prevVec.clone().applyQuaternion(q2).normalize();
-        // Проверяем, что новый отрезок не пересекает существующие
         let bad = false;
         for (const seg of segments) {
-          // Игнорируем сегмент, начинающийся из prevVec — он всегда «касается»
           if (seg.fromVec.distanceTo(prevVec) < 1e-6) continue;
           if (segIntersects(prevVec, nextVec, seg.fromVec, seg.toVec)) { bad = true; break; }
         }
         if (bad) continue;
-        // Возвращаем также новое «направление» движения
         const newDir = nextVec.clone().sub(prevVec.clone().multiplyScalar(nextVec.dot(prevVec))).normalize();
         return { vec: nextVec, dir: newDir };
       }
-      // Fallback — просто продолжаем прямо
       const q2 = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3().crossVectors(prevVec, dir0).normalize(),
         STEP_ANGLE
@@ -1581,7 +1580,6 @@
 
       let vec;
       if (!prev) {
-        // Первый маркер — в случайном месте
         const lat = (Math.random() * 90) - 45;
         const lon = (Math.random() * 360) - 180;
         vec = latLonToVec3(lat, lon, 1).normalize();
@@ -1597,8 +1595,8 @@
       markers.push(marker);
 
       if (prev) {
-        const lineGroup = makeThickDashedArc(prev.vec, vec, 1.025);
-        // Анимация прорисовки: скрываем всё и постепенно показываем
+        // Радиус линии такой же, как у маркеров — чтобы линия упиралась в центры крестиков
+        const lineGroup = makeThickDashedArc(prev.vec, vec, 1.04);
         lineGroup.userData.bornAt = performance.now();
         lineGroup.userData.duration = 700;
         lineGroup.traverse((o) => {
@@ -1612,9 +1610,7 @@
         segments.push({ line: lineGroup, fromVec: prev.vec.clone(), toVec: vec.clone() });
       }
 
-      // Поворот глобуса к новому маркеру
       targetQuat.setFromUnitVectors(vec.clone(), camDir);
-
       return marker;
     }
 
@@ -1639,7 +1635,6 @@
       if (markers.length) {
         const local = markers[markers.length - 1].vec.clone();
         targetQuat.setFromUnitVectors(local, camDir);
-        // Восстанавливаем направление: берём касательный вектор от предпоследнего к последнему
         if (markers.length >= 2) {
           const a = markers[markers.length - 2].vec;
           const b = markers[markers.length - 1].vec;
