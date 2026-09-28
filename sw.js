@@ -1,7 +1,7 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.0.47';
+const VERSION = 'v1.0.48';
 const CACHE = `map-desktop-${VERSION}`;
 
 const APP_SHELL = [
