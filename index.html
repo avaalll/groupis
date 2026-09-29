@@ -949,7 +949,6 @@
       color: var(--ink); font-size: 12.5px;
     }
 
-    /* ─── Чат ─── */
     .support-chat { display: flex; flex-direction: column; height: 100%; }
     .support-chat-head {
       padding: 10px 14px 6px;
@@ -3539,22 +3538,22 @@
 
   /* ═══════ ЭКРАН «СООБЩЕНИЯ» = СПИСОК ЧАТОВ ═══════ */
   async function showMessengerScreen() {
-    setScreen(() => {
-      winTitle.textContent = 'Сообщения';
-      winBody.scrollTop = 0;
-      winBody.style.display = 'flex';
-      winBody.style.flexDirection = 'column';
-      winBody.style.padding = '0';
-      renderChatsList();
-    }, () => {
-      winBody.style.display = '';
-      winBody.style.flexDirection = '';
-      winBody.style.padding = '';
-      closeApp();
-    });
-  }
+    if (!currentUser) {
+      console.warn('[messenger] нет currentUser, откроем карту');
+      showMapApp();
+      return;
+    }
+    clearTimeout(closeTimer);
+    closePostMenus();
+    if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+    if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
 
-  async function renderChatsList() {
+    winBody.style.display = 'flex';
+    winBody.style.flexDirection = 'column';
+    winBody.style.padding = '0';
+    winTitle.textContent = 'Сообщения';
+    winBody.scrollTop = 0;
+
     winBody.innerHTML = `
       <div class="sub-toolbar">
         <span class="sub-toolbar-title">Мои чаты</span>
@@ -3564,28 +3563,71 @@
         <div class="empty-msg">Загружаем чаты…</div>
       </div>`;
 
-    if (!friends.length) {
+    win.hidden = false;
+    const wr = win.getBoundingClientRect();
+    const ox = wr.width / 2;
+    win.style.transformOrigin = `${ox}px ${wr.height + 60}px`;
+    requestAnimationFrame(() => win.classList.add('is-open'));
+
+    resetScreenStack();
+    openApp = 'messenger';
+    document.body.classList.remove('app-map');
+    document.body.classList.add('app-window');
+    setDots();
+    win.focus({ preventScroll: true });
+
+    currentBackHandler = () => { closeApp(); };
+
+    try {
+      await renderChatsList();
+    } catch (err) {
+      console.warn('[messenger] renderChatsList error:', err);
       const el = winBody.querySelector('#chats-list');
-      if (el) el.innerHTML = `<div class="empty-msg">Пока нет друзей.<br>Найдите их через приложение «Друзья».</div>`;
+      if (el) el.innerHTML = `<div class="empty-msg">Ошибка загрузки. Попробуйте ещё раз.</div>`;
+    }
+  }
+
+  async function renderChatsList() {
+    const listEl = winBody.querySelector('#chats-list');
+    if (!listEl) {
+      console.warn('[chats] нет #chats-list в DOM');
+      return;
+    }
+
+    if (!currentUser || !Array.isArray(friends)) {
+      listEl.innerHTML = `<div class="empty-msg">Пока нет друзей.<br>Найдите их через приложение «Друзья».</div>`;
+      return;
+    }
+
+    if (!friends.length) {
+      listEl.innerHTML = `<div class="empty-msg">Пока нет друзей.<br>Найдите их через приложение «Друзья».</div>`;
       return;
     }
 
     const ids = friends.map((f) => f.id);
     const myId = currentUser.id;
-    const { data, error } = await supabaseClient
-      .from('dm_messages')
-      .select('id, from_id, to_id, content, created_at')
-      .or(`from_id.eq.${myId},to_id.eq.${myId}`)
-      .order('created_at', { ascending: false })
-      .limit(500);
 
-    if (error) { console.warn('[dm] list load:', error.message); }
+    let lastByPeer = new Map();
 
-    const lastByPeer = new Map();
-    for (const m of (data || [])) {
-      const peer = m.from_id === myId ? m.to_id : m.from_id;
-      if (!ids.includes(peer)) continue;
-      if (!lastByPeer.has(peer)) lastByPeer.set(peer, m);
+    try {
+      const { data, error } = await supabaseClient
+        .from('dm_messages')
+        .select('id, from_id, to_id, content, created_at')
+        .or(`from_id.eq.${myId},to_id.eq.${myId}`)
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (error) {
+        console.warn('[dm] list load:', error.message);
+      } else {
+        for (const m of (data || [])) {
+          const peer = m.from_id === myId ? m.to_id : m.from_id;
+          if (!ids.includes(peer)) continue;
+          if (!lastByPeer.has(peer)) lastByPeer.set(peer, m);
+        }
+      }
+    } catch (err) {
+      console.warn('[dm] list load exception:', err);
     }
 
     const rows = friends.map((f) => {
@@ -3598,11 +3640,15 @@
         const shortText = raw.length > 34 ? raw.slice(0, 34) + '…' : raw;
         preview = (mine ? 'Вы: ' : '') + shortText;
       }
+      const name = f.name || f.handle || 'Пользователь';
+      const avatar = f.avatar
+        ? `<span class="avatar" style="width:44px;height:44px;background-image:url('${f.avatar}')"></span>`
+        : `<span class="avatar" style="width:44px;height:44px;background:linear-gradient(#6E7EFF,#3D4EB8)">${escapeHtml((name.charAt(0) || '?').toUpperCase())}</span>`;
       return `
         <div class="chat-row" data-open-dm="${f.id}" role="button" tabindex="0">
-          ${avatarCircleHtml(f, 44)}
+          ${avatar}
           <div class="chat-main">
-            <div class="chat-name">${escapeHtml(f.name || f.handle || 'Пользователь')}</div>
+            <div class="chat-name">${escapeHtml(name)}</div>
             <div class="chat-last">${escapeHtml(preview)}</div>
           </div>
           <div class="chat-side">
@@ -3611,8 +3657,7 @@
         </div>`;
     }).join('');
 
-    const list = winBody.querySelector('#chats-list');
-    if (list) list.innerHTML = rows;
+    listEl.innerHTML = rows;
   }
 
   /* ═══════ ТЕХПОДДЕРЖКА ═══════ */
