@@ -1062,6 +1062,7 @@
     }
     .auth-title { margin: 0 0 4px; text-align: center; font-size: 20px; font-weight: 700; color: #E8ECFB; }
     .auth-sub { margin: 0 0 18px; text-align: center; color: #8A94C2; font-size: 13px; }
+    .auth-sub:empty { display: none; margin: 0; }
     .auth-form { display: grid; gap: 12px; }
     .auth-field { display: grid; gap: 6px; }
     .auth-label { font-size: 12px; font-weight: 600; color: #A6B2FF; padding-left: 4px; }
@@ -1382,8 +1383,7 @@
     return typeof window.THREE !== 'undefined' && window.THREE.WebGLRenderer;
   }
 
-    /* ═══════ 3D-ГЛОБУС ═══════ */
-    /* ═══════ 3D-ГЛОБУС ═══════ */
+  /* ═══════ 3D-ГЛОБУС ═══════ */
   const Globe = (() => {
     let renderer = null, scene = null, camera = null, earth = null, glow = null;
     let rafId = null, running = false, initialized = false;
@@ -1392,16 +1392,14 @@
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
 
     const STEP_ANGLE = 0.62;                   // ~35.5° между крестиками
-    const MAX_TURN   = Math.PI * 35 / 180;     // макс. изгиб 35° — ломаная «течёт» плавно
+    const MAX_TURN   = Math.PI * 35 / 180;     // макс. изгиб 35° — ломаная плавная
     const MARKER_RADIUS = 1.04;
     const MIN_MARKER_DIST = 0.45;              // мин. дистанция между маркерами
 
-    // Плавность вращения: чем МЕНЬШЕ — тем медленнее глобус поворачивается
-    const ROT_LERP_BASE = 0.18;                // было 0.0005 — теперь очень плавно
-    // Пауза перед добавлением следующего маркера
-    const ADD_DELAY = 0.35;                    // секунд после появления текущего
-    // Насколько близко должен быть глобус к целевому повороту, чтобы добавить следующий
-    const ANGLE_EPS = 0.06;                    // ~3.5°
+    // Плавность вращения (меньше — медленнее)
+    const ROT_LERP_BASE = 0.18;
+    const ADD_DELAY = 0.35;                    // пауза перед добавлением следующего
+    const ANGLE_EPS = 0.06;                    // ~3.5° — точность доворота
 
     function latLonToVec3(lat, lon, r) {
       const phi = (90 - lat) * Math.PI / 180;
@@ -1456,7 +1454,6 @@
       return new THREE.Vector3().crossVectors(v, ref).normalize();
     }
 
-    // Насколько глобус ещё далёк от целевого поворота
     function currentAngleToTarget() {
       if (!earth) return 0;
       return earth.quaternion.angleTo(targetQuat);
@@ -1476,7 +1473,6 @@
         );
         const nextVec = prevVec.clone().applyQuaternion(q2).normalize();
 
-        // Проверяем близость ко ВСЕМ уже существующим маркерам
         let tooClose = false;
         for (const m of markers) {
           if (nextVec.distanceTo(m.vec) < MIN_MARKER_DIST) { tooClose = true; break; }
@@ -1486,8 +1482,6 @@
         const newDir = nextVec.clone().sub(prevVec.clone().multiplyScalar(nextVec.dot(prevVec))).normalize();
         return { vec: nextVec, dir: newDir };
       }
-
-      // Фолбэк — продолжаем прямо
       const q2 = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3().crossVectors(prevVec, dir0).normalize(),
         STEP_ANGLE
@@ -1525,22 +1519,16 @@
       lastAddTime = performance.now();
     }
 
-    // Устанавливаем цель: сколько крестиков должно быть.
-    // Само добавление происходит в tick() — по одному, плавно, с паузами.
     function setStepCount(n) {
       pendingTarget = n;
-      // Если цель уменьшилась — сразу удаляем лишние
       if (n <= 0) {
         while (markers.length) removeLastMarker();
         return;
       }
       while (markers.length > n) removeLastMarker();
-      // Если крестиков 0 — создаём первый сразу
       if (markers.length === 0 && n >= 1) {
         addFirstMarker();
       }
-      // Если крестиков 1, а цель — уже 2+ — дадим тику добавить следующий
-      // через паузу и после доворота.
     }
 
     function removeLastMarker() {
@@ -1661,8 +1649,6 @@
       const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
       last = now;
 
-      // Плавное вращение глобуса.
-      // ROT_LERP_BASE маленькое — поворот медленный и «обтекаемый».
       if (earth) {
         const k = 1 - Math.pow(ROT_LERP_BASE, dt);
         earth.quaternion.slerp(targetQuat, k);
@@ -1671,7 +1657,6 @@
         if (glow) glow.scale.setScalar(s);
       }
 
-      // Анимация появления маркеров (всплытие)
       for (const m of markers) {
         const p = Math.min(1, (now - m.sprite.userData.bornAt) / 550);
         const e = 1 - Math.pow(1 - p, 3);
@@ -1679,10 +1664,6 @@
         m.sprite.scale.set(sc, sc, sc);
       }
 
-      // Пошаговое добавление следующего маркера:
-      // — должно быть меньше, чем pendingTarget
-      // — глобус уже довернулся (угол к targetQuat < ANGLE_EPS)
-      // — прошла пауза ADD_DELAY с момента появления предыдущего
       if (markers.length < pendingTarget && markers.length >= 1) {
         const timeSinceLastAdd = (now - lastAddTime) / 1000;
         const angleLeft = currentAngleToTarget();
@@ -1781,7 +1762,7 @@
   const authScreen = document.getElementById('auth-screen');
   const authCard   = document.getElementById('auth-card');
 
-  function authHeader({ title, sub, icon = '🔐' }) {
+  function authHeader({ title, sub = '', icon = '🔐' }) {
     return `
       <div class="auth-logo" aria-hidden="true">${icon}</div>
       <h1 class="auth-title">${escapeHtml(title)}</h1>
@@ -1919,7 +1900,7 @@
       }[step];
 
       authCard.innerHTML = `
-        ${authHeader({ title: 'Создание аккаунта', sub: `Шаг ${stepIdx + 1} из ${REG_STEPS.length}`, icon: '✨' })}
+        ${authHeader({ title: 'Создание аккаунта', sub: '', icon: '✨' })}
         <div class="auth-steps">${dots}</div>
         <h2 class="auth-step-title">${escapeHtml(stepInfo.t)}</h2>
         <p class="auth-step-sub">${escapeHtml(stepInfo.s)}</p>
