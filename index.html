@@ -2488,6 +2488,7 @@
   /* ═══════ ГЕОПОЗИЦИИ ДРУЗЕЙ И УЧАСТНИКОВ ГРУПП ═══════ */
   const friendMarkers = new Map();
   let userLocationsById = new Map();
+  let userAvatarCfgById = new Map();  // userId → avatar_config
   let groupMemberProfiles = new Map();
 
   function computeRelevantUserIds() {
@@ -2527,15 +2528,18 @@
     return null;
   }
 
-  function buildFriendMarkerElement(person, isFriend) {
+  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId) {
     const wrap = document.createElement('div');
     wrap.className = 'user-avatar-wrap';
+
     const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
     let label = (person.name || '').trim() || person.handle || 'Пользователь';
     if (label.length > 18) label = label.slice(0, 17) + '…';
+
     const avatarInner = person.avatar
       ? `<div class="user-badge-avatar" style="background-image:url('${person.avatar}')"></div>`
       : `<div class="user-badge-avatar" style="background:linear-gradient(#9AA6FF,#5C6EE0)">${escapeHtml(nameInitial)}</div>`;
+
     const badge = document.createElement('div');
     badge.className = 'user-badge';
     badge.innerHTML = `
@@ -2545,10 +2549,31 @@
         ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
       </div>`;
     wrap.appendChild(badge);
-    const dot = document.createElement('div');
-    dot.className = 'user-dot-marker';
-    dot.style.background = isFriend ? 'var(--you)' : '#8A4A2F';
-    wrap.appendChild(dot);
+
+    // 3D-аватар под бейджем. Если для друга сохранён avatar_config — рисуем его,
+    // иначе fallback — цветной кружок.
+    const use3D = isThreeAvailable() && avatarCfg && typeof avatarCfg === 'object';
+    if (use3D) {
+      const inner = document.createElement('div'); inner.className = 'user-avatar-marker';
+      const canvas = document.createElement('canvas'); canvas.width = 26; canvas.height = 26;
+      inner.appendChild(canvas); wrap.appendChild(inner);
+      const ok = renderAvatarToCanvas(canvas, 26, avatarCfg);
+      if (!ok) inner.className = 'user-dot-marker';
+    } else {
+      const dot = document.createElement('div');
+      dot.className = 'user-dot-marker';
+      dot.style.background = isFriend ? 'var(--you)' : '#8A4A2F';
+      wrap.appendChild(dot);
+    }
+
+    // Клик по маркеру — открыть профиль друга
+    wrap.style.pointerEvents = 'auto';
+    wrap.style.cursor = 'pointer';
+    wrap.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showFriendProfile(userId, person);
+    });
+
     return wrap;
   }
 
@@ -2564,7 +2589,7 @@
     }
     const ids = [...relevant];
     const { data, error } = await supabaseClient.from('user_locations')
-      .select('user_id, lat, lon, updated_at')
+      .select('user_id, lat, lon, updated_at, avatar_config')
       .in('user_id', ids);
     if (error) { console.warn('[user_locations] load:', error.message); return; }
 
@@ -2572,13 +2597,19 @@
     for (const row of (data || [])) {
       found.add(row.user_id);
       userLocationsById.set(row.user_id, [row.lon, row.lat]);
+      if (row.avatar_config && typeof row.avatar_config === 'object') {
+        userAvatarCfgById.set(row.user_id, row.avatar_config);
+      } else {
+        userAvatarCfgById.delete(row.user_id);
+      }
     }
     for (const [userId, coords] of userLocationsById.entries()) {
       if (!relevant.has(userId)) continue;
       const person = personById(userId);
       if (!person) continue;
       const isFriend = friends.some((f) => f.id === userId);
-      upsertFriendMarker(userId, person, coords, isFriend);
+      const cfg = userAvatarCfgById.get(userId) || null;
+      upsertFriendMarker(userId, person, coords, isFriend, cfg);
     }
     for (const [userId, fm] of [...friendMarkers.entries()]) {
       if (!relevant.has(userId) || !found.has(userId)) {
@@ -2588,19 +2619,20 @@
     }
   }
 
-  function upsertFriendMarker(userId, person, coords, isFriend) {
+  function upsertFriendMarker(userId, person, coords, isFriend, avatarCfg) {
     if (!map2gis) return;
     const existing = friendMarkers.get(userId);
     if (existing) {
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
-    const html = buildFriendMarkerElement(person, isFriend);
+    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId);
+    // preventMapInteractions: false — чтобы клик по нашему элементу приходил нам
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
       anchor: [0.5, 0.85],
-      preventMapInteractions: true,
+      preventMapInteractions: false,
     });
     friendMarkers.set(userId, { marker, location: coords });
   }
@@ -2617,6 +2649,7 @@
 
     if (payload.eventType === 'DELETE') {
       userLocationsById.delete(userId);
+      userAvatarCfgById.delete(userId);
       const fm = friendMarkers.get(userId);
       if (fm) { try { fm.marker.destroy(); } catch {} friendMarkers.delete(userId); }
       return;
@@ -2624,6 +2657,9 @@
 
     const coords = [row.lon, row.lat];
     userLocationsById.set(userId, coords);
+    if (row.avatar_config && typeof row.avatar_config === 'object') {
+      userAvatarCfgById.set(userId, row.avatar_config);
+    }
 
     let person = personById(userId);
     if (!person) {
@@ -2634,7 +2670,8 @@
     }
     if (!person) return;
     const isFriend = friends.some((f) => f.id === userId);
-    upsertFriendMarker(userId, person, coords, isFriend);
+    const cfg = userAvatarCfgById.get(userId) || null;
+    upsertFriendMarker(userId, person, coords, isFriend, cfg);
   }
 
   async function upsertMyLocation(coords) {
@@ -2643,6 +2680,7 @@
     const { error } = await supabaseClient.from('user_locations').upsert({
       user_id: currentUser.id,
       lat, lon,
+      avatar_config: avatarConfig,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
     if (error) console.warn('[user_locations] upsert:', error.message);
@@ -4355,6 +4393,94 @@
   }
   function showUserProfileScreen() { showProfileScreen(); }
 
+  function showFriendProfile(userId, personHint = null) {
+    setScreen(() => {
+      if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+      if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+      winTitle.textContent = 'Профиль';
+      winBody.innerHTML = `<div class="empty-msg">Загружаем профиль…</div>`;
+      winBody.scrollTop = 0;
+
+      (async () => {
+        let p = null;
+        try {
+          const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('id, name, username, bio, avatar')
+            .eq('id', userId)
+            .maybeSingle();
+          if (error) console.warn('[friend profile] load:', error.message);
+          p = data;
+        } catch (err) { console.warn('[friend profile] exception:', err); }
+
+        if (!p && personHint) {
+          p = {
+            id: personHint.id || userId,
+            name: personHint.name || 'Пользователь',
+            username: (personHint.handle || '@user').replace(/^@/, ''),
+            bio: '',
+            avatar: personHint.avatar || '',
+          };
+        }
+        if (!p) {
+          winBody.innerHTML = `<div class="empty-msg">Профиль не найден</div>`;
+          return;
+        }
+
+        const cfg = userAvatarCfgById.get(userId) || null;
+        const use3D = isThreeAvailable() && cfg && typeof cfg === 'object';
+        const name = p.name || 'Пользователь';
+        const handle = '@' + (p.username || 'user');
+        const initial = (name.charAt(0) || '?').toUpperCase();
+
+        let avatarHtml;
+        if (use3D) {
+          avatarHtml = `<div class="user-profile-avatar"><canvas id="friend-avatar-canvas" width="256" height="256"></canvas></div>`;
+        } else if (p.avatar) {
+          avatarHtml = `<div class="user-profile-avatar no-3d" style="background-image:url('${p.avatar}')"></div>`;
+        } else {
+          avatarHtml = `<div class="user-profile-avatar no-3d">${escapeHtml(initial)}</div>`;
+        }
+
+        winBody.innerHTML = `
+          <div class="user-profile-view">
+            <div class="user-profile-hero">
+              ${avatarHtml}
+              <div class="user-profile-name">${escapeHtml(name)}</div>
+              <div class="user-profile-handle">${escapeHtml(handle)}</div>
+              ${p.bio ? `<div class="profile-bio">${escapeHtml(p.bio)}</div>` : ''}
+            </div>
+            <div class="edit-actions">
+              <button type="button" class="btn" id="friend-open-chat">Написать</button>
+            </div>
+          </div>`;
+
+        if (use3D) {
+          const canvas = winBody.querySelector('#friend-avatar-canvas');
+          if (canvas) {
+            const ok = renderAvatarToCanvas(canvas, 256, cfg);
+            if (!ok) {
+              canvas.parentElement.classList.add('no-3d');
+              canvas.parentElement.style.background = 'linear-gradient(#6E7EFF,#3D4EB8)';
+              canvas.parentElement.textContent = initial;
+            } else {
+              userProfileAvatarCleanup = () => {
+                if (canvas && canvas.__avatarStop) canvas.__avatarStop();
+                userProfileAvatarCleanup = null;
+              };
+            }
+          }
+        }
+
+        const chatBtn = winBody.querySelector('#friend-open-chat');
+        if (chatBtn) chatBtn.addEventListener('click', () => showDmScreen(userId));
+      })();
+    }, () => {
+      if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+      closeApp();
+    });
+  }
+
   function showEditProfile() {
     setScreen(() => {
       winTitle.textContent = 'Редактировать профиль';
@@ -4447,7 +4573,11 @@
       const canvas = winBody.querySelector('#avatar-stage-canvas');
       if (canvas && canvas.__avatarRefresh) canvas.__avatarRefresh();
       renderAvatarControls();
-      if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
+      if (lastUserLocation && settings.geolocation) {
+        placeUserMarker(lastUserLocation);
+        syncWishMarkers();
+        upsertMyLocation(lastUserLocation);
+      }
       return;
     }
     if (e.target.closest('[data-action="open-avatar"]')) { showAvatarEditor(); return; }
