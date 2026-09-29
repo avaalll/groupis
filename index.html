@@ -2304,6 +2304,10 @@
     syncPostMarkers();
     syncWishMarkers();
     updateBadge();
+
+    // Подгружаем друзей и участников групп на карте
+    await loadGroupMemberProfiles();
+    loadUserLocations();
   }
 
   /* ═══════ ГЛОБАЛЬНЫЕ МАССИВЫ ═══════ */
@@ -2428,9 +2432,11 @@
         if (!currentUser) return;
         const m = payload.new;
         if (m.from_id !== currentUser.id && m.to_id !== currentUser.id) return;
+        if (dmMessages.some((x) => x.id === m.id)) return;
         dmMessages.push(m);
-        if (openApp === 'messenger' && currentDmPeerId && (m.from_id === currentDmPeerId || m.to_id === currentDmPeerId)) {
-          renderDmList();
+        if (openApp === 'messenger' && currentDmPeerId &&
+            (m.from_id === currentDmPeerId || m.to_id === currentDmPeerId)) {
+          appendDmMessage(m);
         }
       }).subscribe();
     rtChannels.push(ch5);
@@ -2444,32 +2450,23 @@
   }
 
   /* ═══════ ГЕОПОЗИЦИИ ДРУЗЕЙ И УЧАСТНИКОВ ГРУПП ═══════ */
-  const friendMarkers = new Map();        // userId → { marker, location: [lon, lat] }
-  let userLocationsById = new Map();      // userId → [lon, lat]  (последняя известная)
+  const friendMarkers = new Map();
+  let userLocationsById = new Map();
+  let groupMemberProfiles = new Map();
 
-  // Кто нам интересен: друзья + участники групп, где я владелец, + те, у кого я в группе
   function computeRelevantUserIds() {
     const ids = new Set();
-    // Друзья
     for (const f of friends) ids.add(f.id);
-    // Участники групп: я — владелец
     for (const g of groups) {
       if (g.ownerId !== (currentUser && currentUser.id)) continue;
       for (const m of (g.members || [])) {
         if (m.id !== currentUser.id) ids.add(m.id);
       }
     }
-    // Участники групп, где я — участник (по списку group_members)
-    // В нашей модели владелец видит всех, а участник не видит других участников — упростим до владельца.
-    // Если вы захотите расширить — добавьте сюда логику.
     return ids;
   }
 
-  // Профили тех, кого нет в friends (участники групп, которые не друзья)
-  let groupMemberProfiles = new Map();   // userId → { id, name, handle, avatar }
-
   async function loadGroupMemberProfiles() {
-    // Собираем id участников моих групп, не являющихся друзьями
     const friendIds = new Set(friends.map((f) => f.id));
     const ids = new Set();
     for (const g of groups) {
@@ -2486,7 +2483,6 @@
     groupMemberProfiles = new Map((data || []).map((p) => [p.id, { id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }]));
   }
 
-  // Возвращает объект-«person» для userId (или null)
   function personById(userId) {
     if (userId === (currentUser && currentUser.id)) return null;
     const f = friends.find((x) => x.id === userId);
@@ -2495,7 +2491,6 @@
     return null;
   }
 
-  // Строим HTML-элемент маркера для друга/участника группы
   function buildFriendMarkerElement(person, isFriend) {
     const wrap = document.createElement('div');
     wrap.className = 'user-avatar-wrap';
@@ -2514,7 +2509,6 @@
         ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
       </div>`;
     wrap.appendChild(badge);
-    // Заглушка вместо 3D — просто кружок с буквой под бейджем
     const dot = document.createElement('div');
     dot.className = 'user-dot-marker';
     dot.style.background = isFriend ? 'var(--you)' : '#8A4A2F';
@@ -2522,12 +2516,10 @@
     return wrap;
   }
 
-  // Отображаем всех «своих» пользователей, у которых есть сохранённая геопозиция
   async function loadUserLocations() {
     if (!map2gis || !currentUser) return;
     const relevant = computeRelevantUserIds();
     if (!relevant.size) {
-      // Удаляем все маркеры — релевантных нет
       for (const [id, fm] of [...friendMarkers.entries()]) {
         try { fm.marker.destroy(); } catch {}
         friendMarkers.delete(id);
@@ -2545,7 +2537,6 @@
       found.add(row.user_id);
       userLocationsById.set(row.user_id, [row.lon, row.lat]);
     }
-    // Обновляем/создаём маркеры
     for (const [userId, coords] of userLocationsById.entries()) {
       if (!relevant.has(userId)) continue;
       const person = personById(userId);
@@ -2553,7 +2544,6 @@
       const isFriend = friends.some((f) => f.id === userId);
       upsertFriendMarker(userId, person, coords, isFriend);
     }
-    // Убираем маркеры тех, у кого больше нет координат / кто стал нерелевантен
     for (const [userId, fm] of [...friendMarkers.entries()]) {
       if (!relevant.has(userId) || !found.has(userId)) {
         try { fm.marker.destroy(); } catch {}
@@ -2566,7 +2556,6 @@
     if (!map2gis) return;
     const existing = friendMarkers.get(userId);
     if (existing) {
-      // Обновляем позицию и обновляем HTML (если изменились данные профиля)
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
@@ -2580,7 +2569,6 @@
     friendMarkers.set(userId, { marker, location: coords });
   }
 
-  // Обработка одного события реалтайма
   async function applyUserLocationChange(payload) {
     if (!currentUser) return;
     const row = payload.new || payload.old;
@@ -2601,11 +2589,8 @@
     const coords = [row.lon, row.lat];
     userLocationsById.set(userId, coords);
 
-    // Если профиль этого пользователя нам ещё не известен (участник группы,
-    // ставший релевантным позже) — подгружаем его
     let person = personById(userId);
     if (!person) {
-      // Попробуем загрузить профиль
       const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').eq('id', userId).maybeSingle();
       if (error || !data) return;
       groupMemberProfiles.set(userId, { id: data.id, name: data.name, handle: '@' + data.username, avatar: data.avatar || '' });
@@ -2616,7 +2601,6 @@
     upsertFriendMarker(userId, person, coords, isFriend);
   }
 
-  // Пишем свою геопозицию в Supabase (upsert)
   async function upsertMyLocation(coords) {
     if (!currentUser || !Array.isArray(coords) || coords.length !== 2) return;
     const [lon, lat] = coords;
@@ -3516,17 +3500,38 @@
     });
   }
 
+  /* Экран «Сообщения» = список чатов с друзьями */
   async function showMessengerScreen() {
-    await loadChatMessages();
     setScreen(() => {
       winTitle.textContent = 'Сообщения';
       winBody.scrollTop = 0;
       winBody.style.display = 'flex'; winBody.style.flexDirection = 'column'; winBody.style.padding = '0';
-      renderMessengerList();
+      renderChatsList();
     }, () => {
       winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
       closeApp();
     });
+  }
+
+  function renderChatsList() {
+    const list = friends.slice();
+    const rows = list.length
+      ? list.map((f) => `
+          <li class="person-card" data-open-dm="${f.id}" role="button" tabindex="0">
+            ${avatarCircleHtml(f, 44)}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(f.name)}</div>
+              <div class="person-handle">${escapeHtml(f.handle)}</div>
+            </div>
+            <span class="chev">›</span>
+          </li>`).join('')
+      : `<div class="empty-msg">Пока нет друзей.<br>Найдите их через приложение «Друзья».</div>`;
+    winBody.innerHTML = `
+      <div class="sub-toolbar">
+        <span class="sub-toolbar-title">Мои чаты</span>
+        <span class="sub-toolbar-spacer"></span>
+      </div>
+      <ul class="rows">${rows}</ul>`;
   }
 
   /* ═══════ ТЕХПОДДЕРЖКА ═══════ */
@@ -3610,7 +3615,7 @@
         <div class="support-chat-body" id="dm-body">
           ${dmMessages.length ? dmMessages.map((m) => {
             const mine = m.from_id === currentUser.id;
-            return `<div class="chat-msg ${mine ? 'me' : 'them'}">
+            return `<div class="chat-msg ${mine ? 'me' : 'them'}" data-msg-id="${m.id}">
               ${escapeHtml(m.content)}
               <span class="chat-msg-time">${fmtTime(m.created_at)}</span>
             </div>`;
@@ -3621,19 +3626,62 @@
           <button class="support-chat-send" type="submit">Отправить</button>
         </form>
       </div>`;
-    const bodyEl = winBody.querySelector('#dm-body');
-    if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
+    scrollDmToBottom();
+
     const form = winBody.querySelector('#dm-form');
     const input = winBody.querySelector('#dm-input');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const text = input.value.trim(); if (!text || !currentUser || !currentDmPeerId) return;
+      const text = input.value.trim();
+      if (!text || !currentUser || !currentDmPeerId) return;
       input.value = '';
-      const { error } = await supabaseClient.from('dm_messages').insert({
+
+      const tempId = 'tmp-' + Date.now() + Math.random().toString(36).slice(2, 6);
+      const optimistic = {
+        id: tempId,
+        from_id: currentUser.id,
+        to_id: currentDmPeerId,
+        content: text,
+        created_at: new Date().toISOString(),
+      };
+      dmMessages.push(optimistic);
+      appendDmMessage(optimistic);
+
+      const { data, error } = await supabaseClient.from('dm_messages').insert({
         from_id: currentUser.id, to_id: currentDmPeerId, content: text,
-      });
-      if (error) console.warn('[dm] insert:', error.message);
+      }).select().single();
+
+      if (error) {
+        console.warn('[dm] insert:', error.message);
+        dmMessages = dmMessages.filter((m) => m.id !== tempId);
+        const el = winBody.querySelector(`[data-msg-id="${tempId}"]`);
+        if (el) el.remove();
+        return;
+      }
+      const idx = dmMessages.findIndex((m) => m.id === tempId);
+      if (idx !== -1 && data) dmMessages[idx] = data;
+      const el = winBody.querySelector(`[data-msg-id="${tempId}"]`);
+      if (el && data) el.dataset.msgId = data.id;
     });
+  }
+
+  function scrollDmToBottom() {
+    const bodyEl = winBody.querySelector('#dm-body');
+    if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
+
+  function appendDmMessage(m) {
+    const bodyEl = winBody.querySelector('#dm-body');
+    if (!bodyEl) return;
+    const empty = bodyEl.querySelector('.empty-msg');
+    if (empty) empty.remove();
+    const mine = m.from_id === currentUser.id;
+    const div = document.createElement('div');
+    div.className = `chat-msg ${mine ? 'me' : 'them'}`;
+    div.dataset.msgId = m.id;
+    div.innerHTML = `${escapeHtml(m.content)}<span class="chat-msg-time">${fmtTime(m.created_at)}</span>`;
+    bodyEl.appendChild(div);
+    scrollDmToBottom();
   }
 
   async function showDmScreen(peerId) {
@@ -3647,7 +3695,7 @@
     }, () => {
       winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
       currentDmPeerId = null;
-      showApp('friends');
+      showMessengerScreen();
     });
   }
 
@@ -4254,7 +4302,6 @@
           return;
         }
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
-        // Обновляем и мой маркер на карте, и маркер у друзей — на всякий случай перезагрузим локации
         loadUserLocations();
         showProfileScreen();
       });
