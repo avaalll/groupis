@@ -1222,6 +1222,175 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
+
+    /* ═══════════════════════════════════════════════════════
+       МОБИЛЬНАЯ АДАПТАЦИЯ
+       ═══════════════════════════════════════════════════════ */
+
+    /* Планшеты и небольшие ноутбуки */
+    @media (max-width: 900px) {
+      .window {
+        inset: calc(38px + env(safe-area-inset-top, 0px)) 8px calc(96px + env(safe-area-inset-bottom, 0px)) 8px;
+        width: calc(100% - 16px);
+        height: auto;
+        max-height: calc(100dvh - 38px - 96px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        border-radius: 16px;
+      }
+      .win-body { padding-bottom: env(safe-area-inset-bottom, 0px); }
+    }
+
+    /* Телефоны (вертикально) */
+    @media (max-width: 640px) {
+      .menubar {
+        height: calc(26px + env(safe-area-inset-top, 0px));
+        font-size: 12px;
+        padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
+      }
+
+      #notif-btn, #settings-btn {
+        width: 38px; height: 38px;
+        top: calc(34px + env(safe-area-inset-top, 0px));
+      }
+      #notif-btn { left: 10px; }
+      #settings-btn { right: 10px; }
+      #notif-btn svg, #settings-btn svg { width: 18px; height: 18px; }
+
+      .geo-btn {
+        width: 38px; height: 38px;
+        right: 10px;
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      }
+      .geo-btn svg { width: 18px; height: 18px; }
+
+      .dock-wrap {
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        padding: 0 8px;
+        box-sizing: border-box;
+      }
+      .dock {
+        gap: 12px;
+        padding: 7px 12px;
+        border-radius: 22px;
+        max-width: calc(100vw - 16px);
+        box-sizing: border-box;
+      }
+      .dock-item { width: 48px; height: 48px; }
+      .dock-btn { width: 48px; height: 48px; border-radius: 12px; }
+      .tip { display: none; }
+
+      .window {
+        inset: calc(34px + env(safe-area-inset-top, 0px)) 6px calc(80px + env(safe-area-inset-bottom, 0px)) 6px;
+        width: calc(100% - 12px);
+        height: auto;
+        max-height: calc(100dvh - 34px - 80px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        border-radius: 14px;
+      }
+      .win-head {
+        height: 40px;
+        padding: 0 10px;
+        grid-template-columns: 40px 1fr 40px;
+      }
+      .win-back { width: 30px; height: 30px; }
+      .win-back svg { width: 18px; height: 18px; }
+      .win-title { font-size: 12.5px; }
+
+      .edit-form { padding: 14px 12px 16px; gap: 12px; }
+      .rows { padding: 4px; }
+      .row { padding: 9px 10px; gap: 10px; }
+      .profile-head { padding: 18px 14px 10px; }
+      .profile-head .avatar { width: 72px; height: 72px; font-size: 28px; }
+
+      .places-toolbar { padding: 6px 8px; }
+      .sub-toolbar { padding: 6px 10px; }
+      .feed { padding: 8px 8px 20px; gap: 10px; }
+      .grid { gap: 2px; padding: 2px; }
+
+      .avatar-editor { padding: 12px 12px 16px; gap: 14px; }
+      .avatar-stage { height: 200px; }
+
+      .group-form { padding: 12px; gap: 12px; }
+      .user-profile-view { padding: 14px 12px 18px; gap: 12px; }
+      .user-profile-avatar { width: 108px; height: 108px; }
+
+      .post-head { padding: 8px 10px; }
+      .post-body { padding: 8px 10px 10px; }
+
+      .auth-screen { padding: 10px; }
+      .auth-card {
+        width: 100%;
+        max-height: calc(100dvh - 20px);
+        padding: 20px 16px 16px;
+        border-radius: 18px;
+      }
+      .auth-logo { width: 56px; height: 56px; font-size: 26px; margin-bottom: 10px; }
+      .auth-title { font-size: 18px; }
+      .auth-sub { font-size: 12px; margin-bottom: 14px; }
+      .auth-input { padding: 10px 12px; }
+      .auth-btn { padding: 11px 14px; }
+      .auth-steps { gap: 5px; margin-bottom: 12px; }
+      .auth-step-dot { width: 22px; height: 4px; }
+      .auth-step-title { font-size: 14px; }
+      .auth-step-sub { font-size: 12px; margin-bottom: 12px; }
+
+      .gender-row { gap: 8px; }
+      .gender-opt { padding: 12px 8px; }
+      .gender-opt .gender-emoji { font-size: 22px; }
+      .gender-opt .gender-label { font-size: 12px; }
+
+      .auth-age-row { gap: 10px; }
+
+      .modal { width: calc(100vw - 24px); padding: 16px 14px 12px; }
+      .popover { min-width: 180px; }
+
+      .memory-marker { width: 72px; height: 72px; }
+      .memory-card { width: 52px; height: 58px; }
+
+      .wish-marker { width: 190px; height: 120px; }
+      .wish-cloud-content { font-size: 11.5px; }
+    }
+
+    /* Очень узкие экраны */
+    @media (max-width: 380px) {
+      .dock { gap: 8px; padding: 6px 10px; }
+      .dock-item { width: 44px; height: 44px; }
+      .dock-btn { width: 44px; height: 44px; }
+      .auth-card { padding: 16px 14px 14px; }
+      .auth-logo { width: 48px; height: 48px; font-size: 22px; }
+      .auth-title { font-size: 17px; }
+    }
+
+    /* Телефон в горизонтальной ориентации */
+    @media (max-height: 480px) and (orientation: landscape) {
+      .menubar { height: calc(22px + env(safe-area-inset-top, 0px)); font-size: 11px; }
+      #notif-btn, #settings-btn {
+        width: 34px; height: 34px;
+        top: calc(28px + env(safe-area-inset-top, 0px));
+      }
+      #notif-btn svg, #settings-btn svg { width: 16px; height: 16px; }
+      .geo-btn {
+        width: 34px; height: 34px;
+        bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+      }
+      .geo-btn svg { width: 16px; height: 16px; }
+      .dock-wrap { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+      .dock { gap: 10px; padding: 6px 10px; }
+      .dock-item { width: 42px; height: 42px; }
+      .dock-btn { width: 42px; height: 42px; }
+      .window {
+        inset: calc(28px + env(safe-area-inset-top, 0px)) 6px calc(64px + env(safe-area-inset-bottom, 0px)) 6px;
+        max-height: calc(100dvh - 28px - 64px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      }
+      .auth-screen { align-items: center; justify-content: center; padding: 8px; }
+      .auth-card {
+        width: min(420px, 100%);
+        max-height: calc(100dvh - 16px);
+        padding: 14px 16px 12px;
+      }
+      .auth-logo { width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px; }
+      .auth-title { font-size: 16px; margin-bottom: 2px; }
+      .auth-sub { font-size: 11.5px; margin-bottom: 10px; }
+      .auth-steps { margin-bottom: 8px; }
+    }
   </style>
 </head>
 <body>
@@ -1388,18 +1557,17 @@
     let renderer = null, scene = null, camera = null, earth = null, glow = null;
     let rafId = null, running = false, initialized = false;
     let targetQuat = new THREE.Quaternion();
-    const markers = [];        // [{ sprite, vec }]
+    const markers = [];
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
 
-    const STEP_ANGLE = 0.62;                   // ~35.5° между крестиками
-    const MAX_TURN   = Math.PI * 35 / 180;     // макс. изгиб 35° — ломаная плавная
+    const STEP_ANGLE = 0.62;
+    const MAX_TURN   = Math.PI * 35 / 180;
     const MARKER_RADIUS = 1.04;
-    const MIN_MARKER_DIST = 0.45;              // мин. дистанция между маркерами
+    const MIN_MARKER_DIST = 0.45;
 
-    // Плавность вращения (меньше — медленнее)
     const ROT_LERP_BASE = 0.18;
-    const ADD_DELAY = 0.35;                    // пауза перед добавлением следующего
-    const ANGLE_EPS = 0.06;                    // ~3.5° — точность доворота
+    const ADD_DELAY = 0.35;
+    const ANGLE_EPS = 0.06;
 
     function latLonToVec3(lat, lon, r) {
       const phi = (90 - lat) * Math.PI / 180;
