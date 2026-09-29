@@ -1227,7 +1227,6 @@
        МОБИЛЬНАЯ АДАПТАЦИЯ
        ═══════════════════════════════════════════════════════ */
 
-    /* Планшеты и небольшие ноутбуки */
     @media (max-width: 900px) {
       .window {
         inset: calc(38px + env(safe-area-inset-top, 0px)) 8px calc(96px + env(safe-area-inset-bottom, 0px)) 8px;
@@ -1239,7 +1238,6 @@
       .win-body { padding-bottom: env(safe-area-inset-bottom, 0px); }
     }
 
-    /* Телефоны (вертикально) */
     @media (max-width: 640px) {
       .menubar {
         height: calc(26px + env(safe-area-inset-top, 0px));
@@ -1349,7 +1347,6 @@
       .wish-cloud-content { font-size: 11.5px; }
     }
 
-    /* Очень узкие экраны */
     @media (max-width: 380px) {
       .dock { gap: 8px; padding: 6px 10px; }
       .dock-item { width: 44px; height: 44px; }
@@ -1359,7 +1356,6 @@
       .auth-title { font-size: 17px; }
     }
 
-    /* Телефон в горизонтальной ориентации */
     @media (max-height: 480px) and (orientation: landscape) {
       .menubar { height: calc(22px + env(safe-area-inset-top, 0px)); font-size: 11px; }
       #notif-btn, #settings-btn {
@@ -2438,6 +2434,198 @@
         }
       }).subscribe();
     rtChannels.push(ch5);
+
+    /* Следим за геопозициями друзей и участников групп */
+    const ch6 = supabaseClient.channel('rt:user_locations')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, (payload) => {
+        applyUserLocationChange(payload);
+      }).subscribe();
+    rtChannels.push(ch6);
+  }
+
+  /* ═══════ ГЕОПОЗИЦИИ ДРУЗЕЙ И УЧАСТНИКОВ ГРУПП ═══════ */
+  const friendMarkers = new Map();        // userId → { marker, location: [lon, lat] }
+  let userLocationsById = new Map();      // userId → [lon, lat]  (последняя известная)
+
+  // Кто нам интересен: друзья + участники групп, где я владелец, + те, у кого я в группе
+  function computeRelevantUserIds() {
+    const ids = new Set();
+    // Друзья
+    for (const f of friends) ids.add(f.id);
+    // Участники групп: я — владелец
+    for (const g of groups) {
+      if (g.ownerId !== (currentUser && currentUser.id)) continue;
+      for (const m of (g.members || [])) {
+        if (m.id !== currentUser.id) ids.add(m.id);
+      }
+    }
+    // Участники групп, где я — участник (по списку group_members)
+    // В нашей модели владелец видит всех, а участник не видит других участников — упростим до владельца.
+    // Если вы захотите расширить — добавьте сюда логику.
+    return ids;
+  }
+
+  // Профили тех, кого нет в friends (участники групп, которые не друзья)
+  let groupMemberProfiles = new Map();   // userId → { id, name, handle, avatar }
+
+  async function loadGroupMemberProfiles() {
+    // Собираем id участников моих групп, не являющихся друзьями
+    const friendIds = new Set(friends.map((f) => f.id));
+    const ids = new Set();
+    for (const g of groups) {
+      if (g.ownerId !== (currentUser && currentUser.id)) continue;
+      for (const m of (g.members || [])) {
+        if (m.id === currentUser.id) continue;
+        if (friendIds.has(m.id)) continue;
+        ids.add(m.id);
+      }
+    }
+    if (!ids.length) { groupMemberProfiles = new Map(); return; }
+    const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', [...ids]);
+    if (error) { console.warn('[group profiles] load:', error.message); return; }
+    groupMemberProfiles = new Map((data || []).map((p) => [p.id, { id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }]));
+  }
+
+  // Возвращает объект-«person» для userId (или null)
+  function personById(userId) {
+    if (userId === (currentUser && currentUser.id)) return null;
+    const f = friends.find((x) => x.id === userId);
+    if (f) return f;
+    if (groupMemberProfiles.has(userId)) return groupMemberProfiles.get(userId);
+    return null;
+  }
+
+  // Строим HTML-элемент маркера для друга/участника группы
+  function buildFriendMarkerElement(person, isFriend) {
+    const wrap = document.createElement('div');
+    wrap.className = 'user-avatar-wrap';
+    const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
+    let label = (person.name || '').trim() || person.handle || 'Пользователь';
+    if (label.length > 18) label = label.slice(0, 17) + '…';
+    const avatarInner = person.avatar
+      ? `<div class="user-badge-avatar" style="background-image:url('${person.avatar}')"></div>`
+      : `<div class="user-badge-avatar" style="background:linear-gradient(#9AA6FF,#5C6EE0)">${escapeHtml(nameInitial)}</div>`;
+    const badge = document.createElement('div');
+    badge.className = 'user-badge';
+    badge.innerHTML = `
+      <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
+        ${avatarInner}
+        <span class="user-badge-name">${escapeHtml(label)}</span>
+        ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
+      </div>`;
+    wrap.appendChild(badge);
+    // Заглушка вместо 3D — просто кружок с буквой под бейджем
+    const dot = document.createElement('div');
+    dot.className = 'user-dot-marker';
+    dot.style.background = isFriend ? 'var(--you)' : '#8A4A2F';
+    wrap.appendChild(dot);
+    return wrap;
+  }
+
+  // Отображаем всех «своих» пользователей, у которых есть сохранённая геопозиция
+  async function loadUserLocations() {
+    if (!map2gis || !currentUser) return;
+    const relevant = computeRelevantUserIds();
+    if (!relevant.size) {
+      // Удаляем все маркеры — релевантных нет
+      for (const [id, fm] of [...friendMarkers.entries()]) {
+        try { fm.marker.destroy(); } catch {}
+        friendMarkers.delete(id);
+      }
+      return;
+    }
+    const ids = [...relevant];
+    const { data, error } = await supabaseClient.from('user_locations')
+      .select('user_id, lat, lon, updated_at')
+      .in('user_id', ids);
+    if (error) { console.warn('[user_locations] load:', error.message); return; }
+
+    const found = new Set();
+    for (const row of (data || [])) {
+      found.add(row.user_id);
+      userLocationsById.set(row.user_id, [row.lon, row.lat]);
+    }
+    // Обновляем/создаём маркеры
+    for (const [userId, coords] of userLocationsById.entries()) {
+      if (!relevant.has(userId)) continue;
+      const person = personById(userId);
+      if (!person) continue;
+      const isFriend = friends.some((f) => f.id === userId);
+      upsertFriendMarker(userId, person, coords, isFriend);
+    }
+    // Убираем маркеры тех, у кого больше нет координат / кто стал нерелевантен
+    for (const [userId, fm] of [...friendMarkers.entries()]) {
+      if (!relevant.has(userId) || !found.has(userId)) {
+        try { fm.marker.destroy(); } catch {}
+        friendMarkers.delete(userId);
+      }
+    }
+  }
+
+  function upsertFriendMarker(userId, person, coords, isFriend) {
+    if (!map2gis) return;
+    const existing = friendMarkers.get(userId);
+    if (existing) {
+      // Обновляем позицию и обновляем HTML (если изменились данные профиля)
+      try { existing.marker.destroy(); } catch {}
+      friendMarkers.delete(userId);
+    }
+    const html = buildFriendMarkerElement(person, isFriend);
+    const marker = new mapgl.HtmlMarker(map2gis, {
+      coordinates: coords,
+      html,
+      anchor: [0.5, 0.85],
+      preventMapInteractions: true,
+    });
+    friendMarkers.set(userId, { marker, location: coords });
+  }
+
+  // Обработка одного события реалтайма
+  async function applyUserLocationChange(payload) {
+    if (!currentUser) return;
+    const row = payload.new || payload.old;
+    if (!row) return;
+    const userId = row.user_id;
+    if (!userId || userId === currentUser.id) return;
+
+    const relevant = computeRelevantUserIds();
+    if (!relevant.has(userId)) return;
+
+    if (payload.eventType === 'DELETE') {
+      userLocationsById.delete(userId);
+      const fm = friendMarkers.get(userId);
+      if (fm) { try { fm.marker.destroy(); } catch {} friendMarkers.delete(userId); }
+      return;
+    }
+
+    const coords = [row.lon, row.lat];
+    userLocationsById.set(userId, coords);
+
+    // Если профиль этого пользователя нам ещё не известен (участник группы,
+    // ставший релевантным позже) — подгружаем его
+    let person = personById(userId);
+    if (!person) {
+      // Попробуем загрузить профиль
+      const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').eq('id', userId).maybeSingle();
+      if (error || !data) return;
+      groupMemberProfiles.set(userId, { id: data.id, name: data.name, handle: '@' + data.username, avatar: data.avatar || '' });
+      person = groupMemberProfiles.get(userId);
+    }
+    if (!person) return;
+    const isFriend = friends.some((f) => f.id === userId);
+    upsertFriendMarker(userId, person, coords, isFriend);
+  }
+
+  // Пишем свою геопозицию в Supabase (upsert)
+  async function upsertMyLocation(coords) {
+    if (!currentUser || !Array.isArray(coords) || coords.length !== 2) return;
+    const [lon, lat] = coords;
+    const { error } = await supabaseClient.from('user_locations').upsert({
+      user_id: currentUser.id,
+      lat, lon,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (error) console.warn('[user_locations] upsert:', error.message);
   }
 
   /* ═══════ 2ГИС ═══════ */
@@ -2618,6 +2806,7 @@
         lastUserLocation = coords;
         if (map2gis) { map2gis.setCenter(coords); map2gis.setZoom(16); }
         placeUserMarker(coords); syncWishMarkers();
+        upsertMyLocation(coords);
         const btn = document.getElementById('geo-btn'); if (btn) btn.classList.add('is-active');
       },
       (err) => console.info('[гео]', err.message),
@@ -2625,7 +2814,13 @@
     );
     if (userLocationWatchId === null) {
       userLocationWatchId = navigator.geolocation.watchPosition(
-        (pos) => { const coords = [pos.coords.longitude, pos.coords.latitude]; lastUserLocation = coords; placeUserMarker(coords); syncWishMarkers(); },
+        (pos) => {
+          const coords = [pos.coords.longitude, pos.coords.latitude];
+          lastUserLocation = coords;
+          placeUserMarker(coords);
+          syncWishMarkers();
+          upsertMyLocation(coords);
+        },
         (err) => console.info('[гео watch]', err.message),
         { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
       );
@@ -2640,9 +2835,16 @@
   function goToUserLocation() {
     if (!map2gis) return;
     if (!settings.geolocation) { settings.geolocation = true; saveSettings(settings); syncSettingsUi(); startGeolocation(); return; }
-    if (lastUserLocation) { map2gis.setCenter(lastUserLocation); map2gis.setZoom(16); placeUserMarker(lastUserLocation); syncWishMarkers(); return; }
+    if (lastUserLocation) { map2gis.setCenter(lastUserLocation); map2gis.setZoom(16); placeUserMarker(lastUserLocation); syncWishMarkers(); upsertMyLocation(lastUserLocation); return; }
     navigator.geolocation.getCurrentPosition(
-      (pos) => { const coords = [pos.coords.longitude, pos.coords.latitude]; lastUserLocation = coords; map2gis.setCenter(coords); map2gis.setZoom(16); placeUserMarker(coords); syncWishMarkers(); const btn = document.getElementById('geo-btn'); if (btn) btn.classList.add('is-active'); },
+      (pos) => {
+        const coords = [pos.coords.longitude, pos.coords.latitude];
+        lastUserLocation = coords;
+        map2gis.setCenter(coords); map2gis.setZoom(16);
+        placeUserMarker(coords); syncWishMarkers();
+        upsertMyLocation(coords);
+        const btn = document.getElementById('geo-btn'); if (btn) btn.classList.add('is-active');
+      },
       (err) => console.warn('[гео]', err.message),
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -4052,6 +4254,8 @@
           return;
         }
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
+        // Обновляем и мой маркер на карте, и маркер у друзей — на всякий случай перезагрузим локации
+        loadUserLocations();
         showProfileScreen();
       });
     }, () => showProfileScreen());
@@ -4131,6 +4335,7 @@
           text: `${profile.name} добавил вас в друзья`,
         });
         await loadFriendsFromDB();
+        loadUserLocations();
       }
       showFriendsScreen(); return;
     }
@@ -4141,6 +4346,7 @@
       const { error: rmErr } = await supabaseClient.rpc('remove_friend', { friend_uuid: fid });
       if (rmErr) { console.error('[rpc remove_friend]', rmErr); }
       await loadFriendsFromDB();
+      loadUserLocations();
       showFriendsScreen(); return;
     }
 
