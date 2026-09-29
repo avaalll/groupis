@@ -228,7 +228,8 @@
       display: block; width: 100%; height: 100%;
       filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
     }
-    .user-avatar-marker canvas { display: block; width: 100%; height: 100%; }
+    .user-avatar-marker canvas,
+    .user-avatar-marker img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; user-select: none; }
     .user-badge {
       position: absolute; left: 50%; bottom: calc(100% + 8px);
       transform: translateX(-50%);
@@ -260,6 +261,7 @@
     }
     .user-badge[data-clickable="true"] { pointer-events: auto; cursor: pointer; }
     .user-badge[data-clickable="true"]:hover .user-badge-inner { transform: translateY(-1px); }
+    .user-avatar-wrap > .user-badge { pointer-events: auto; }
     .user-badge-avatar {
       flex: none; width: 22px; height: 22px; border-radius: 50%;
       background-size: cover; background-position: center;
@@ -2542,6 +2544,7 @@
 
     const badge = document.createElement('div');
     badge.className = 'user-badge';
+    badge.dataset.clickable = 'true';
     badge.innerHTML = `
       <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
         ${avatarInner}
@@ -2550,15 +2553,21 @@
       </div>`;
     wrap.appendChild(badge);
 
-    // 3D-аватар под бейджем. Если для друга сохранён avatar_config — рисуем его,
-    // иначе fallback — цветной кружок.
-    const use3D = isThreeAvailable() && avatarCfg && typeof avatarCfg === 'object';
-    if (use3D) {
-      const inner = document.createElement('div'); inner.className = 'user-avatar-marker';
-      const canvas = document.createElement('canvas'); canvas.width = 26; canvas.height = 26;
-      inner.appendChild(canvas); wrap.appendChild(inner);
-      const ok = renderAvatarToCanvas(canvas, 26, avatarCfg);
-      if (!ok) inner.className = 'user-dot-marker';
+    // Нижняя часть — либо снимок 3D-аватара, либо цветной кружок.
+    const cfg = (avatarCfg && typeof avatarCfg === 'object') ? avatarCfg : null;
+    const imgUrl = cfg ? getAvatarSnapshotDataURL(cfg) : null;
+
+    if (imgUrl) {
+      const inner = document.createElement('div');
+      inner.className = 'user-avatar-marker';
+      inner.style.pointerEvents = 'none';
+      const img = document.createElement('img');
+      img.src = imgUrl;
+      img.alt = '';
+      img.draggable = false;
+      img.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;';
+      inner.appendChild(img);
+      wrap.appendChild(inner);
     } else {
       const dot = document.createElement('div');
       dot.className = 'user-dot-marker';
@@ -2566,13 +2575,16 @@
       wrap.appendChild(dot);
     }
 
-    // Клик по маркеру — открыть профиль друга
+    // Клик — открыть профиль друга.
+    const openProfile = (e) => {
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      showFriendProfile(userId, person);
+    };
     wrap.style.pointerEvents = 'auto';
     wrap.style.cursor = 'pointer';
-    wrap.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showFriendProfile(userId, person);
-    });
+    wrap.addEventListener('click', openProfile);
+    badge.addEventListener('click', openProfile);
+    badge.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     return wrap;
   }
@@ -2622,19 +2634,36 @@
   function upsertFriendMarker(userId, person, coords, isFriend, avatarCfg) {
     if (!map2gis) return;
     const existing = friendMarkers.get(userId);
+    const cfgKey = avatarCfgKey(avatarCfg);
     if (existing) {
+      const same =
+        existing.avatarKey === cfgKey &&
+        existing.isFriend === isFriend &&
+        existing.personName === (person.name || '') &&
+        existing.personAvatar === (person.avatar || '');
+      if (same) {
+        try { existing.marker.setCoordinates(coords); } catch {}
+        existing.location = coords;
+        return;
+      }
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
     const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId);
-    // preventMapInteractions: false — чтобы клик по нашему элементу приходил нам
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
       anchor: [0.5, 0.85],
       preventMapInteractions: false,
     });
-    friendMarkers.set(userId, { marker, location: coords });
+    friendMarkers.set(userId, {
+      marker,
+      location: coords,
+      avatarKey: cfgKey,
+      isFriend,
+      personName: person.name || '',
+      personAvatar: person.avatar || '',
+    });
   }
 
   async function applyUserLocationChange(payload) {
@@ -2790,7 +2819,7 @@
     if (!isThreeAvailable()) return false;
     const THREE = window.THREE;
     try {
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(size, size, false);
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -2809,6 +2838,36 @@
       canvas.__avatarStop = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
       return true;
     } catch (err) { console.warn('[аватар]', err); return false; }
+  }
+
+  /* Кэш статичных снимков 3D-аватара — чтобы не рисовать WebGL повторно
+     и чтобы корректно вставлять аватар в HTML-маркер карты 2ГИС. */
+  const avatarSnapshotCache = new Map();
+
+  function avatarCfgKey(cfg) {
+    if (!cfg || typeof cfg !== 'object') return '';
+    return `${cfg.skin || ''}|${cfg.clothes || ''}|${cfg.hair || ''}`;
+  }
+
+  function getAvatarSnapshotDataURL(cfg) {
+    if (!isThreeAvailable() || !cfg || typeof cfg !== 'object') return null;
+    const key = avatarCfgKey(cfg);
+    if (avatarSnapshotCache.has(key)) return avatarSnapshotCache.get(key);
+    try {
+      const size = 96;
+      const off = document.createElement('canvas');
+      off.width = size; off.height = size;
+      const ok = renderAvatarToCanvas(off, size, cfg);
+      if (!ok) { avatarSnapshotCache.set(key, null); return null; }
+      const dataUrl = off.toDataURL('image/png');
+      if (off.__avatarStop) { off.__avatarStop(); off.__avatarStop = null; }
+      avatarSnapshotCache.set(key, dataUrl);
+      return dataUrl;
+    } catch (err) {
+      console.warn('[avatar snapshot]', err);
+      avatarSnapshotCache.set(key, null);
+      return null;
+    }
   }
 
   /* ═══════ МАРКЕР ПОЛЬЗОВАТЕЛЯ ═══════ */
