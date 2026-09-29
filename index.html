@@ -1382,18 +1382,23 @@
     return typeof window.THREE !== 'undefined' && window.THREE.WebGLRenderer;
   }
 
-  /* ═══════ 3D-ГЛОБУС ═══════ */
+   /* ═══════ 3D-ГЛОБУС ═══════ */
   const Globe = (() => {
     let renderer = null, scene = null, camera = null, earth = null, glow = null, linesGroup = null;
     let rafId = null, running = false, initialized = false;
     let targetQuat = new THREE.Quaternion();
     const markers = [];        // [{ sprite, vec }]
-    const segments = [];       // [{ line, fromVec, toVec, progress, doneAt }]
+    const segments = [];       // [{ line, fromVec, toVec, progress, doneAt, dashes, dashCount }]
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
-    const STEP_ANGLE = 0.55;   // угловой шаг между маркерами (рад)
-    const MAX_TURN   = Math.PI / 3;
-    const LINE_SPEED = 0.75;   // прогресс линии за 1 сек
-    const POST_PAUSE = 0.35;   // пауза после завершения линии
+    const STEP_ANGLE = 0.45;    // угловой шаг между крестиками (рад) — меньше => ближе друг к другу
+    const MAX_TURN   = Math.PI * 50 / 180; // макс. изгиб = 50°
+    const LINE_SPEED = 0.85;    // прогресс линии за 1 сек
+    const POST_PAUSE = 0.25;    // пауза после завершения линии
+
+    // Радиус, на котором рисуются крестики и линии.
+    // Оба используют ОДИН радиус, чтобы линии точно попадали в центр крестика.
+    const MARKER_RADIUS = 1.04;
+    const LINE_RADIUS   = MARKER_RADIUS;
 
     function latLonToVec3(lat, lon, r) {
       const phi = (90 - lat) * Math.PI / 180;
@@ -1405,6 +1410,7 @@
       );
     }
 
+    // Крестик — компактный, без кольца
     function makeMarkerTexture() {
       const c = document.createElement('canvas');
       c.width = 128; c.height = 128;
@@ -1415,11 +1421,11 @@
       ctx.translate(cx, cy);
       ctx.rotate(Math.PI / 4);
       ctx.strokeStyle = '#E4EAFF';
-      ctx.lineWidth = 10;
+      ctx.lineWidth = 7;
       ctx.lineCap = 'round';
       ctx.shadowColor = '#6E7EFF';
-      ctx.shadowBlur = 20;
-      const arm = 34;
+      ctx.shadowBlur = 14;
+      const arm = 22;
       ctx.beginPath();
       ctx.moveTo(-arm, 0); ctx.lineTo(arm, 0);
       ctx.moveTo(0, -arm); ctx.lineTo(0, arm);
@@ -1436,7 +1442,7 @@
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
       const s = new THREE.Sprite(mat);
       s.position.copy(vec.clone().multiplyScalar(r));
-      s.userData.targetScale = 0.35;
+      s.userData.targetScale = 0.22;             // <── меньше, чем было (0.35)
       s.userData.bornAt = performance.now();
       s.scale.set(0, 0, 0);
       earth.add(s);
@@ -1465,38 +1471,65 @@
       return new THREE.Vector3().crossVectors(v, ref).normalize();
     }
 
-    function makeDashedArc(a, b, radius, dashLen = 0.05, gapLen = 0.03) {
+    // Предрасчёт пунктирных штрихов между двумя точками.
+    // Возвращаем массив { a: Vector3, b: Vector3 } — каждый штрих — отдельный отрезок.
+    function buildDashSegments(a, b, radius, dashLen = 0.045, gapLen = 0.03) {
       const angle = a.angleTo(b);
       const axis = new THREE.Vector3().crossVectors(a, b);
-      const geo = new THREE.BufferGeometry();
-      const mat = new THREE.LineBasicMaterial({ color: 0xDDE3FF, transparent: true, opacity: 0.95 });
-      if (axis.lengthSq() < 1e-9) {
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(0), 3));
-        return new THREE.LineSegments(geo, mat);
-      }
+      if (axis.lengthSq() < 1e-9 || angle < 1e-6) return [];
       axis.normalize();
       const arcLen = angle;
       const dashCount = Math.max(1, Math.round(arcLen / (dashLen + gapLen)));
       const q = new THREE.Quaternion();
-      const positions = [];
+      const result = [];
       for (let k = 0; k < dashCount; k++) {
         const t0 = k * (dashLen + gapLen) / arcLen;
         const t1 = t0 + dashLen / arcLen;
         if (t0 >= 1) break;
         const t1c = Math.min(1, t1);
-        const sub = 8;
-        for (let i = 0; i < sub; i++) {
-          const tA = t0 + (t1c - t0) * (i / sub);
-          const tB = t0 + (t1c - t0) * ((i + 1) / sub);
-          q.setFromAxisAngle(axis, angle * tA);
-          const pA = a.clone().applyQuaternion(q).multiplyScalar(radius);
-          q.setFromAxisAngle(axis, angle * tB);
-          const pB = a.clone().applyQuaternion(q).multiplyScalar(radius);
-          positions.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
-        }
+        // Наклонная линия штриха (2 точки достаточно)
+        q.setFromAxisAngle(axis, angle * t0);
+        const pA = a.clone().applyQuaternion(q).multiplyScalar(radius);
+        q.setFromAxisAngle(axis, angle * t1c);
+        const pB = a.clone().applyQuaternion(q).multiplyScalar(radius);
+        result.push({ a: pA, b: pB, tStart: t0, tEnd: t1c });
       }
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      return new THREE.LineSegments(geo, mat);
+      return result;
+    }
+
+    // Создаём пустой LineSegments; наполнять будем на каждом кадре
+    function makeEmptyLine() {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(0), 3));
+      const mat = new THREE.LineBasicMaterial({ color: 0xDDE3FF, transparent: true, opacity: 0.95 });
+      const line = new THREE.LineSegments(geo, mat);
+      return line;
+    }
+
+    // Заполняем буфер линии теми штрихами, чей tStart <= progress
+    function updateLineGeometry(seg) {
+      const dashes = seg.dashes;
+      const p = seg.progress;
+      const visible = [];
+      for (const d of dashes) {
+        if (d.tStart <= p) visible.push(d);
+        else break;
+      }
+      const positions = new Float32Array(visible.length * 6);
+      for (let i = 0; i < visible.length; i++) {
+        const d = visible[i];
+        positions[i * 6 + 0] = d.a.x;
+        positions[i * 6 + 1] = d.a.y;
+        positions[i * 6 + 2] = d.a.z;
+        positions[i * 6 + 3] = d.b.x;
+        positions[i * 6 + 4] = d.b.y;
+        positions[i * 6 + 5] = d.b.z;
+      }
+      const oldGeo = seg.line.geometry;
+      const newGeo = new THREE.BufferGeometry();
+      newGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      seg.line.geometry = newGeo;
+      if (oldGeo) oldGeo.dispose();
     }
 
     function pickNextVec(prevVec, prevDir) {
@@ -1538,7 +1571,7 @@
       const lon = (Math.random() * 360) - 180;
       const vec = latLonToVec3(lat, lon, 1).normalize();
       currentDir = perpendicular(vec);
-      const sprite = addMarkerSpriteAtVec(vec, 1.04);
+      const sprite = addMarkerSpriteAtVec(vec, MARKER_RADIUS);
       markers.push({ sprite, vec });
       targetQuat.setFromUnitVectors(vec.clone(), camDir);
     }
@@ -1549,24 +1582,26 @@
       const next = pickNextVec(prev.vec, currentDir);
       currentDir = next.dir;
 
-      const line = makeDashedArc(prev.vec, next.vec, 1.025);
-      const fullCount = line.geometry.getAttribute('position').count;
-      line.userData.fullCount = fullCount;
-      line.geometry.setDrawRange(0, 0);
+      const line = makeEmptyLine();
       linesGroup.add(line);
 
-      segments.push({
+      const dashes = buildDashSegments(prev.vec, next.vec, LINE_RADIUS);
+
+      const seg = {
         line,
         fromVec: prev.vec.clone(),
         toVec: next.vec.clone(),
         progress: 0,
         doneAt: null,
-      });
+        dashes,
+      };
+      segments.push(seg);
+      updateLineGeometry(seg);
     }
 
     function commitSegmentMarker(seg) {
       const vec = seg.toVec.clone();
-      const sprite = addMarkerSpriteAtVec(vec, 1.04);
+      const sprite = addMarkerSpriteAtVec(vec, MARKER_RADIUS);
       markers.push({ sprite, vec });
     }
 
@@ -1714,7 +1749,7 @@
       const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
       last = now;
 
-      // Анимация появления маркеров
+      // Появление маркеров
       for (const m of markers) {
         const p = Math.min(1, (now - m.sprite.userData.bornAt) / 400);
         const e = 1 - Math.pow(1 - p, 3);
@@ -1727,9 +1762,7 @@
 
       if (activeSeg) {
         activeSeg.progress = Math.min(1, activeSeg.progress + dt * LINE_SPEED);
-        const full = activeSeg.line.userData.fullCount || 0;
-        const count = Math.floor(activeSeg.progress * full / 2) * 2;
-        activeSeg.line.geometry.setDrawRange(0, count);
+        updateLineGeometry(activeSeg);
 
         // Глобус поворачивается вслед за кончиком линии
         const angle = activeSeg.fromVec.angleTo(activeSeg.toVec);
