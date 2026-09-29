@@ -1383,6 +1383,7 @@
   }
 
     /* ═══════ 3D-ГЛОБУС ═══════ */
+    /* ═══════ 3D-ГЛОБУС ═══════ */
   const Globe = (() => {
     let renderer = null, scene = null, camera = null, earth = null, glow = null;
     let rafId = null, running = false, initialized = false;
@@ -1390,10 +1391,17 @@
     const markers = [];        // [{ sprite, vec }]
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
 
-    const STEP_ANGLE = 0.65;                    // ~37° между крестиками
-    const MAX_TURN   = Math.PI * 50 / 180;      // макс. изгиб 50°
+    const STEP_ANGLE = 0.62;                   // ~35.5° между крестиками
+    const MAX_TURN   = Math.PI * 35 / 180;     // макс. изгиб 35° — ломаная «течёт» плавно
     const MARKER_RADIUS = 1.04;
-    const MIN_MARKER_DIST = 0.45;               // мин. дистанция между маркерами (по хорде)
+    const MIN_MARKER_DIST = 0.45;              // мин. дистанция между маркерами
+
+    // Плавность вращения: чем МЕНЬШЕ — тем медленнее глобус поворачивается
+    const ROT_LERP_BASE = 0.18;                // было 0.0005 — теперь очень плавно
+    // Пауза перед добавлением следующего маркера
+    const ADD_DELAY = 0.35;                    // секунд после появления текущего
+    // Насколько близко должен быть глобус к целевому повороту, чтобы добавить следующий
+    const ANGLE_EPS = 0.06;                    // ~3.5°
 
     function latLonToVec3(lat, lon, r) {
       const phi = (90 - lat) * Math.PI / 180;
@@ -1448,11 +1456,17 @@
       return new THREE.Vector3().crossVectors(v, ref).normalize();
     }
 
+    // Насколько глобус ещё далёк от целевого поворота
+    function currentAngleToTarget() {
+      if (!earth) return 0;
+      return earth.quaternion.angleTo(targetQuat);
+    }
+
     function pickNextVec(prevVec, prevDir) {
       const dir0 = prevDir ? prevDir.clone() : perpendicular(prevVec);
       dir0.sub(prevVec.clone().multiplyScalar(dir0.dot(prevVec))).normalize();
 
-      for (let attempt = 0; attempt < 80; attempt++) {
+      for (let attempt = 0; attempt < 100; attempt++) {
         const turn = (Math.random() * 2 - 1) * MAX_TURN;
         const q = new THREE.Quaternion().setFromAxisAngle(prevVec, turn);
         const dir = dir0.clone().applyQuaternion(q).normalize();
@@ -1472,7 +1486,8 @@
         const newDir = nextVec.clone().sub(prevVec.clone().multiplyScalar(nextVec.dot(prevVec))).normalize();
         return { vec: nextVec, dir: newDir };
       }
-      // Фолбэк: продолжаем прямо, если никакой вариант не подошёл
+
+      // Фолбэк — продолжаем прямо
       const q2 = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3().crossVectors(prevVec, dir0).normalize(),
         STEP_ANGLE
@@ -1484,6 +1499,7 @@
 
     let currentDir = null;
     let pendingTarget = 0;
+    let lastAddTime = 0;
 
     function addFirstMarker() {
       const lat = (Math.random() * 90) - 45;
@@ -1493,6 +1509,7 @@
       const sprite = addMarkerSpriteAtVec(vec, MARKER_RADIUS);
       markers.push({ sprite, vec });
       targetQuat.setFromUnitVectors(vec.clone(), camDir);
+      lastAddTime = performance.now();
     }
 
     function addNextMarker() {
@@ -1504,22 +1521,26 @@
       const sprite = addMarkerSpriteAtVec(next.vec, MARKER_RADIUS);
       markers.push({ sprite, vec: next.vec });
 
-      // Поворачиваем глобус к новому маркеру
       targetQuat.setFromUnitVectors(next.vec.clone(), camDir);
+      lastAddTime = performance.now();
     }
 
+    // Устанавливаем цель: сколько крестиков должно быть.
+    // Само добавление происходит в tick() — по одному, плавно, с паузами.
     function setStepCount(n) {
       pendingTarget = n;
+      // Если цель уменьшилась — сразу удаляем лишние
       if (n <= 0) {
         while (markers.length) removeLastMarker();
         return;
       }
       while (markers.length > n) removeLastMarker();
-      // Досыпаем недостающие маркеры
-      while (markers.length < n) {
-        if (markers.length === 0) addFirstMarker();
-        else addNextMarker();
+      // Если крестиков 0 — создаём первый сразу
+      if (markers.length === 0 && n >= 1) {
+        addFirstMarker();
       }
+      // Если крестиков 1, а цель — уже 2+ — дадим тику добавить следующий
+      // через паузу и после доворота.
     }
 
     function removeLastMarker() {
@@ -1640,19 +1661,34 @@
       const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
       last = now;
 
-      // Анимация появления маркеров
+      // Плавное вращение глобуса.
+      // ROT_LERP_BASE маленькое — поворот медленный и «обтекаемый».
+      if (earth) {
+        const k = 1 - Math.pow(ROT_LERP_BASE, dt);
+        earth.quaternion.slerp(targetQuat, k);
+        const s = 1 + Math.sin(now * 0.0006) * 0.012;
+        earth.scale.setScalar(s);
+        if (glow) glow.scale.setScalar(s);
+      }
+
+      // Анимация появления маркеров (всплытие)
       for (const m of markers) {
-        const p = Math.min(1, (now - m.sprite.userData.bornAt) / 450);
+        const p = Math.min(1, (now - m.sprite.userData.bornAt) / 550);
         const e = 1 - Math.pow(1 - p, 3);
         const sc = m.sprite.userData.targetScale * e;
         m.sprite.scale.set(sc, sc, sc);
       }
 
-      if (earth) {
-        earth.quaternion.slerp(targetQuat, 1 - Math.pow(0.0005, dt));
-        const s = 1 + Math.sin(now * 0.0006) * 0.012;
-        earth.scale.setScalar(s);
-        if (glow) glow.scale.setScalar(s);
+      // Пошаговое добавление следующего маркера:
+      // — должно быть меньше, чем pendingTarget
+      // — глобус уже довернулся (угол к targetQuat < ANGLE_EPS)
+      // — прошла пауза ADD_DELAY с момента появления предыдущего
+      if (markers.length < pendingTarget && markers.length >= 1) {
+        const timeSinceLastAdd = (now - lastAddTime) / 1000;
+        const angleLeft = currentAngleToTarget();
+        if (timeSinceLastAdd >= ADD_DELAY && angleLeft <= ANGLE_EPS) {
+          addNextMarker();
+        }
       }
 
       renderer.render(scene, camera);
@@ -1677,6 +1713,7 @@
       while (markers.length) removeLastMarker();
       targetQuat.identity();
       currentDir = null;
+      lastAddTime = 0;
     }
 
     document.addEventListener('visibilitychange', () => {
