@@ -1384,20 +1384,16 @@
 
     /* ═══════ 3D-ГЛОБУС ═══════ */
   const Globe = (() => {
-    let renderer = null, scene = null, camera = null, earth = null, glow = null, linesGroup = null;
+    let renderer = null, scene = null, camera = null, earth = null, glow = null;
     let rafId = null, running = false, initialized = false;
     let targetQuat = new THREE.Quaternion();
     const markers = [];        // [{ sprite, vec }]
-    const segments = [];       // [{ line, fromVec, toVec, progress, doneAt, dashCount, totalPairs }]
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
 
-    const STEP_ANGLE = 0.55;                   // ~31° между крестиками
-    const MAX_TURN   = Math.PI * 45 / 180;     // макс. изгиб 45°
-    const LINE_SPEED = 0.9;                    // прогресс линии за 1 сек
-    const POST_PAUSE = 0.25;                   // пауза после завершения линии
+    const STEP_ANGLE = 0.65;                    // ~37° между крестиками
+    const MAX_TURN   = Math.PI * 50 / 180;      // макс. изгиб 50°
     const MARKER_RADIUS = 1.04;
-    const LINE_RADIUS   = MARKER_RADIUS;       // линия строго на радиусе крестиков
-    const MIN_MARKER_DIST = 0.28;              // минимальная дистанция между маркерами (по хорде)
+    const MIN_MARKER_DIST = 0.45;               // мин. дистанция между маркерами (по хорде)
 
     function latLonToVec3(lat, lon, r) {
       const phi = (90 - lat) * Math.PI / 180;
@@ -1447,61 +1443,15 @@
       return s;
     }
 
-    function segIntersects(a, b, c, d) {
-      const ab = b.clone().sub(a);
-      const cd = d.clone().sub(c);
-      const n = new THREE.Vector3().crossVectors(ab, cd);
-      if (n.lengthSq() < 1e-9) return false;
-      n.normalize();
-      const ac = c.clone().sub(a);
-      const sA = ab.dot(n);
-      const sC = ac.dot(n);
-      const sD = d.clone().sub(a).dot(n);
-      const signs = [Math.sign(sA), 0, Math.sign(sC), Math.sign(sD)];
-      const allPos = signs.every((v) => v >= 0);
-      const allNeg = signs.every((v) => v <= 0);
-      return !(allPos || allNeg);
-    }
-
     function perpendicular(v) {
       const ref = Math.abs(v.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
       return new THREE.Vector3().crossVectors(v, ref).normalize();
-    }
-
-    // Единая геометрия для сегмента: массив пар (a, b) на каждый штрих
-    function buildDashGeometry(a, b, radius, dashLen = 0.045, gapLen = 0.03) {
-      const angle = a.angleTo(b);
-      const axis = new THREE.Vector3().crossVectors(a, b);
-      const geo = new THREE.BufferGeometry();
-      if (axis.lengthSq() < 1e-9 || angle < 1e-6) {
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(0), 3));
-        return { geo, totalPairs: 0 };
-      }
-      axis.normalize();
-      const arcLen = angle;
-      const dashCount = Math.max(1, Math.round(arcLen / (dashLen + gapLen)));
-      const q = new THREE.Quaternion();
-      const positions = [];
-      for (let k = 0; k < dashCount; k++) {
-        const t0 = k * (dashLen + gapLen) / arcLen;
-        const t1 = t0 + dashLen / arcLen;
-        if (t0 >= 1) break;
-        const t1c = Math.min(1, t1);
-        q.setFromAxisAngle(axis, angle * t0);
-        const pA = a.clone().applyQuaternion(q).multiplyScalar(radius);
-        q.setFromAxisAngle(axis, angle * t1c);
-        const pB = a.clone().applyQuaternion(q).multiplyScalar(radius);
-        positions.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
-      }
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      return { geo, totalPairs: positions.length / 6 };
     }
 
     function pickNextVec(prevVec, prevDir) {
       const dir0 = prevDir ? prevDir.clone() : perpendicular(prevVec);
       dir0.sub(prevVec.clone().multiplyScalar(dir0.dot(prevVec))).normalize();
 
-      // Пробуем разные углы поворота
       for (let attempt = 0; attempt < 80; attempt++) {
         const turn = (Math.random() * 2 - 1) * MAX_TURN;
         const q = new THREE.Quaternion().setFromAxisAngle(prevVec, turn);
@@ -1519,18 +1469,10 @@
         }
         if (tooClose) continue;
 
-        // Проверяем пересечения с уже существующими сегментами
-        let bad = false;
-        for (const seg of segments) {
-          if (seg.fromVec.distanceTo(prevVec) < 1e-6) continue;
-          if (segIntersects(prevVec, nextVec, seg.fromVec, seg.toVec)) { bad = true; break; }
-        }
-        if (bad) continue;
-
         const newDir = nextVec.clone().sub(prevVec.clone().multiplyScalar(nextVec.dot(prevVec))).normalize();
         return { vec: nextVec, dir: newDir };
       }
-      // Фолбэк — прямо, но всё равно с проверкой близости
+      // Фолбэк: продолжаем прямо, если никакой вариант не подошёл
       const q2 = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3().crossVectors(prevVec, dir0).normalize(),
         STEP_ANGLE
@@ -1553,32 +1495,17 @@
       targetQuat.setFromUnitVectors(vec.clone(), camDir);
     }
 
-    function startNextSegment() {
+    function addNextMarker() {
       const prev = markers[markers.length - 1];
       if (!prev) return;
       const next = pickNextVec(prev.vec, currentDir);
       currentDir = next.dir;
 
-      const { geo, totalPairs } = buildDashGeometry(prev.vec, next.vec, LINE_RADIUS);
-      geo.setDrawRange(0, 0);
-      const mat = new THREE.LineBasicMaterial({ color: 0xDDE3FF, transparent: true, opacity: 0.95 });
-      const line = new THREE.LineSegments(geo, mat);
-      linesGroup.add(line);
+      const sprite = addMarkerSpriteAtVec(next.vec, MARKER_RADIUS);
+      markers.push({ sprite, vec: next.vec });
 
-      segments.push({
-        line,
-        fromVec: prev.vec.clone(),
-        toVec: next.vec.clone(),
-        progress: 0,
-        doneAt: null,
-        totalPairs,
-      });
-    }
-
-    function commitSegmentMarker(seg) {
-      const vec = seg.toVec.clone();
-      const sprite = addMarkerSpriteAtVec(vec, MARKER_RADIUS);
-      markers.push({ sprite, vec });
+      // Поворачиваем глобус к новому маркеру
+      targetQuat.setFromUnitVectors(next.vec.clone(), camDir);
     }
 
     function setStepCount(n) {
@@ -1588,21 +1515,14 @@
         return;
       }
       while (markers.length > n) removeLastMarker();
-      while (segments.length > Math.max(0, n - 1)) removeLastSegment();
-    }
-
-    function removeLastSegment() {
-      const seg = segments.pop();
-      if (!seg) return;
-      if (seg.line.parent) seg.line.parent.remove(seg.line);
-      if (seg.line.geometry) seg.line.geometry.dispose();
-      if (seg.line.material) seg.line.material.dispose();
+      // Досыпаем недостающие маркеры
+      while (markers.length < n) {
+        if (markers.length === 0) addFirstMarker();
+        else addNextMarker();
+      }
     }
 
     function removeLastMarker() {
-      if (segments.length && !segments[segments.length - 1].doneAt) {
-        removeLastSegment();
-      }
       const m = markers.pop();
       if (!m) return;
       if (m.sprite.parent) m.sprite.parent.remove(m.sprite);
@@ -1630,11 +1550,9 @@
       if (w > 720) {
         earth.position.set(0.95, 0, 0);
         if (glow) glow.position.set(0.95, 0, 0);
-        if (linesGroup) linesGroup.position.copy(earth.position);
       } else {
         earth.position.set(0, 0.55, 0);
         if (glow) glow.position.set(0, 0.55, 0);
-        if (linesGroup) linesGroup.position.copy(earth.position);
       }
     }
 
@@ -1680,9 +1598,6 @@
       earth = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 48), fallbackMat);
       scene.add(earth);
 
-      linesGroup = new THREE.Group();
-      scene.add(linesGroup);
-
       const loader = new THREE.TextureLoader();
       loader.setCrossOrigin('anonymous');
       loader.load(
@@ -1727,48 +1642,10 @@
 
       // Анимация появления маркеров
       for (const m of markers) {
-        const p = Math.min(1, (now - m.sprite.userData.bornAt) / 400);
+        const p = Math.min(1, (now - m.sprite.userData.bornAt) / 450);
         const e = 1 - Math.pow(1 - p, 3);
         const sc = m.sprite.userData.targetScale * e;
         m.sprite.scale.set(sc, sc, sc);
-      }
-
-      const lastSeg = segments[segments.length - 1];
-      const activeSeg = lastSeg && !lastSeg.doneAt ? lastSeg : null;
-
-      if (activeSeg) {
-        // Линия растёт от старта к концу: показываем первые N штрихов
-        activeSeg.progress = Math.min(1, activeSeg.progress + dt * LINE_SPEED);
-        const visiblePairs = Math.floor(activeSeg.progress * activeSeg.totalPairs);
-        activeSeg.line.geometry.setDrawRange(0, visiblePairs * 2);
-
-        // Глобус поворачивается вслед за кончиком линии
-        const angle = activeSeg.fromVec.angleTo(activeSeg.toVec);
-        const axis = new THREE.Vector3().crossVectors(activeSeg.fromVec, activeSeg.toVec);
-        if (axis.lengthSq() > 1e-9) {
-          axis.normalize();
-          const q = new THREE.Quaternion().setFromAxisAngle(axis, angle * activeSeg.progress);
-          const tipVec = activeSeg.fromVec.clone().applyQuaternion(q).normalize();
-          targetQuat.setFromUnitVectors(tipVec.clone(), camDir);
-        }
-
-        if (activeSeg.progress >= 1) {
-          activeSeg.doneAt = now;
-          commitSegmentMarker(activeSeg);
-        }
-      } else if (lastSeg && lastSeg.doneAt) {
-        const dtSinceDone = (now - lastSeg.doneAt) / 1000;
-        if (dtSinceDone >= POST_PAUSE) {
-          if (markers.length < pendingTarget) {
-            startNextSegment();
-          }
-        }
-      } else {
-        if (markers.length === 0 && pendingTarget >= 1) {
-          addFirstMarker();
-        } else if (markers.length < pendingTarget && markers.length >= 1 && segments.length === 0) {
-          startNextSegment();
-        }
       }
 
       if (earth) {
@@ -1798,7 +1675,6 @@
     function reset() {
       pendingTarget = 0;
       while (markers.length) removeLastMarker();
-      while (segments.length) removeLastSegment();
       targetQuat.identity();
       currentDir = null;
     }
