@@ -1,14 +1,15 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.0.52';
-const CACHE = `map-desktop-${VERSION}`;
+const VERSION = 'v1.0.54';
+const CACHE = `groupies-${VERSION}`;
 
 const APP_SHELL = [
   './',
   './index.html',
   './three.min.js',
   './manifest.webmanifest',
+  './icons/logo.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
