@@ -1642,9 +1642,13 @@
         inset: calc(28px + env(safe-area-inset-top, 0px)) 6px calc(64px + env(safe-area-inset-bottom, 0px)) 6px;
         max-height: calc(100dvh - 28px - 64px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
       }
-      .auth-screen { align-items: center; justify-content: center; padding: 8px; }
+      /* Телефон лёжа: карточка слева, глобус справа — как на компьютере */
+      .auth-screen {
+        align-items: center; justify-content: flex-start;
+        padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+      }
       .auth-card {
-        width: min(420px, 100%);
+        width: min(360px, 48vw);
         max-height: calc(100dvh - 16px);
         padding: 14px 16px 12px;
       }
@@ -1652,6 +1656,50 @@
       .auth-title { font-size: 16px; margin-bottom: 2px; }
       .auth-sub { font-size: 11.5px; margin-bottom: 10px; }
       .auth-steps { margin-bottom: 8px; }
+    }
+
+    /* ── Вход на вертикальном экране (телефоны и планшеты стоя) ──
+       Глобус сверху (раскладку считает JS), карточка снизу по центру, с учётом «чёлки» и полоски «домой». */
+    @media (orientation: portrait) {
+      .auth-screen {
+        align-items: flex-end; justify-content: center;
+        padding:
+          max(12px, env(safe-area-inset-top, 0px))
+          max(12px, env(safe-area-inset-right, 0px))
+          max(14px, env(safe-area-inset-bottom, 0px))
+          max(12px, env(safe-area-inset-left, 0px));
+      }
+      .auth-card {
+        width: min(460px, 100%);
+        max-height: 56dvh;
+        padding: 20px 18px 16px;
+        border-radius: 22px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+      .auth-logo { width: 52px; height: 52px; font-size: 24px; margin-bottom: 8px; }
+      .auth-logo-img { width: 64px; height: 64px; }
+      .auth-title { font-size: 18px; }
+      .auth-sub { margin-bottom: 14px; }
+      .auth-steps { margin-bottom: 10px; }
+      .auth-step-sub { margin-bottom: 12px; }
+      /* 16px в полях — иначе iPhone приближает страницу при фокусе */
+      .auth-input, .auth-card .edit-input, .auth-card .edit-textarea { font-size: 16px; }
+      .auth-card .edit-textarea { min-height: 72px; }
+      .auth-btn, .auth-link { min-height: 44px; }
+    }
+    /* Планшет стоя: карточка шире и приподнята над нижним краем */
+    @media (orientation: portrait) and (min-width: 600px) {
+      .auth-screen { padding-bottom: max(40px, env(safe-area-inset-bottom, 0px)); }
+      .auth-card { max-height: 50dvh; padding: 26px 26px 20px; }
+      .auth-logo-img { width: 76px; height: 76px; }
+      .auth-title { font-size: 20px; }
+    }
+    /* Низкий телефон стоя (SE и т. п.): карточке нужно больше места */
+    @media (orientation: portrait) and (max-height: 700px) {
+      .auth-card { max-height: 60dvh; padding: 16px 16px 14px; }
+      .auth-logo, .auth-logo-img { width: 44px; height: 44px; margin-bottom: 6px; }
+      .auth-sub { margin-bottom: 10px; }
     }
   </style>
 </head>
@@ -1836,7 +1884,10 @@
     const markers = [];        // { vec, sprite, line } — line ведёт из предыдущей точки
     const tweens = [];         // { start, dur, update(t), res }
     const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+    // Куда «смотрит» активный крестик (из центра глобуса); пересчитывается под ориентацию экрана
     const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
+    let camDist = 3.4;          // расстояние камеры — подбирается так, чтобы глобус влезал в экран
+    let lockedHeight = 0;       // высота холста, пока открыта экранная клавиатура
     let currentDir = null;
 
     const STEP_ANGLE = 0.62;
@@ -2122,23 +2173,69 @@
       clearAll();
       flying = false;
       if (!initialized) return;
-      camera.position.set(0, 0, 3.4);
-      camera.near = 0.1; camera.updateProjectionMatrix();
-      camera.lookAt(0, 0, 0);
+      camera.near = 0.1;
+      updateGlobePosition();
       earth.quaternion.identity();
     }
 
+    /* Раскладка под экран.
+       Горизонтальный (компьютер, планшет и телефон лёжа): карточка слева, глобус в оставшейся части справа.
+       Вертикальный (телефон и планшет стоя): глобус сверху по центру, карточка снизу.
+       Размер глобуса задаём расстоянием камеры, чтобы он всегда целиком влезал в свою область. */
     function updateGlobePosition() {
-      if (!earth) return;
-      const w = window.innerWidth;
-      const p = w > 720 ? [0.95, 0, 0] : [0, 0.55, 0];
-      earth.position.set(...p);
-      if (glow) glow.position.set(...p);
+      if (!earth || !camera) return;
+      const w = window.innerWidth, h = lockedHeight || window.innerHeight;
+      const t = Math.tan((camera.fov / 2) * Math.PI / 180);
+      const portrait = h > w;
+      let targetPx, cx, cy, offset;
+      if (portrait) {
+        // глобус в верхней половине, карточка занимает нижнюю
+        const short = h <= 700;   // низкие телефоны — карточке нужно больше высоты
+        targetPx = short ? Math.min(w * 0.8, h * 0.36) : Math.min(w * 0.86, h * (w >= 600 ? 0.4 : 0.44));
+        cx = w / 2;
+        cy = h * (short ? 0.21 : w >= 600 ? 0.25 : 0.24);
+        offset = new THREE.Vector3(0.1, 0.22, 0);   // крестик чуть выше центра диска
+      } else {
+        const card = document.getElementById('auth-card');
+        const cardW = (card && card.offsetWidth) || Math.min(400, w);
+        const left = Math.min(w * 0.55, cardW + 48);  // карточка с отступами
+        const aw = Math.max(200, w - left);
+        targetPx = Math.min(h * 0.76, aw * 0.78);   // с запасом на ореол вокруг глобуса
+        cx = left + aw / 2;
+        cy = h / 2;
+        offset = new THREE.Vector3(0.28, 0.04, 0);
+      }
+      // диаметр глобуса в пикселях ≈ h / (D·tg(fov/2)) — отсюда расстояние камеры
+      camDist = Math.min(10, Math.max(2.6, h / (targetPx * t)));
+      const H = 2 * camDist * t, W = H * (w / h);
+      const x = (cx / w - 0.5) * W, y = (0.5 - cy / h) * H;
+      earth.position.set(x, y, 0);
+      if (glow) glow.position.set(x, y, 0);
+      if (!flying) {
+        camera.position.set(0, 0, camDist);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+      }
+      // активный крестик — в видимой части глобуса, лицом к камере
+      camDir.set(-x, -y, camDist).normalize().add(offset).normalize();
     }
 
     function onResize() {
       if (!renderer) return;
       const w = window.innerWidth, h = window.innerHeight;
+      const canvas = renderer.domElement;
+      // На Android экранная клавиатура уменьшает высоту окна. Чтобы глобус не прыгал и не сжимался,
+      // пока человек печатает, оставляем холст прежнего размера — лишнее просто обрежется снизу.
+      const typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+      const prevW = renderer.getSize(new THREE.Vector2()).x;
+      if (typing && w === prevW && h < (lockedHeight || camera.userData.h || h)) {
+        if (!lockedHeight) lockedHeight = camera.userData.h || h;
+        canvas.style.height = lockedHeight + 'px';
+        return;
+      }
+      lockedHeight = 0;
+      canvas.style.height = '';
+      camera.userData.h = h;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -2160,6 +2257,7 @@
       camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
       camera.position.set(0, 0, 3.4);
       camera.lookAt(0, 0, 0);
+      camera.userData.h = h;
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.55));
       const key = new THREE.DirectionalLight(0xA6B2FF, 1.15);
