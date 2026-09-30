@@ -57,6 +57,11 @@
 
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+    /* Текстовый курсор только в полях ввода: в режиме «просмотра с курсором» (F7)
+       браузер иначе рисует мигающую палочку в любом месте, куда кликнули */
+    body { caret-color: transparent; }
+    input, textarea, select, [contenteditable="true"] { caret-color: auto; }
+    input[type="range"], input[type="checkbox"], input[type="radio"] { caret-color: transparent; }
     body {
       background: var(--land);
       color: var(--ink);
