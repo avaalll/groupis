@@ -224,7 +224,11 @@
     .wish-card .wish-card-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
 
     .user-avatar-wrap { position: relative; width: 26px; height: 26px; }
-    .user-avatar-wrap[data-clickable="true"] { pointer-events: auto !important; cursor: pointer; }
+    .user-avatar-wrap[data-clickable="true"] { pointer-events: auto !important; cursor: pointer !important; }
+    .user-avatar-wrap[data-clickable="true"] .user-badge,
+    .user-avatar-wrap[data-clickable="true"] .user-badge-inner,
+    .user-avatar-wrap[data-clickable="true"] .user-badge-name,
+    .user-avatar-wrap[data-clickable="true"] .user-badge-avatar { pointer-events: auto !important; cursor: pointer !important; }
     .user-avatar-wrap .user-avatar-marker {
       display: block; width: 100%; height: 100%;
       filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
@@ -2551,22 +2555,18 @@
       ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
       : `<div class="user-dot-marker" style="background:${isFriend ? 'var(--you)' : '#8A4A2F'}"></div>`;
 
-    const wrap = document.createElement('div');
-    wrap.className = 'user-avatar-wrap';
-    wrap.setAttribute('data-user-id', userId);
-    wrap.setAttribute('data-clickable', 'true');
-    wrap.style.pointerEvents = 'auto';
-    wrap.style.cursor = 'pointer';
-    wrap.innerHTML = `
-      <div class="user-badge" data-clickable="true" data-user-id="${userId}">
-        <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
-          ${avatarInner}
-          <span class="user-badge-name">${escapeHtml(label)}</span>
-          ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
+    return `
+      <div class="user-avatar-wrap" data-clickable="true" data-user-id="${userId}"
+           style="pointer-events:auto;cursor:pointer;">
+        <div class="user-badge" data-clickable="true">
+          <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
+            ${avatarInner}
+            <span class="user-badge-name">${escapeHtml(label)}</span>
+            ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
+          </div>
         </div>
-      </div>
-      ${bottom}`;
-    return wrap;
+        ${bottom}
+      </div>`;
   }
 
   async function loadUserLocations() {
@@ -2638,6 +2638,14 @@
       html,
       anchor: [0.5, 0.85],
       preventMapInteractions: false,
+      onClick: (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const p = personById(userId) || groupMemberProfiles.get(userId) || friends.find((f) => f.id === userId);
+        if (p) {
+          console.log('[mapgl onClick] open friend profile', userId, p);
+          showFriendProfile(userId, p);
+        }
+      },
     });
     friendMarkers.set(userId, {
       marker,
@@ -4787,20 +4795,38 @@
   updateBadge();
 
   /* ═══════ ГЛОБАЛЬНЫЙ ПЕРЕХВАТ КЛИКА ПО МАРКЕРУ ДРУГА ═══════
-     Capture phase — ловим клик раньше, чем 2ГИС его проглотит. */
+     Резервный путь — если 2ГИС по какой-то причине не вызвал onClick. */
   document.addEventListener('click', (e) => {
     let el = e.target;
-    while (el && el !== document) {
+    while (el && el !== document && el !== document.documentElement) {
       if (el.dataset && el.dataset.userId) {
         const uid = el.dataset.userId;
-        const person = personById(uid) || groupMemberProfiles.get(uid) || friends.find(f => f.id === uid);
+        const person = personById(uid) || groupMemberProfiles.get(uid) || friends.find((f) => f.id === uid);
         if (person) {
           e.stopPropagation();
           e.preventDefault();
-          console.log('[click] open friend profile', uid, person);
+          console.log('[document click] open friend profile', uid, person);
           showFriendProfile(uid, person);
         } else {
-          console.warn('[click] no person for uid', uid);
+          console.warn('[document click] no person for uid', uid);
+        }
+        return;
+      }
+      el = el.parentNode;
+    }
+  }, true);
+
+  document.addEventListener('pointerdown', (e) => {
+    let el = e.target;
+    while (el && el !== document && el !== document.documentElement) {
+      if (el.dataset && el.dataset.userId) {
+        const uid = el.dataset.userId;
+        const person = personById(uid) || groupMemberProfiles.get(uid) || friends.find((f) => f.id === uid);
+        if (person) {
+          e.stopPropagation();
+          e.preventDefault();
+          console.log('[document pointerdown] open friend profile', uid, person);
+          showFriendProfile(uid, person);
         }
         return;
       }
