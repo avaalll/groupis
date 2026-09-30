@@ -2664,7 +2664,20 @@
     return null;
   }
 
-  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId) {
+  /* Подпись на плашке участника-не-друга: название общей группы.
+     Общая — где состоим оба (как владелец или участник). Несколько — «Название +N». */
+  function sharedGroupsLabel(userId) {
+    const myId = currentUser && currentUser.id;
+    if (!myId) return '';
+    const inGroup = (g, id) => g.ownerId === id || (g.members || []).some((m) => m.id === id);
+    const names = groups.filter((g) => inGroup(g, myId) && inGroup(g, userId)).map((g) => (g.name || '').trim()).filter(Boolean);
+    if (!names.length) return 'группа';
+    let first = names[0];
+    if (first.length > 16) first = first.slice(0, 15) + '…';
+    return names.length > 1 ? `${first} +${names.length - 1}` : first;
+  }
+
+  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel) {
     const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
     let label = (person.name || '').trim() || person.handle || 'Пользователь';
     if (label.length > 18) label = label.slice(0, 17) + '…';
@@ -2687,7 +2700,7 @@
           <div class="user-badge-inner ${isFriend ? '' : 'is-group'}">
             ${avatarInner}
             <span class="user-badge-name">${escapeHtml(label)}</span>
-            ${isFriend ? '' : '<span class="user-badge-name user-badge-group">· группа</span>'}
+            ${isFriend ? '' : `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel || 'группа')}</span>`}
           </div>
         </div>
         ${bottom}
@@ -2696,9 +2709,9 @@
 
   /* Реальный DOM-элемент маркера друга с обработчиком клика —
      так же, как у твоего собственного маркера и маркеров воспоминаний. */
-  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId) {
+  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel) {
     const tpl = document.createElement('div');
-    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId).trim();
+    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel).trim();
     const el = tpl.firstElementChild;
 
     const openProfile = (e) => {
@@ -2767,10 +2780,12 @@
     if (!map2gis) return;
     const existing = friendMarkers.get(userId);
     const cfgKey = avatarCfgKey(avatarCfg);
+    const groupLabel = isFriend ? '' : sharedGroupsLabel(userId);
     if (existing) {
       const same =
         existing.avatarKey === cfgKey &&
         existing.isFriend === isFriend &&
+        existing.groupLabel === groupLabel &&
         existing.personName === (person.name || '') &&
         existing.personAvatar === (person.avatar || '');
       if (same) {
@@ -2782,7 +2797,7 @@
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
-    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId);
+    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel);
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
@@ -2794,6 +2809,7 @@
       location: coords,
       avatarKey: cfgKey,
       isFriend,
+      groupLabel,
       personName: person.name || '',
       personAvatar: person.avatar || '',
     });
@@ -3624,7 +3640,7 @@
           if (!ok) return;
           const { error } = await supabaseClient.from('groups').delete().eq('id', editingId);
           if (error) { console.warn('[groups] delete:', error.message); return; }
-          await loadGroupsFromDB();
+          await loadGroupsFromDB(); refreshFriendsAndMap();
           showGroupsScreen();
         });
       }
@@ -3682,7 +3698,7 @@
           }
         }
 
-        await loadGroupsFromDB();
+        await loadGroupsFromDB(); refreshFriendsAndMap();
         showGroupsScreen();
       });
     }, () => showGroupsScreen());
@@ -4850,7 +4866,7 @@
       const ok = await confirmModal({ title: 'Удалить группу?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
       if (!ok) return;
       await supabaseClient.from('groups').delete().eq('id', id);
-      await loadGroupsFromDB(); showGroupsScreen();
+      await loadGroupsFromDB(); refreshFriendsAndMap(); showGroupsScreen();
       return;
     }
 
