@@ -2587,6 +2587,14 @@
       }).subscribe();
     rtChannels.push(ch5);
 
+    // Нас удалили из друзей (или добавили) — обновляем список и карту без перезагрузки
+    const chFriends = supabaseClient.channel('rt:friendships')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, async () => {
+        await refreshFriendsAndMap();
+        if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
+      }).subscribe();
+    rtChannels.push(chFriends);
+
     const ch6 = supabaseClient.channel('rt:user_locations')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, (payload) => {
         applyUserLocationChange(payload);
@@ -2628,6 +2636,15 @@
     const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', [...ids]);
     if (error) { console.warn('[group profiles] load:', error.message); return; }
     groupMemberProfiles = new Map((data || []).map((p) => [p.id, { id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }]));
+  }
+
+  /* Перечитать друзей и привести маркеры на карте в соответствие.
+     loadGroupMemberProfiles нужен, чтобы бывший друг, оставшийся участником группы,
+     перерисовался как участник группы, а не завис со старым маркером. */
+  async function refreshFriendsAndMap() {
+    await loadFriendsFromDB();
+    await loadGroupMemberProfiles();
+    await loadUserLocations();
   }
 
   function personById(userId) {
@@ -2713,6 +2730,7 @@
         userAvatarCfgById.delete(row.user_id);
       }
     }
+    const shown = new Set();
     for (const [userId, coords] of userLocationsById.entries()) {
       if (!relevant.has(userId)) continue;
       const person = personById(userId);
@@ -2720,14 +2738,20 @@
       const isFriend = friends.some((f) => f.id === userId);
       const cfg = userAvatarCfgById.get(userId) || null;
       upsertFriendMarker(userId, person, coords, isFriend, cfg);
+      shown.add(userId);
     }
-    for (const [userId, fm] of [...friendMarkers.entries()]) {
-      if (!relevant.has(userId) || !found.has(userId)) {
-        try { fm.marker.destroy(); } catch {}
-        friendMarkers.delete(userId);
-        friendMarkerCoords.delete(userId);
-      }
+    // Убираем всех, кого не показали в этом проходе: больше не друг и не участник группы,
+    // нет геопозиции или нет профиля — иначе на карте остаётся устаревший маркер
+    for (const userId of [...friendMarkers.keys()]) {
+      if (!shown.has(userId) || !found.has(userId)) removeFriendMarker(userId);
     }
+  }
+
+  function removeFriendMarker(userId) {
+    const fm = friendMarkers.get(userId);
+    if (fm) { try { fm.marker.destroy(); } catch {} }
+    friendMarkers.delete(userId);
+    friendMarkerCoords.delete(userId);
   }
 
   function upsertFriendMarker(userId, person, coords, isFriend, avatarCfg) {
@@ -2775,14 +2799,13 @@
     if (!userId || userId === currentUser.id) return;
 
     const relevant = computeRelevantUserIds();
-    if (!relevant.has(userId)) return;
+    // Человек больше не друг и не участник группы — его маркера на карте быть не должно
+    if (!relevant.has(userId)) { removeFriendMarker(userId); return; }
 
     if (payload.eventType === 'DELETE') {
       userLocationsById.delete(userId);
       userAvatarCfgById.delete(userId);
-      const fm = friendMarkers.get(userId);
-      if (fm) { try { fm.marker.destroy(); } catch {} friendMarkers.delete(userId); }
-      friendMarkerCoords.delete(userId);
+      removeFriendMarker(userId);
       return;
     }
 
@@ -4870,9 +4893,12 @@
     if (rmFriendBtn) {
       const fid = rmFriendBtn.dataset.removeFriend;
       const { error: rmErr } = await supabaseClient.rpc('remove_friend', { friend_uuid: fid });
-      if (rmErr) { console.error('[rpc remove_friend]', rmErr); }
-      await loadFriendsFromDB();
-      loadUserLocations();
+      if (rmErr) {
+        console.error('[rpc remove_friend]', rmErr);
+        alert('Не удалось удалить из друзей: ' + rmErr.message);
+        return;
+      }
+      await refreshFriendsAndMap();
       showFriendsScreen(); return;
     }
 
