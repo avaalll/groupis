@@ -2491,7 +2491,6 @@
 
   /* ═══════ ГЕОПОЗИЦИИ ДРУЗЕЙ И УЧАСТНИКОВ ГРУПП ═══════ */
   const friendMarkers = new Map();
-  // Отдельная карта для проверки попадания клика по маркеру.
   const friendMarkerCoords = new Map(); // userId → { coords:[lon,lat], person }
   let userLocationsById = new Map();
   let userAvatarCfgById = new Map();
@@ -2520,7 +2519,7 @@
         ids.add(m.id);
       }
     }
-    if (!ids.length) { groupMemberProfiles = new Map(); return; }
+    if (!ids.size) { groupMemberProfiles = new Map(); return; }
     const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', [...ids]);
     if (error) { console.warn('[group profiles] load:', error.message); return; }
     groupMemberProfiles = new Map((data || []).map((p) => [p.id, { id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }]));
@@ -2546,8 +2545,6 @@
     const cfg = (avatarCfg && typeof avatarCfg === 'object') ? avatarCfg : null;
     const imgUrl = cfg ? getAvatarSnapshotDataURL(cfg) : null;
 
-    console.log('[marker]', person.name, 'cfg=', cfg, 'img=', !!imgUrl);
-
     const bottom = imgUrl
       ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
       : `<div class="user-dot-marker" style="background:${isFriend ? 'var(--you)' : '#8A4A2F'}"></div>`;
@@ -2564,6 +2561,22 @@
         </div>
         ${bottom}
       </div>`;
+  }
+
+  /* Реальный DOM-элемент маркера друга с обработчиком клика —
+     так же, как у твоего собственного маркера и маркеров воспоминаний. */
+  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId) {
+    const tpl = document.createElement('div');
+    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId).trim();
+    const el = tpl.firstElementChild;
+
+    const openProfile = (e) => {
+      e.stopPropagation();
+      showApp('profile');                 // окно скрыто, пока ты на карте — сначала открываем его
+      showFriendProfile(userId, person);  // затем показываем профиль друга
+    };
+    el.addEventListener('click', openProfile);
+    return el;
   }
 
   async function loadUserLocations() {
@@ -2631,12 +2644,12 @@
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
-    const html = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId);
+    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId);
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
       anchor: [0.5, 0.85],
-      preventMapInteractions: false,
+      preventMapInteractions: true, // как у собственного маркера — клик не уходит в карту
     });
     friendMarkers.set(userId, {
       marker,
@@ -2646,7 +2659,6 @@
       personName: person.name || '',
       personAvatar: person.avatar || '',
     });
-    // Запоминаем координаты и человека — пригодится для проверки попадания клика.
     friendMarkerCoords.set(userId, { coords, person });
   }
 
@@ -2724,50 +2736,14 @@
       await loadScript('https://mapgl.2gis.com/api/js/v1');
       map2gis = new mapgl.Map('map', { center: MAP_START_LOCATION.center, zoom: MAP_START_LOCATION.zoom, key: MAPGL_API_KEY });
 
-      // ⚡ Главный обработчик клика: проверяем попадание по координатам.
-      // DOM-события 2ГИС не передаёт на вложенные элементы HtmlMarker,
-      // поэтому ловим клик по карте и вручную ищем ближайший маркер друга.
-      map2gis.on('click', (e) => {
-        const hit = findFriendMarkerAtClick(e);
-        if (hit) {
-          console.log('[map click] hit friend marker', hit.userId, hit.person);
-          showFriendProfile(hit.userId, hit.person);
-          return;
-        }
+      // Клик по пустому месту карты: закрываем окно или попап.
+      // Клики по маркерам друзей обрабатываются самими маркерами.
+      map2gis.on('click', () => {
         if (openApp !== null) closeApp(); else closePopup();
       });
 
       syncPostMarkers(); syncWishMarkers(); startGeolocation();
     } catch (err) { console.error('[карта]', err); }
-  }
-
-  /* Проверяем, попал ли клик по карте в область какого-нибудь маркера друга.
-     Работает по координатам, не через DOM — поэтому 2ГИС не может помешать. */
-  function findFriendMarkerAtClick(e) {
-    if (!e || !e.lngLat || !map2gis) return null;
-    const cx = (typeof e.lngLat.lng === 'number') ? e.lngLat.lng
-             : (typeof e.lngLat.lon === 'number') ? e.lngLat.lon : null;
-    const cy = (typeof e.lngLat.lat === 'number') ? e.lngLat.lat : null;
-    if (typeof cx !== 'number' || typeof cy !== 'number') return null;
-
-    // Радиус попадания в градусах. 1° ≈ 111 км, значит 0.0006° ≈ 66 м.
-    // Хватает, чтобы клик по бейджу над маркером засчитался.
-    const RADIUS_DEG = 0.0008;
-    const R2 = RADIUS_DEG * RADIUS_DEG;
-
-    let best = null, bestD2 = Infinity;
-    for (const [userId, info] of friendMarkerCoords.entries()) {
-      if (!info || !Array.isArray(info.coords)) continue;
-      const [lon, lat] = info.coords;
-      const dx = lon - cx;
-      const dy = lat - cy;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < R2 && d2 < bestD2) {
-        bestD2 = d2;
-        best = { userId, person: info.person };
-      }
-    }
-    return best;
   }
 
   /* ═══════ НАСТРОЙКИ ═══════ */
