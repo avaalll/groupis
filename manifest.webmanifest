@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Карта",
-  "short_name": "Карта",
-  "description": "Карта с мессенджером, профилем и настройками в стиле рабочего стола macOS",
+  "name": "Groupies",
+  "short_name": "Groupies",
+  "description": "Groupies — карта с друзьями, группами и мессенджером",
   "lang": "ru",
   "dir": "ltr",
   "start_url": "./",
