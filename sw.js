@@ -1,12 +1,11 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.0.51';
+const VERSION = 'v1.0.52';
 const CACHE = `map-desktop-${VERSION}`;
 
 const APP_SHELL = [
   './',
-  './main.html',
   './index.html',
   './three.min.js',
   './manifest.webmanifest',
@@ -14,6 +13,11 @@ const APP_SHELL = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
+];
+
+// Внешние скрипты, без которых приложение не стартует — кешируем их по мере загрузки
+const CACHEABLE_EXTERNAL = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
 ];
 
 self.addEventListener('install', (event) => {
@@ -31,38 +35,49 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Внешние запросы (Supabase, 2ГИС и т. д.) пропускаем как есть
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
-
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('./main.html', copy));
-          return response;
-        })
-        .catch(() => caches.match('./main.html'))
-    );
-    return;
-  }
-
+function staleWhileRevalidate(event, request) {
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((response) => {
-          if (response.ok) {
+          // opaque — ответ на no-cors запрос <script> к CDN, его статус не виден, но он валиден
+          if (response.ok || response.type === 'opaque') {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(request, copy));
           }
           return response;
         })
-        .catch(() => cached);
+        .catch(() => cached || Response.error());
       return cached || network;
     })
   );
+}
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+
+  if (url.origin !== self.location.origin) {
+    if (CACHEABLE_EXTERNAL.includes(request.url)) staleWhileRevalidate(event, request);
+    // Остальные внешние запросы (Supabase API, 2ГИС и т. д.) пропускаем как есть
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  staleWhileRevalidate(event, request);
 });
