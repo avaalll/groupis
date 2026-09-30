@@ -1429,7 +1429,7 @@
     }
   </style>
 </head>
-<body>
+<body class="auth-locked">
 
   <section id="auth-screen" class="auth-screen" aria-label="Вход в приложение">
     <canvas id="globe-canvas" class="globe-canvas" aria-hidden="true"></canvas>
@@ -1582,6 +1582,11 @@
   /* ═══════ SUPABASE ═══════ */
   const SUPABASE_URL = 'https://zioxwmynfbrmmouduhbf.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_YBsh_W2dBbk1ZIZk1y3yBg_7X2iVE3P';
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    const card = document.getElementById('auth-card');
+    if (card) card.innerHTML = '<h1 class="auth-title">Нет соединения</h1><p class="auth-sub">Не удалось загрузить библиотеку Supabase. Проверьте интернет и обновите страницу.</p>';
+    throw new Error('supabase-js не загружен');
+  }
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   function isThreeAvailable() {
@@ -1950,17 +1955,32 @@
     return !!data;
   }
 
+  /* Сброс состояния сессии: вызывается и при ручном выходе, и по событию SIGNED_OUT.
+     Повторный вызов безопасен. */
+  function handleSignedOut() {
+    if (!currentUser && !authScreen.hidden) return;
+    currentUser = null;
+    profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
+
+    rtChannels.forEach((c) => { try { supabaseClient.removeChannel(c); } catch {} });
+    rtChannels = [];
+    for (const fm of friendMarkers.values()) { try { fm.marker.destroy(); } catch {} }
+    friendMarkers.clear(); friendMarkerCoords.clear();
+    userLocationsById.clear(); userAvatarCfgById.clear(); groupMemberProfiles.clear();
+    posts = []; wishes = []; groups = []; notifications = []; friends = [];
+    dmMessages = []; currentDmPeerId = null; chatMessages = []; supportMessages = [];
+    syncPostMarkers(); syncWishMarkers(); updateBadge();
+
+    document.body.classList.add('auth-locked');
+    authScreen.hidden = false;
+    closeApp();
+    Globe.init();
+    Globe.start();
+    renderAuthLogin();
+  }
+
   function logout() {
-    supabaseClient.auth.signOut().finally(() => {
-      currentUser = null;
-      profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
-      document.body.classList.add('auth-locked');
-      authScreen.hidden = false;
-      closeApp();
-      Globe.init();
-      Globe.start();
-      renderAuthLogin();
-    });
+    supabaseClient.auth.signOut().finally(handleSignedOut);
   }
 
   const authScreen = document.getElementById('auth-screen');
@@ -2347,6 +2367,18 @@
 
     await loadGroupMemberProfiles();
     loadUserLocations();
+    openAppFromShortcut();
+  }
+
+  /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings */
+  function openAppFromShortcut() {
+    const params = new URLSearchParams(location.search);
+    const target = params.get('open');
+    if (!target) return;
+    params.delete('open');
+    const qs = params.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    if (target === 'messenger' || APPS[target]) showApp(target);
   }
 
   /* ═══════ ГЛОБАЛЬНЫЕ МАССИВЫ ═══════ */
@@ -2435,7 +2467,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => {
         await loadPostsFromDB();
         syncPostMarkers();
-        if (openApp === 'profile') showPlacesScreen();
+        if (openApp === 'profile' && winTitle.textContent === 'Воспоминания') showPlacesScreen();
       }).subscribe();
     rtChannels.push(ch1);
 
@@ -2450,7 +2482,8 @@
     const ch3 = supabaseClient.channel('rt:messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'room_id=eq.general' }, (payload) => {
         chatMessages.push(payload.new);
-        if (openApp === 'messenger') renderMessengerList();
+        // Перерисовываем только если открыт именно общий чат, иначе затрём список чатов / личный диалог
+        if (openApp === 'messenger' && winBody.querySelector('#chat-body')) renderMessengerList();
       }).subscribe();
     rtChannels.push(ch3);
 
@@ -2472,6 +2505,19 @@
         const m = payload.new;
         if (m.from_id !== currentUser.id && m.to_id !== currentUser.id) return;
         if (dmMessages.some((x) => x.id === m.id)) return;
+        // Своё сообщение может прийти по realtime раньше, чем ответ на insert —
+        // тогда заменяем оптимистичную копию, а не дублируем её
+        if (m.from_id === currentUser.id) {
+          const tmpIdx = dmMessages.findIndex((x) =>
+            String(x.id).startsWith('tmp-') && x.to_id === m.to_id && x.content === m.content);
+          if (tmpIdx !== -1) {
+            const tmpId = dmMessages[tmpIdx].id;
+            dmMessages[tmpIdx] = m;
+            const tmpEl = winBody.querySelector(`[data-msg-id="${tmpId}"]`);
+            if (tmpEl) tmpEl.dataset.msgId = m.id;
+            return;
+          }
+        }
         dmMessages.push(m);
         if (openApp === 'messenger' && currentDmPeerId &&
             (m.from_id === currentDmPeerId || m.to_id === currentDmPeerId)) {
@@ -2539,7 +2585,7 @@
     if (label.length > 18) label = label.slice(0, 17) + '…';
 
     const avatarInner = person.avatar
-      ? `<div class="user-badge-avatar" style="background-image:url('${person.avatar}')"></div>`
+      ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(person.avatar)}')"></div>`
       : `<div class="user-badge-avatar" style="background:linear-gradient(#9AA6FF,#5C6EE0)">${escapeHtml(nameInitial)}</div>`;
 
     const cfg = (avatarCfg && typeof avatarCfg === 'object') ? avatarCfg : null;
@@ -2550,7 +2596,7 @@
       : `<div class="user-dot-marker" style="background:${isFriend ? 'var(--you)' : '#8A4A2F'}"></div>`;
 
     return `
-      <div class="user-avatar-wrap" data-clickable="true" data-user-id="${userId}"
+      <div class="user-avatar-wrap" data-clickable="true" data-user-id="${escapeHtml(userId)}"
            style="pointer-events:auto;cursor:pointer;">
         <div class="user-badge" data-clickable="true">
           <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
@@ -2893,7 +2939,7 @@
     let label = displayName || 'Я';
     if (label.length > 18) label = label.slice(0, 17) + '…';
     const avatarInner = profile.avatar
-      ? `<div class="user-badge-avatar" style="background-image:url('${profile.avatar}')"></div>`
+      ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></div>`
       : `<div class="user-badge-avatar">${escapeHtml(nameInitial)}</div>`;
     const badge = document.createElement('div');
     badge.className = 'user-badge'; badge.dataset.clickable = 'true';
@@ -2981,7 +3027,7 @@
     const imgs = postImages(post);
     const el = document.createElement('div'); el.className = 'memory-marker';
     if (!imgs.length) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img no-photo"></div></div></div>`; return el; }
-    if (imgs.length === 1) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img" style="background-image:url('${imgs[0]}')"></div></div></div>`; return el; }
+    if (imgs.length === 1) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img" style="background-image:url('${safeUrl(imgs[0])}')"></div></div></div>`; return el; }
     const max = 4, total = Math.min(imgs.length, max);
     const anglesByCount = { 2:[-12,6], 3:[-14,0,14], 4:[-18,-6,6,18] };
     const shiftsByCount = { 2:[-11,11], 3:[-16,0,16], 4:[-20,-7,7,20] };
@@ -2992,7 +3038,7 @@
     const hiddenCount = Math.max(0, imgs.length - total);
     el.innerHTML = `
       <div class="memory-fan">
-        ${cards.map((c) => `<div class="memory-card" style="transform: translate(-50%, -50%) translateX(${c.shift}px) rotate(${c.angle}deg); z-index: ${c.z};"><div class="mc-img" style="background-image:url('${c.src}')"></div></div>`).join('')}
+        ${cards.map((c) => `<div class="memory-card" style="transform: translate(-50%, -50%) translateX(${c.shift}px) rotate(${c.angle}deg); z-index: ${c.z};"><div class="mc-img" style="background-image:url('${safeUrl(c.src)}')"></div></div>`).join('')}
         ${hiddenCount > 0 ? `<span class="memory-more">+${hiddenCount}</span>` : ''}
       </div>`;
     return el;
@@ -3019,7 +3065,7 @@
     const cover = (Array.isArray(post.images) && post.images[0]) || '';
     const wrap = document.createElement('div'); wrap.className = 'map-popup';
     wrap.innerHTML = `
-      ${cover ? `<img class="pop-img" src="${cover}" alt="">` : ''}
+      ${cover ? `<img class="pop-img" src="${safeUrl(cover)}" alt="">` : ''}
       <div class="pop-place">📍 ${escapeHtml(post.place || '')}</div>
       ${post.caption ? `<div class="pop-caption">${escapeHtml(post.caption)}</div>` : ''}
       <button type="button" class="pop-open">Открыть воспоминание</button>`;
@@ -3130,12 +3176,12 @@
             metaBits.push(new Date(w.ts || Date.now()).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
             const isMine = w.authorId === (currentUser && currentUser.id);
             return `
-              <li class="wish-card" data-wish-id="${w.id}">
+              <li class="wish-card" data-wish-id="${escapeHtml(w.id)}">
                 <div class="wish-card-text">${escapeHtml(w.text)}</div>
                 <div class="wish-card-meta">${metaBits.join(' • ')}</div>
                 ${isMine ? `<div class="wish-card-actions">
-                  <button class="btn" type="button" data-wish-edit="${w.id}">Изменить</button>
-                  <button class="btn btn-danger" type="button" data-wish-remove="${w.id}">Удалить</button>
+                  <button class="btn" type="button" data-wish-edit="${escapeHtml(w.id)}">Изменить</button>
+                  <button class="btn btn-danger" type="button" data-wish-remove="${escapeHtml(w.id)}">Удалить</button>
                 </div>` : ''}
               </li>`;
           }).join('')
@@ -3163,7 +3209,7 @@
       const currentGroup = editing ? (editing.groupId || '') : '';
       const myGroups = groups.filter((g) => g.ownerId === (currentUser && currentUser.id));
       const groupOptions = myGroups.length
-        ? myGroups.map((g) => `<option value="${g.id}" ${currentGroup === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')
+        ? myGroups.map((g) => `<option value="${escapeHtml(g.id)}" ${currentGroup === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')
         : `<option value="">— нет групп —</option>`;
 
       winBody.innerHTML = `
@@ -3258,8 +3304,8 @@
                 <div class="person-name">${escapeHtml(f.name)}</div>
                 <div class="person-handle">${escapeHtml(f.handle)}</div>
               </div>
-              <button class="btn" type="button" data-open-dm="${f.id}">Чат</button>
-              <button class="btn" type="button" data-remove-friend="${f.id}">Удалить</button>
+              <button class="btn" type="button" data-open-dm="${escapeHtml(f.id)}">Чат</button>
+              <button class="btn" type="button" data-remove-friend="${escapeHtml(f.id)}">Удалить</button>
             </li>`).join('')}</ul>`
         : `<div class="empty-msg">Пока нет друзей.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы найти человека по @username.</div>`;
       winBody.innerHTML = `
@@ -3313,7 +3359,7 @@
               <div class="person-name">${escapeHtml(found.name)}</div>
               <div class="person-handle">@${escapeHtml(found.username)}</div>
             </div>
-            <button class="friend-add-btn" type="button" data-add-friend="${found.id}" ${isFriend ? 'disabled' : ''}>${isFriend ? 'Уже друг' : 'Добавить'}</button>
+            <button class="friend-add-btn" type="button" data-add-friend="${escapeHtml(found.id)}" ${isFriend ? 'disabled' : ''}>${isFriend ? 'Уже друг' : 'Добавить'}</button>
           </li></ul>`;
       }
 
@@ -3333,16 +3379,16 @@
         ? `<ul class="rows">${myGroups.map((g) => {
             const membersCount = (g.members || []).length;
             const av = g.photo
-              ? `<span class="group-avatar" style="background-image:url('${g.photo}')"></span>`
+              ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
               : `<span class="group-avatar">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
             const isOwner = g.ownerId === (currentUser && currentUser.id);
             return `
-              <li class="group-row" data-group-row="${g.id}">
+              <li class="group-row" data-group-row="${escapeHtml(g.id)}">
                 <div class="group-actions">
-                  ${isOwner ? `<button class="group-action-btn settings" type="button" data-group-settings="${g.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.4-2.6h-3.9l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.5 11a7.6 7.6 0 0 0-.1 1 7.6 7.6 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h3.9l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
-                    <button class="group-action-btn danger" type="button" data-group-delete="${g.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2zm2 6v9h2v-9h-2zm4 0v9h2v-9h-2z"/></svg></button>` : ''}
+                  ${isOwner ? `<button class="group-action-btn settings" type="button" data-group-settings="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.4-2.6h-3.9l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.5 11a7.6 7.6 0 0 0-.1 1 7.6 7.6 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h3.9l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+                    <button class="group-action-btn danger" type="button" data-group-delete="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2zm2 6v9h2v-9h-2zm4 0v9h2v-9h-2z"/></svg></button>` : ''}
                 </div>
-                <div class="group-card" data-group-id="${g.id}" role="button" tabindex="0">
+                <div class="group-card" data-group-id="${escapeHtml(g.id)}" role="button" tabindex="0">
                   ${av}
                   <div class="group-main">
                     <div class="group-name">${escapeHtml(g.name)}</div>
@@ -3392,10 +3438,6 @@
       card.addEventListener('pointercancel', endDrag);
       card.addEventListener('contextmenu', (e) => { e.preventDefault(); row.classList.toggle('revealed'); });
     });
-    winBody.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.group-row')) return;
-      winBody.querySelectorAll('.group-row.revealed').forEach((r) => r.classList.remove('revealed'));
-    });
   }
 
   function showCreateGroupScreen(editingId = null) {
@@ -3409,7 +3451,7 @@
       const known = friends.slice();
       const peopleHtml = known.length
         ? known.map((p) => `
-            <li class="person-card" data-person-id="${p.id}" role="checkbox" aria-checked="${selectedIds.has(p.id) ? 'true' : 'false'}" tabindex="0">
+            <li class="person-card" data-person-id="${escapeHtml(p.id)}" role="checkbox" aria-checked="${selectedIds.has(p.id) ? 'true' : 'false'}" tabindex="0">
               <span class="person-check"></span>
               ${avatarCircleHtml(p, 36)}
               <div class="person-main">
@@ -3424,7 +3466,7 @@
       winBody.innerHTML = `
         <form class="group-form" id="group-form" novalidate>
           <div class="group-photo-row">
-            <div id="group-photo" class="group-photo" ${groupPhoto ? `style="background-image:url('${groupPhoto}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? editing.name.charAt(0).toUpperCase() : 'Г'))}</div>
+            <div id="group-photo" class="group-photo" ${groupPhoto ? `style="background-image:url('${safeUrl(groupPhoto)}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? editing.name.charAt(0).toUpperCase() : 'Г'))}</div>
             <div class="avatar-edit-side">
               <button type="button" class="btn" id="group-photo-pick">Выбрать фото</button>
               <button type="button" class="btn-ghost" id="group-photo-remove" ${groupPhoto ? '' : 'hidden'}>Удалить фото</button>
@@ -3555,7 +3597,7 @@
       winBody.innerHTML = `
         <div class="user-profile-view">
           <div class="user-profile-hero">
-            <div class="user-profile-avatar ${g.photo ? 'no-3d' : ''}" ${g.photo ? `style="background-image:url('${g.photo}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
+            <div class="user-profile-avatar ${g.photo ? 'no-3d' : ''}" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
             <div class="user-profile-name">${escapeHtml(g.name)}</div>
             <div class="user-profile-handle">${(g.members || []).length} участников</div>
           </div>
@@ -3718,10 +3760,10 @@
       }
       const name = f.name || f.handle || 'Пользователь';
       const avatar = f.avatar
-        ? `<span class="avatar" style="width:44px;height:44px;background-image:url('${f.avatar}')"></span>`
+        ? `<span class="avatar" style="width:44px;height:44px;background-image:url('${safeUrl(f.avatar)}')"></span>`
         : `<span class="avatar" style="width:44px;height:44px;background:linear-gradient(#6E7EFF,#3D4EB8)">${escapeHtml((name.charAt(0) || '?').toUpperCase())}</span>`;
       return `
-        <div class="chat-row" data-open-dm="${f.id}" role="button" tabindex="0">
+        <div class="chat-row" data-open-dm="${escapeHtml(f.id)}" role="button" tabindex="0">
           ${avatar}
           <div class="chat-main">
             <div class="chat-name">${escapeHtml(name)}</div>
@@ -3769,18 +3811,34 @@
       e.preventDefault();
       const text = input.value.trim(); if (!text || !currentUser) return;
       input.value = '';
-      const { error } = await supabaseClient.from('support_messages').insert({
+      const { data: sent, error } = await supabaseClient.from('support_messages').insert({
         content: text, user_id: currentUser.id, from_support: false,
-      });
+      }).select().single();
       if (error) { console.warn('[support] insert:', error.message); return; }
+      appendSupportMessage(sent);
+      const uid = currentUser.id;
       setTimeout(async () => {
-        await supabaseClient.from('support_messages').insert({
+        const { data: reply, error: rErr } = await supabaseClient.from('support_messages').insert({
           content: 'Спасибо за обращение! Мы получили ваш запрос и ответим в ближайшее время.',
-          user_id: currentUser.id, from_support: true,
-        });
+          user_id: uid, from_support: true,
+        }).select().single();
+        if (rErr) { console.warn('[support] auto-reply:', rErr.message); return; }
+        appendSupportMessage(reply);
       }, 1200);
     });
   }
+  function appendSupportMessage(m) {
+    if (!m) return;
+    supportMessages.push(m);
+    const bodyEl = winBody.querySelector('#support-body');
+    if (!bodyEl) return;
+    const div = document.createElement('div');
+    div.className = `chat-msg ${m.from_support ? 'them' : 'me'}`;
+    div.innerHTML = `${escapeHtml(m.content)}<span class="chat-msg-time">${fmtTime(m.created_at)}</span>`;
+    bodyEl.appendChild(div);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
+
   async function showSupportChatScreen() {
     await loadSupportMessages();
     setScreen(() => {
@@ -3815,7 +3873,7 @@
     const rowsHtml = dmMessages.length
       ? dmMessages.map((m) => {
           const mine = String(m.from_id) === myId;
-          return `<div class="chat-msg ${mine ? 'me' : 'them'}" data-msg-id="${m.id}">${escapeHtml(m.content)}<span class="chat-msg-time">${fmtTime(m.created_at)}</span></div>`;
+          return `<div class="chat-msg ${mine ? 'me' : 'them'}" data-msg-id="${escapeHtml(m.id)}">${escapeHtml(m.content)}<span class="chat-msg-time">${fmtTime(m.created_at)}</span></div>`;
         }).join('')
       : `<div class="empty-msg">Начните диалог.</div>`;
     winBody.innerHTML = `
@@ -3906,8 +3964,8 @@
                   <div class="person-name">${escapeHtml(f.name)}</div>
                   <div class="person-handle">${escapeHtml(f.handle)}</div>
                 </div>
-                <button class="btn" type="button" data-open-dm="${f.id}">Чат</button>
-                <button class="btn btn-danger" type="button" data-remove-friend="${f.id}">×</button>
+                <button class="btn" type="button" data-open-dm="${escapeHtml(f.id)}">Чат</button>
+                <button class="btn btn-danger" type="button" data-remove-friend="${escapeHtml(f.id)}">×</button>
               </li>`).join('')}</ul>`
           : `<div class="empty-msg">Пока нет друзей.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы найти человека по @username.</div>`;
         return `
@@ -3944,7 +4002,7 @@
         return `
           <ul class="rows">
             ${notifications.map((n) => `
-              <li class="row ${n.read ? '' : 'notif-unread'}" data-notif-id="${n.id}" role="button" tabindex="0">
+              <li class="row ${n.read ? '' : 'notif-unread'}" data-notif-id="${escapeHtml(n.id)}" role="button" tabindex="0">
                 ${notifIconHtml(n.type)}
                 <div class="row-main">
                   <div class="row-name">${escapeHtml(n.title || '')}</div>
@@ -3988,18 +4046,26 @@
 
   function avatarCircleHtml(person, size = 40) {
     const letter = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
-    if (person.avatar) return `<span class="avatar" style="width:${size}px;height:${size}px;background-image:url('${person.avatar}')"></span>`;
+    if (person.avatar) return `<span class="avatar" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(person.avatar)}')"></span>`;
     return `<span class="avatar" style="width:${size}px;height:${size}px;background:linear-gradient(#6E7EFF,#3D4EB8)">${escapeHtml(letter)}</span>`;
   }
 
   function profileAvatarHtml(size = 84) {
-    if (profile.avatar) return `<span class="avatar-preview" style="width:${size}px;height:${size}px;background-image:url('${profile.avatar}')"></span>`;
+    if (profile.avatar) return `<span class="avatar-preview" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(profile.avatar)}')"></span>`;
     const letter = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
     return `<span class="avatar-preview" style="width:${size}px;height:${size}px">${letter}</span>`;
   }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  /* URL картинки для вставки в HTML-шаблон (src="…" или url('…')).
+     Пропускает только data:image/…;base64 и https-ссылки, остальное — пустая строка. */
+  function safeUrl(u) {
+    const s = String(u || '').trim();
+    if (/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(s)) return s;
+    if (/^https:\/\/[^\s"'()<>\\]+$/i.test(s)) return s;
+    return '';
   }
   function normalizeUsernameInput(raw) { return String(raw).trim().replace(/^@+/, '').toLowerCase(); }
   function isValidUsernameInput(u) { return /^[a-zA-Z][a-zA-Z0-9_.]{2,19}$/.test(u); }
@@ -4037,7 +4103,7 @@
   const winBody = document.getElementById('win-body');
   let openApp = null, closeTimer = null;
   let currentBackHandler = null;
-  let placesView = (localStorage.getItem('places.view.v1') === 'grid') ? 'grid' : 'feed';
+  let placesView = (() => { try { return localStorage.getItem('places.view.v1') === 'grid' ? 'grid' : 'feed'; } catch { return 'feed'; } })();
   let avatarStageCleanup = null;
   let userProfileAvatarCleanup = null;
 
@@ -4136,12 +4202,12 @@
       const imgs = postImages(p);
       const multi = imgs.length > 1;
       const mediaHtml = multi
-        ? `<div class="post-carousel" data-carousel><div class="slides">${imgs.map((src) => `<div class="slide"><img src="${src}" loading="lazy"></div>`).join('')}</div>
+        ? `<div class="post-carousel" data-carousel><div class="slides">${imgs.map((src) => `<div class="slide"><img src="${safeUrl(src)}" loading="lazy"></div>`).join('')}</div>
             <span class="counter"><span data-idx>1</span>/${imgs.length}</span>
             <div class="dots">${imgs.map((_, i) => `<button class="dot ${i === 0 ? 'active' : ''}" type="button"></button>`).join('')}</div></div>`
-        : `<img class="post-media" src="${imgs[0] || ''}" loading="lazy">`;
+        : `<img class="post-media" src="${safeUrl(imgs[0])}" loading="lazy">`;
       const isMine = p.authorId === (currentUser && currentUser.id);
-      return `<article class="post" data-post-id="${p.id}">
+      return `<article class="post" data-post-id="${escapeHtml(p.id)}">
         <header class="post-head">
           <span class="avatar" style="background:linear-gradient(#6E7EFF,#3D4EB8)">${escapeHtml((p.author || '?').trim().charAt(0).toUpperCase() || '?')}</span>
           <div class="row-main">
@@ -4149,7 +4215,7 @@
             <div class="post-place">📍 ${escapeHtml(p.place || '')}</div>
           </div>
           <span class="row-time">${escapeHtml(p.time || '')}</span>
-          ${isMine ? `<button type="button" class="post-menu-btn" data-post-menu="${p.id}"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></button>` : ''}
+          ${isMine ? `<button type="button" class="post-menu-btn" data-post-menu="${escapeHtml(p.id)}"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></button>` : ''}
         </header>
         ${mediaHtml}
         ${p.caption ? `<div class="post-body"><div class="post-caption">${escapeHtml(p.caption)}</div></div>` : ''}
@@ -4162,8 +4228,8 @@
     return `<div class="grid">${posts.map((p) => {
       const imgs = postImages(p);
       const badge = imgs.length > 1 ? `<span class="cell-multi">${imgs.length}</span>` : '';
-      return `<div class="grid-cell" data-post-id="${p.id}" role="button" tabindex="0">
-        <img src="${imgs[0] || ''}" loading="lazy">${badge}
+      return `<div class="grid-cell" data-post-id="${escapeHtml(p.id)}" role="button" tabindex="0">
+        <img src="${safeUrl(imgs[0])}" loading="lazy">${badge}
         ${p.caption ? `<span class="cell-caption">${escapeHtml(p.caption)}</span>` : ''}
       </div>`;
     }).join('')}</div>`;
@@ -4201,11 +4267,11 @@
     closePostMenus();
     const pop = document.createElement('div'); pop.className = 'popover';
     pop.innerHTML = `
-      <button class="pop-item" type="button" data-show-on-map="${postId}">
+      <button class="pop-item" type="button" data-show-on-map="${escapeHtml(postId)}">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
         Показать на карте
       </button>
-      <button class="pop-item danger" type="button" data-remove-post="${postId}">
+      <button class="pop-item danger" type="button" data-remove-post="${escapeHtml(postId)}">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2z"/></svg>
         Удалить
       </button>`;
@@ -4425,6 +4491,7 @@
       winTitle.textContent = 'Профиль';
       winBody.innerHTML = `<div class="empty-msg">Загружаем профиль…</div>`;
       winBody.scrollTop = 0;
+      const loadingEl = winBody.firstElementChild;
 
       (async () => {
         let p = null;
@@ -4437,6 +4504,9 @@
           if (error) console.warn('[friend profile] load:', error.message);
           p = data;
         } catch (err) { console.warn('[friend profile] exception:', err); }
+
+        // Пока грузили, пользователь мог уйти на другой экран — не затираем его
+        if (!loadingEl.isConnected || win.hidden) return;
 
         if (!p && personHint) {
           p = {
@@ -4462,7 +4532,7 @@
         if (use3D) {
           avatarHtml = `<div class="user-profile-avatar"><canvas id="friend-avatar-canvas" width="256" height="256"></canvas></div>`;
         } else if (p.avatar) {
-          avatarHtml = `<div class="user-profile-avatar no-3d" style="background-image:url('${p.avatar}')"></div>`;
+          avatarHtml = `<div class="user-profile-avatar no-3d" style="background-image:url('${safeUrl(p.avatar)}')"></div>`;
         } else {
           avatarHtml = `<div class="user-profile-avatar no-3d">${escapeHtml(initial)}</div>`;
         }
@@ -4573,7 +4643,11 @@
         if (previewEl.dataset.pending !== undefined) newAvatar = previewEl.dataset.pending;
         else if (previewEl.style.backgroundImage) newAvatar = profile.avatar;
         else newAvatar = '';
-        profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar };
+        if (uname !== normalizeUsername(profile.handle) && await isUsernameTakenRemote(uname)) {
+          alert('Этот username уже занят');
+          usernameEl.focus();
+          return;
+        }
         const { error: saveErr } = await supabaseClient.from('profiles').upsert({
           id: currentUser.id, name: newName, username: uname, bio: newBio, avatar: newAvatar,
         });
@@ -4582,6 +4656,8 @@
           alert('Не удалось сохранить профиль: ' + saveErr.message);
           return;
         }
+        // Локальный профиль меняем только после успешного сохранения
+        profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar };
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
         loadUserLocations();
         showProfileScreen();
@@ -4590,6 +4666,12 @@
   }
 
   /* ═══════ ГЛАВНЫЙ ОБРАБОТЧИК ═══════ */
+  // Тап мимо строки группы прячет открытые свайпом кнопки
+  winBody.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.group-row')) return;
+    winBody.querySelectorAll('.group-row.revealed').forEach((r) => r.classList.remove('revealed'));
+  });
+
   winBody.addEventListener('click', async (e) => {
     const avBtn = e.target.closest('[data-av-group]');
     if (avBtn) {
@@ -4732,7 +4814,7 @@
     const row = e.target.closest('[data-notif-id]');
     if (row) {
       const id = row.dataset.notifId;
-      await supabaseClient.from('notifications').update({ read: true }).eq('id', Number(id));
+      await supabaseClient.from('notifications').update({ read: true }).eq('id', id);
       notifications = notifications.map((n) => n.id === id ? { ...n, read: true } : n);
       updateBadge();
     }
@@ -4788,15 +4870,7 @@
   }
 
   supabaseClient.auth.onAuthStateChange((event, s) => {
-    if (event === 'SIGNED_OUT') {
-      currentUser = null;
-      document.body.classList.add('auth-locked');
-      authScreen.hidden = false;
-      closeApp();
-      Globe.init();
-      Globe.start();
-      renderAuthLogin();
-    }
+    if (event === 'SIGNED_OUT') handleSignedOut();
   });
 
   bootApp();
