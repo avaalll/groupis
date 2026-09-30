@@ -467,6 +467,9 @@
       border-radius: 50%; background: var(--you);
     }
     .notif-empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; }
+    .notif-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .notif-actions .btn { padding: 6px 14px; font-size: 13px; }
+    .notif-status { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
 
     .profile-head { display: grid; justify-items: center; gap: 4px; padding: 26px 16px 14px; text-align: center; }
     .profile-head .avatar { width: 84px; height: 84px; font-size: 32px; margin-bottom: 6px; }
@@ -1969,6 +1972,7 @@
     userLocationsById.clear(); userAvatarCfgById.clear(); groupMemberProfiles.clear();
     posts = []; wishes = []; groups = []; notifications = []; friends = [];
     dmMessages = []; currentDmPeerId = null; chatMessages = []; supportMessages = [];
+    pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     syncPostMarkers(); syncWishMarkers(); updateBadge();
 
     document.body.classList.add('auth-locked');
@@ -2439,11 +2443,61 @@
       .select('*').eq('user_id', currentUser.id)
       .order('created_at', { ascending: false }).limit(100);
     if (error) { console.warn('[notifications] load:', error.message); notifications = []; return; }
-    notifications = (data || []).map((n) => ({
-      id: String(n.id), type: n.type, title: n.title, text: n.text,
-      read: n.read, time: new Date(n.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
-    }));
+    notifications = (data || []).map(mapNotificationRow);
+    await loadIncomingFriendRequests();
     updateBadge();
+  }
+
+  function mapNotificationRow(n) {
+    return {
+      id: String(n.id), type: n.type, title: n.title, text: n.text, read: !!n.read,
+      requestId: n.request_id != null ? String(n.request_id) : null,
+      time: new Date(n.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+    };
+  }
+
+  /* ═══════ ЗАПРОСЫ В ДРУЗЬЯ ═══════ */
+  let pendingIncomingRequests = new Set();   // id входящих запросов, ожидающих ответа
+  const friendRequestOutcome = new Map();    // id запроса → 'accepted' | 'declined' (ответ дан в этой сессии)
+
+  async function loadIncomingFriendRequests() {
+    if (!currentUser) { pendingIncomingRequests = new Set(); return; }
+    const { data, error } = await supabaseClient.from('friend_requests')
+      .select('id').eq('to_id', currentUser.id).eq('status', 'pending');
+    if (error) { console.warn('[friend_requests] load:', error.message); return; }
+    pendingIncomingRequests = new Set((data || []).map((r) => String(r.id)));
+  }
+
+  /* Состояние отношений с пользователем для кнопки в поиске */
+  async function friendRelationWith(userId) {
+    if (friends.some((f) => f.id === userId)) return 'friend';
+    const { data, error } = await supabaseClient.from('friend_requests')
+      .select('id, from_id, to_id')
+      .eq('status', 'pending')
+      .or(`and(from_id.eq.${currentUser.id},to_id.eq.${userId}),and(from_id.eq.${userId},to_id.eq.${currentUser.id})`);
+    if (error) { console.warn('[friend_requests] relation:', error.message); return 'none'; }
+    const rows = data || [];
+    if (rows.some((r) => r.from_id === currentUser.id)) return 'outgoing';
+    if (rows.some((r) => r.from_id === userId)) return 'incoming';
+    return 'none';
+  }
+
+  async function respondFriendRequest(requestId, accept) {
+    const { error } = await supabaseClient.rpc(accept ? 'accept_friend_request' : 'decline_friend_request', { req_id: Number(requestId) });
+    if (error) {
+      console.error('[friend request respond]', error);
+      alert('Не удалось ответить на запрос: ' + error.message);
+      return false;
+    }
+    pendingIncomingRequests.delete(String(requestId));
+    friendRequestOutcome.set(String(requestId), accept ? 'accepted' : 'declined');
+    notifications = notifications.map((n) => n.requestId === String(requestId) ? { ...n, read: true } : n);
+    if (accept) {
+      await loadFriendsFromDB();
+      await loadGroupMemberProfiles();
+      loadUserLocations();
+    }
+    return true;
   }
 
   async function loadFriendsFromDB() {
@@ -2489,11 +2543,16 @@
 
     const ch4 = supabaseClient.channel('rt:notifications')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: currentUser ? `user_id=eq.${currentUser.id}` : undefined }, (payload) => {
-        notifications.unshift({
-          id: String(payload.new.id), type: payload.new.type,
-          title: payload.new.title, text: payload.new.text, read: false,
-          time: new Date(payload.new.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
-        });
+        const n = mapNotificationRow(payload.new);
+        notifications.unshift(n);
+        if (n.type === 'friend_request' && n.requestId) pendingIncomingRequests.add(n.requestId);
+        if (n.type === 'friend_accept') {
+          // Наш запрос приняли — обновляем список друзей и их маркеры на карте
+          loadFriendsFromDB().then(() => {
+            loadUserLocations();
+            if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
+          });
+        }
         updateBadge();
         if (openApp === 'notifications') refreshNotifications();
       }).subscribe();
@@ -3351,7 +3410,9 @@
         const { data: found, error: sErr } = await supabaseClient.from('profiles').select('*').eq('username', v).maybeSingle();
         if (sErr) { console.error('[search profile]', sErr); }
         if (!found) { result.innerHTML = `<div class="empty-msg">Пользователь <b>@${escapeHtml(v)}</b> не найден.</div>`; return; }
-        const isFriend = friends.some((f) => f.id === found.id);
+        const relation = await friendRelationWith(found.id);
+        const btnLabel = { friend: 'Уже друг', outgoing: 'Запрос отправлен', incoming: 'Принять запрос', none: 'Добавить' }[relation];
+        const btnDisabled = relation === 'friend' || relation === 'outgoing';
         result.innerHTML = `
           <ul class="rows"><li class="person-card">
             ${avatarCircleHtml({ name: found.name, avatar: found.avatar }, 40)}
@@ -3359,7 +3420,7 @@
               <div class="person-name">${escapeHtml(found.name)}</div>
               <div class="person-handle">@${escapeHtml(found.username)}</div>
             </div>
-            <button class="friend-add-btn" type="button" data-add-friend="${escapeHtml(found.id)}" ${isFriend ? 'disabled' : ''}>${isFriend ? 'Уже друг' : 'Добавить'}</button>
+            <button class="friend-add-btn" type="button" data-add-friend="${escapeHtml(found.id)}" ${btnDisabled ? 'disabled' : ''}>${btnLabel}</button>
           </li></ul>`;
       }
 
@@ -3448,7 +3509,14 @@
       let groupPhoto = editing && editing.photo ? editing.photo : '';
       let selectedIds = new Set((editing && editing.members ? editing.members : []).map((m) => m.id));
 
-      const known = friends.slice();
+      // В списке — друзья плюс текущие участники группы, которые не в друзьях:
+      // иначе при сохранении они бы пропадали из группы
+      const existingMembers = editing && editing.members ? editing.members : [];
+      const friendIdSet = new Set(friends.map((f) => f.id));
+      const known = [
+        ...friends,
+        ...existingMembers.filter((m) => !friendIdSet.has(m.id) && m.id !== (currentUser && currentUser.id)),
+      ];
       const peopleHtml = known.length
         ? known.map((p) => `
             <li class="person-card" data-person-id="${escapeHtml(p.id)}" role="checkbox" aria-checked="${selectedIds.has(p.id) ? 'true' : 'false'}" tabindex="0">
@@ -3456,7 +3524,7 @@
               ${avatarCircleHtml(p, 36)}
               <div class="person-main">
                 <div class="person-name">${escapeHtml(p.name)}</div>
-                <div class="person-handle">${escapeHtml(p.handle)}</div>
+                <div class="person-handle">${escapeHtml(p.handle || '')}${friendIdSet.has(p.id) ? '' : ' · участник, не в друзьях'}</div>
               </div>
             </li>`).join('')
         : `<div class="empty-msg">Сначала добавьте друзей.</div>`;
@@ -3534,14 +3602,24 @@
         const name = winBody.querySelector('#group-name').value.trim();
         if (!name) { winBody.querySelector('#group-name').focus(); return; }
         const visibility = winBody.querySelector('input[name="group-vis"]:checked').value;
-        const members = friends.filter((p) => selectedIds.has(p.id));
+        const members = known.filter((p) => selectedIds.has(p.id));
 
         const gid = editing ? editingId : 'g' + Date.now();
+
+        // Меняем состав только по разнице: удаляем тех, с кого сняли галочку,
+        // добавляем новых. Остальные участники не трогаются.
+        const existingIds = new Set(existingMembers.map((m) => m.id));
+        const removedIds = [...existingIds].filter((id) => !selectedIds.has(id));
+        const added = members.filter((m) => !existingIds.has(m.id));
 
         if (editing) {
           const { error } = await supabaseClient.from('groups').update({ name, photo: groupPhoto, visibility }).eq('id', editingId);
           if (error) { console.warn('[groups] update:', error.message); return; }
-          await supabaseClient.from('group_members').delete().eq('group_id', editingId);
+          if (removedIds.length) {
+            const { error: rmErr } = await supabaseClient.from('group_members').delete()
+              .eq('group_id', editingId).in('user_id', removedIds);
+            if (rmErr) console.warn('[group_members] delete:', rmErr.message);
+          }
         } else {
           const { error } = await supabaseClient.from('groups').insert({
             id: gid, owner_id: currentUser.id, name, photo: groupPhoto, visibility,
@@ -3549,15 +3627,16 @@
           if (error) { console.warn('[groups] insert:', error.message); return; }
         }
 
-        if (members.length) {
-          const rows = members.map((m) => ({
+        if (added.length) {
+          const rows = added.map((m) => ({
             group_id: gid, user_id: m.id, name: m.name,
             username: (m.handle || '').replace(/^@/, ''), avatar: m.avatar || '',
           }));
           const { error } = await supabaseClient.from('group_members').insert(rows);
           if (error) console.warn('[group_members] insert:', error.message);
 
-          const notifs = members
+          // Уведомляем только новых участников, а не всех при каждом сохранении
+          const notifs = added
             .filter((m) => m.id !== currentUser.id)
             .map((m) => ({
               user_id: m.id,
@@ -4007,6 +4086,7 @@
                 <div class="row-main">
                   <div class="row-name">${escapeHtml(n.title || '')}</div>
                   <div class="row-sub">${escapeHtml(n.text || '')}</div>
+                  ${friendRequestActionsHtml(n)}
                 </div>
                 <span class="row-time">${escapeHtml(n.time || '')}</span>
               </li>`).join('')}
@@ -4074,6 +4154,8 @@
     message: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3C6.9 3 3 6.5 3 10.8c0 2.2 1.1 4.2 3 5.6-.2 1-.7 2-1.5 2.9 1.6-.2 3-.8 4.1-1.6.8.2 1.6.3 2.4.3 5.1 0 9-3.5 9-7.8S17.1 3 12 3z"/></svg>`,
     geo:     `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>`,
     system:  `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2 1 21h22L12 2zm0 6 6.5 11h-13L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z"/></svg>`,
+    friend_request: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M15 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`,
+    friend_accept:  `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`,
     group:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
   };
   const NOTIF_COLOR = {
@@ -4081,7 +4163,21 @@
     geo:     'linear-gradient(#8B9AFF, #4A5FD6)',
     system:  'linear-gradient(#D9A84A, #A0761F)',
     group:   'linear-gradient(#8B9AFF, #4A5FD6)',
+    friend_request: 'linear-gradient(#7ED8FF, #2C7BC4)',
+    friend_accept:  'linear-gradient(#6df27c, #0bbf3f)',
   };
+  function friendRequestActionsHtml(n) {
+    if (n.type !== 'friend_request' || !n.requestId) return '';
+    const outcome = friendRequestOutcome.get(n.requestId);
+    if (outcome === 'accepted') return `<div class="notif-status">Вы приняли запрос</div>`;
+    if (outcome === 'declined') return `<div class="notif-status">Запрос отклонён</div>`;
+    if (!pendingIncomingRequests.has(n.requestId)) return `<div class="notif-status">Запрос уже обработан</div>`;
+    const id = escapeHtml(n.requestId);
+    return `<div class="notif-actions">
+      <button class="btn btn-primary" type="button" data-fr-accept="${id}">Принять</button>
+      <button class="btn" type="button" data-fr-decline="${id}">Отклонить</button>
+    </div>`;
+  }
   function notifIconHtml(type) {
     const svg = NOTIF_ICON[type] || NOTIF_ICON.system;
     const bg = NOTIF_COLOR[type] || NOTIF_COLOR.system;
@@ -4737,21 +4833,37 @@
     const addFriendBtn = e.target.closest('[data-add-friend]');
     if (addFriendBtn) {
       const fid = addFriendBtn.dataset.addFriend;
-      if (fid && fid !== currentUser.id && !friends.some((f) => f.id === fid)) {
-        const { error: addErr } = await supabaseClient.rpc('add_friend', { friend_uuid: fid });
-        if (addErr) {
-          console.error('[rpc add_friend]', addErr);
-          alert('Не удалось добавить друга: ' + addErr.message);
-          return;
-        }
-        await supabaseClient.from('notifications').insert({
-          user_id: fid, type: 'message', title: 'Новый друг',
-          text: `${profile.name} добавил вас в друзья`,
-        });
-        await loadFriendsFromDB();
-        loadUserLocations();
+      if (!fid || fid === currentUser.id || friends.some((f) => f.id === fid)) return;
+      // Не добавляем сразу — отправляем запрос, человек подтвердит его в уведомлениях.
+      // Если от него уже был встречный запрос, сервер сразу примет его.
+      addFriendBtn.disabled = true;
+      const { data: status, error: reqErr } = await supabaseClient.rpc('send_friend_request', { target: fid });
+      if (reqErr) {
+        console.error('[rpc send_friend_request]', reqErr);
+        addFriendBtn.disabled = false;
+        alert('Не удалось отправить запрос: ' + reqErr.message);
+        return;
       }
-      showFriendsScreen(); return;
+      if (status === 'accepted' || status === 'already_friends') {
+        await loadFriendsFromDB();
+        await loadIncomingFriendRequests();
+        loadUserLocations();
+        addFriendBtn.textContent = 'Уже друг';
+      } else {
+        addFriendBtn.textContent = 'Запрос отправлен';
+      }
+      return;
+    }
+
+    const frBtn = e.target.closest('[data-fr-accept], [data-fr-decline]');
+    if (frBtn) {
+      e.stopPropagation();
+      const accept = frBtn.hasAttribute('data-fr-accept');
+      const reqId = accept ? frBtn.dataset.frAccept : frBtn.dataset.frDecline;
+      frBtn.closest('.notif-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      await respondFriendRequest(reqId, accept);
+      refreshNotifications();
+      return;
     }
 
     const rmFriendBtn = e.target.closest('[data-remove-friend]');
