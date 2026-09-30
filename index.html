@@ -223,18 +223,22 @@
     .wish-card .wish-card-meta { color: var(--ink-soft); font-size: 12px; }
     .wish-card .wish-card-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
 
-    .user-avatar-wrap { position: relative; width: 26px; height: 26px; pointer-events: none; }
+    .user-avatar-wrap { position: relative; width: 26px; height: 26px; }
+    .user-avatar-wrap[data-clickable="true"] { pointer-events: auto !important; cursor: pointer; }
     .user-avatar-wrap .user-avatar-marker {
       display: block; width: 100%; height: 100%;
       filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
     }
     .user-avatar-marker canvas,
-    .user-avatar-marker img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; user-select: none; }
+    .user-avatar-marker img {
+      display: block; width: 100%; height: 100%;
+      pointer-events: none; -webkit-user-drag: none; user-select: none;
+    }
     .user-badge {
       position: absolute; left: 50%; bottom: calc(100% + 8px);
       transform: translateX(-50%);
       display: flex; flex-direction: column; align-items: center;
-      gap: 3px; pointer-events: none;
+      gap: 3px; pointer-events: auto;
       animation: user-badge-in .35s ease-out;
     }
     @keyframes user-badge-in {
@@ -261,7 +265,6 @@
     }
     .user-badge[data-clickable="true"] { pointer-events: auto; cursor: pointer; }
     .user-badge[data-clickable="true"]:hover .user-badge-inner { transform: translateY(-1px); }
-    .user-avatar-wrap > .user-badge { pointer-events: auto; }
     .user-badge-avatar {
       flex: none; width: 22px; height: 22px; border-radius: 50%;
       background-size: cover; background-position: center;
@@ -2530,10 +2533,7 @@
     return null;
   }
 
-  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId) {
-    const wrap = document.createElement('div');
-    wrap.className = 'user-avatar-wrap';
-
+  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId) {
     const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
     let label = (person.name || '').trim() || person.handle || 'Пользователь';
     if (label.length > 18) label = label.slice(0, 17) + '…';
@@ -2542,50 +2542,30 @@
       ? `<div class="user-badge-avatar" style="background-image:url('${person.avatar}')"></div>`
       : `<div class="user-badge-avatar" style="background:linear-gradient(#9AA6FF,#5C6EE0)">${escapeHtml(nameInitial)}</div>`;
 
-    const badge = document.createElement('div');
-    badge.className = 'user-badge';
-    badge.dataset.clickable = 'true';
-    badge.innerHTML = `
-      <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
-        ${avatarInner}
-        <span class="user-badge-name">${escapeHtml(label)}</span>
-        ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
-      </div>`;
-    wrap.appendChild(badge);
-
-    // Нижняя часть — либо снимок 3D-аватара, либо цветной кружок.
     const cfg = (avatarCfg && typeof avatarCfg === 'object') ? avatarCfg : null;
     const imgUrl = cfg ? getAvatarSnapshotDataURL(cfg) : null;
 
-    if (imgUrl) {
-      const inner = document.createElement('div');
-      inner.className = 'user-avatar-marker';
-      inner.style.pointerEvents = 'none';
-      const img = document.createElement('img');
-      img.src = imgUrl;
-      img.alt = '';
-      img.draggable = false;
-      img.style.cssText = 'display:block;width:100%;height:100%;pointer-events:none;';
-      inner.appendChild(img);
-      wrap.appendChild(inner);
-    } else {
-      const dot = document.createElement('div');
-      dot.className = 'user-dot-marker';
-      dot.style.background = isFriend ? 'var(--you)' : '#8A4A2F';
-      wrap.appendChild(dot);
-    }
+    console.log('[marker]', person.name, 'cfg=', cfg, 'img=', !!imgUrl);
 
-    // Клик — открыть профиль друга.
-    const openProfile = (e) => {
-      if (e) { e.stopPropagation(); e.preventDefault(); }
-      showFriendProfile(userId, person);
-    };
+    const bottom = imgUrl
+      ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
+      : `<div class="user-dot-marker" style="background:${isFriend ? 'var(--you)' : '#8A4A2F'}"></div>`;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'user-avatar-wrap';
+    wrap.setAttribute('data-user-id', userId);
+    wrap.setAttribute('data-clickable', 'true');
     wrap.style.pointerEvents = 'auto';
     wrap.style.cursor = 'pointer';
-    wrap.addEventListener('click', openProfile);
-    badge.addEventListener('click', openProfile);
-    badge.addEventListener('pointerdown', (e) => e.stopPropagation());
-
+    wrap.innerHTML = `
+      <div class="user-badge" data-clickable="true" data-user-id="${userId}">
+        <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
+          ${avatarInner}
+          <span class="user-badge-name">${escapeHtml(label)}</span>
+          ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
+        </div>
+      </div>
+      ${bottom}`;
     return wrap;
   }
 
@@ -2604,6 +2584,9 @@
       .select('user_id, lat, lon, updated_at, avatar_config')
       .in('user_id', ids);
     if (error) { console.warn('[user_locations] load:', error.message); return; }
+
+    console.log('[user_locations] rows:', data);
+    console.log('[user_locations] relevant ids:', ids);
 
     const found = new Set();
     for (const row of (data || [])) {
@@ -2649,7 +2632,7 @@
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
-    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId);
+    const html = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId);
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
@@ -2688,6 +2671,8 @@
     userLocationsById.set(userId, coords);
     if (row.avatar_config && typeof row.avatar_config === 'object') {
       userAvatarCfgById.set(userId, row.avatar_config);
+    } else {
+      userAvatarCfgById.delete(userId);
     }
 
     let person = personById(userId);
@@ -4800,6 +4785,28 @@
   }
 
   updateBadge();
+
+  /* ═══════ ГЛОБАЛЬНЫЙ ПЕРЕХВАТ КЛИКА ПО МАРКЕРУ ДРУГА ═══════
+     Capture phase — ловим клик раньше, чем 2ГИС его проглотит. */
+  document.addEventListener('click', (e) => {
+    let el = e.target;
+    while (el && el !== document) {
+      if (el.dataset && el.dataset.userId) {
+        const uid = el.dataset.userId;
+        const person = personById(uid) || groupMemberProfiles.get(uid) || friends.find(f => f.id === uid);
+        if (person) {
+          e.stopPropagation();
+          e.preventDefault();
+          console.log('[click] open friend profile', uid, person);
+          showFriendProfile(uid, person);
+        } else {
+          console.warn('[click] no person for uid', uid);
+        }
+        return;
+      }
+      el = el.parentNode;
+    }
+  }, true);
 
   /* ═══════ СТАРТ ═══════ */
   async function bootApp() {
