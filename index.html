@@ -281,6 +281,15 @@
       font-size: 12px; font-weight: 650; color: var(--ink); line-height: 1;
       white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
     }
+    /* Участник группы, не друг: тёмная плашка, чтобы не сливалась со светлой картой */
+    .user-badge-inner.is-group {
+      background: rgba(92, 52, 24, .92);
+      border-color: rgba(255, 214, 150, .35);
+      box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.25);
+    }
+    .user-badge-inner.is-group .user-badge-name { color: #fff; }
+    .user-badge-inner.is-group .user-badge-group { color: #FFD9A0; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
+    .user-dot-marker.is-group { background: #5C3418 !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
     .user-badge-status {
       position: absolute; left: 50%; bottom: 100%;
       transform: translate(-50%, 2px);
@@ -2669,16 +2678,16 @@
 
     const bottom = imgUrl
       ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
-      : `<div class="user-dot-marker" style="background:${isFriend ? 'var(--you)' : '#8A4A2F'}"></div>`;
+      : `<div class="user-dot-marker ${isFriend ? '' : 'is-group'}" style="background:${isFriend ? 'var(--you)' : '#5C3418'}"></div>`;
 
     return `
       <div class="user-avatar-wrap" data-clickable="true" data-user-id="${escapeHtml(userId)}"
            style="pointer-events:auto;cursor:pointer;">
         <div class="user-badge" data-clickable="true">
-          <div class="user-badge-inner" style="${isFriend ? '' : 'background:rgba(255,244,210,.85);'}">
+          <div class="user-badge-inner ${isFriend ? '' : 'is-group'}">
             ${avatarInner}
             <span class="user-badge-name">${escapeHtml(label)}</span>
-            ${isFriend ? '' : '<span class="user-badge-name" style="opacity:.6;font-weight:500;font-size:10.5px;margin-left:2px">· группа</span>'}
+            ${isFriend ? '' : '<span class="user-badge-name user-badge-group">· группа</span>'}
           </div>
         </div>
         ${bottom}
