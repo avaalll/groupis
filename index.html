@@ -74,13 +74,15 @@
     body.app-map .window { display: none !important; }
     body.app-window #geo-btn,
     body.app-window #notif-btn,
-    body.app-window #settings-btn { display: none !important; }
+    body.app-window #settings-btn,
+    body.app-window #filter-btn { display: none !important; }
 
     body.auth-locked .menubar,
     body.auth-locked .dock-wrap,
     body.auth-locked #geo-btn,
     body.auth-locked #notif-btn,
     body.auth-locked #settings-btn,
+    body.auth-locked #filter-btn,
     body.auth-locked #window { display: none !important; }
 
     .geo-btn {
@@ -101,7 +103,7 @@
     .geo-btn svg { width: 20px; height: 20px; }
     .geo-btn.is-active { color: #fff; background: var(--you); border-color: transparent; }
 
-    #notif-btn, #settings-btn {
+    #notif-btn, #settings-btn, #filter-btn {
       position: fixed;
       top: calc(38px + env(safe-area-inset-top, 0px));
       z-index: 19; width: 42px; height: 42px;
@@ -116,10 +118,11 @@
     }
     #notif-btn { left: 14px; }
     #settings-btn { right: 14px; }
-    #notif-btn:hover, #settings-btn:hover { transform: scale(1.06); color: var(--you); }
-    #notif-btn:active, #settings-btn:active { transform: scale(.96); }
-    #notif-btn svg, #settings-btn svg { width: 20px; height: 20px; display: block; }
-    #notif-btn.is-active, #settings-btn.is-active { color: #fff; background: var(--you); border-color: transparent; }
+    #filter-btn { right: 64px; }
+    #notif-btn:hover, #settings-btn:hover, #filter-btn:hover { transform: scale(1.06); color: var(--you); }
+    #notif-btn:active, #settings-btn:active, #filter-btn:active { transform: scale(.96); }
+    #notif-btn svg, #settings-btn svg, #filter-btn svg { width: 20px; height: 20px; display: block; }
+    #notif-btn.is-active, #settings-btn.is-active, #filter-btn.is-active { color: #fff; background: var(--you); border-color: transparent; }
     #notif-btn .badge {
       position: absolute; top: -5px; right: -5px;
       min-width: 18px; height: 18px; padding: 0 5px;
@@ -131,6 +134,34 @@
       pointer-events: none;
     }
     #notif-btn .badge[hidden] { display: none !important; }
+    /* Точка на кнопке фильтров: фильтр включён */
+    #filter-btn .filter-dot {
+      position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%;
+      background: #34c759; box-shadow: 0 0 0 1.5px var(--win); pointer-events: none;
+    }
+    #filter-btn .filter-dot[hidden] { display: none !important; }
+
+    /* ── Экран фильтров ── */
+    .filters { display: grid; gap: 18px; padding: 16px; }
+    .filter-block { display: grid; gap: 10px; }
+    .filter-head { display: flex; align-items: center; gap: 10px; }
+    .filter-title { font-weight: 700; font-size: 14px; flex: 1; }
+    .filter-sub { font-size: 12.5px; color: var(--ink-soft); }
+    .filter-range { display: flex; align-items: center; gap: 12px; }
+    .filter-range input[type="range"] { flex: 1; accent-color: var(--you); }
+    .filter-range .filter-val { min-width: 64px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .filter-block.is-off .filter-range { opacity: .4; pointer-events: none; }
+    .seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .seg-opt {
+      display: flex; align-items: center; gap: 8px; justify-content: center;
+      padding: 11px 10px; border-radius: 12px; cursor: pointer;
+      border: 1.5px solid var(--win-line); background: transparent; color: var(--ink);
+      font: inherit; font-weight: 600; font-size: 13px;
+    }
+    .seg-opt[aria-pressed="true"] { border-color: var(--you); background: rgba(110,126,255,.14); }
+    .seg-opt .seg-emoji { font-size: 18px; }
+    .filter-note { font-size: 12px; color: var(--ink-soft); }
+    .filter-actions { display: flex; gap: 8px; justify-content: space-between; }
 
     .memory-marker {
       position: relative; cursor: pointer; pointer-events: auto;
@@ -1461,13 +1492,14 @@
         padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
       }
 
-      #notif-btn, #settings-btn {
+      #notif-btn, #settings-btn, #filter-btn {
         width: 38px; height: 38px;
         top: calc(34px + env(safe-area-inset-top, 0px));
       }
       #notif-btn { left: 10px; }
       #settings-btn { right: 10px; }
-      #notif-btn svg, #settings-btn svg { width: 18px; height: 18px; }
+      #filter-btn { right: 56px; }
+      #notif-btn svg, #settings-btn svg, #filter-btn svg { width: 18px; height: 18px; }
 
       .geo-btn {
         width: 38px; height: 38px;
@@ -1574,11 +1606,12 @@
 
     @media (max-height: 480px) and (orientation: landscape) {
       .menubar { height: calc(22px + env(safe-area-inset-top, 0px)); font-size: 11px; }
-      #notif-btn, #settings-btn {
+      #notif-btn, #settings-btn, #filter-btn {
         width: 34px; height: 34px;
         top: calc(28px + env(safe-area-inset-top, 0px));
       }
-      #notif-btn svg, #settings-btn svg { width: 16px; height: 16px; }
+      #notif-btn svg, #settings-btn svg, #filter-btn svg { width: 16px; height: 16px; }
+      #filter-btn { right: 56px; }
       .geo-btn {
         width: 34px; height: 34px;
         bottom: calc(68px + env(safe-area-inset-bottom, 0px));
@@ -1640,6 +1673,13 @@
       <path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6v-5a7 7 0 0 0-5-6.7V3.5a2 2 0 1 0-4 0v.8A7 7 0 0 0 5 11v5l-1.6 2.4c-.4.6 0 1.4.8 1.4h15.6c.8 0 1.2-.8.8-1.4L19 16z"/>
     </svg>
     <span class="badge" id="notif-badge" hidden>0</span>
+  </button>
+
+  <button id="filter-btn" type="button" aria-label="Фильтры групп" title="Фильтры">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M3 5h18v2l-7 7.5V20l-4-2v-3.5L3 7V5z"/>
+    </svg>
+    <span class="filter-dot" id="filter-dot" hidden></span>
   </button>
 
   <button id="settings-btn" type="button" aria-label="Настройки" title="Настройки">
@@ -2113,7 +2153,21 @@
       handle: '@' + (row.username || 'user'),
       bio: row.bio || '',
       avatar: row.avatar || '',
+      gender: row.gender || '',
+      age: row.age || null,
     };
+  }
+
+  /* Сохранить профиль. Если в таблице ещё нет колонок gender/age
+     (не выполнен supabase_group_filters.sql) — сохраняем без них, чтобы не ломать регистрацию. */
+  async function upsertProfileRow(row) {
+    const res = await supabaseClient.from('profiles').upsert(row);
+    if (res.error && /gender|age/i.test(res.error.message || '')) {
+      console.warn('[profiles] нет колонок gender/age — выполните supabase_group_filters.sql');
+      const { gender, age, ...rest } = row;
+      return supabaseClient.from('profiles').upsert(rest);
+    }
+    return res;
   }
 
   async function loadProfileRow(userId) {
@@ -2147,6 +2201,7 @@
     leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = [];
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     groupMatches = []; groupMatchOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
+    groupStats = new Map();
     syncPostMarkers(); syncWishMarkers(); updateBadge();
 
     document.body.classList.add('auth-locked');
@@ -2488,10 +2543,11 @@
 
         const uid = signUpData.user && signUpData.user.id;
         if (uid) {
-          const { error: profErr } = await supabaseClient.from('profiles').upsert({
+          const { error: profErr } = await upsertProfileRow({
             id: uid, name: draft.name, username: draft.username,
             bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
             avatar: draft.avatar || '',
+            gender: draft.gender || null, age: draft.age || null,
           });
           if (profErr) {
             console.error('[profiles] upsert error:', profErr);
@@ -2534,7 +2590,9 @@
       loadGroupsFromDB(),
       loadNotificationsFromDB(),
       loadFriendsFromDB(),
+      loadGroupStats(),
     ]);
+    updateFilterDot();
     subscribeRealtime();
 
     if (lastUserLocation && settings.geolocation) {
@@ -2682,9 +2740,85 @@
     return status;
   }
 
+  /* ═══════ ФИЛЬТРЫ ГРУПП НА КАРТЕ ═══════
+     Скрывают только чужие группы. Свои группы, друзья и группы с match видны всегда. */
+  const FILTERS_KEY = 'map.filters.v1';
+  const DEFAULT_FILTERS = { ageOn: false, age: 20, spread: 2, comp: 'all' };
+  const COMP_LABELS = { all: 'Любой', male: 'Только парни', female: 'Только девушки', mixed: 'Смешанный' };
+  function loadFilters() {
+    try {
+      const raw = localStorage.getItem(FILTERS_KEY);
+      return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+    } catch { return { ...DEFAULT_FILTERS }; }
+  }
+  function saveFilters() { try { localStorage.setItem(FILTERS_KEY, JSON.stringify(mapFilters)); } catch {} }
+  let mapFilters = loadFilters();
+
+  // Сводка по группам: средний возраст и сколько парней/девушек (считает сервер)
+  let groupStats = new Map();
+  let groupStatsFailed = false;
+  async function loadGroupStats() {
+    if (!currentUser) { groupStats = new Map(); return; }
+    const { data, error } = await supabaseClient.rpc('get_group_stats');
+    if (error) { console.warn('[group stats]', error.message); groupStatsFailed = true; return; }
+    groupStatsFailed = false;
+    groupStats = new Map((data || []).map((r) => [String(r.group_id), {
+      avgAge: r.avg_age != null ? Number(r.avg_age) : null,
+      males: r.males || 0, females: r.females || 0, total: r.total || 0,
+    }]));
+  }
+
+  function groupComposition(st) {
+    if (!st) return null;
+    if (st.males && st.females) return 'mixed';
+    if (st.males) return 'male';
+    if (st.females) return 'female';
+    return null; // пол участников не указан
+  }
+
+  function groupStatsText(g) {
+    const st = groupStats.get(String(g.id));
+    if (!st) return '';
+    const bits = [];
+    if (st.avgAge != null) bits.push(`средний возраст ${Math.round(st.avgAge)}`);
+    const comp = groupComposition(st);
+    if (comp) bits.push({ male: 'парни', female: 'девушки', mixed: 'смешанный состав' }[comp]);
+    return bits.join(' · ');
+  }
+
+  function filtersActive() { return !!mapFilters.ageOn || mapFilters.comp !== 'all'; }
+
+  function groupPassesFilters(g) {
+    if (!filtersActive()) return true;
+    const st = groupStats.get(String(g.id));
+    if (mapFilters.ageOn) {
+      // «20 лет, ±0» — средний возраст, который округляется до 20
+      if (!st || st.avgAge == null || Math.abs(st.avgAge - mapFilters.age) > mapFilters.spread + 0.5) return false;
+    }
+    if (mapFilters.comp !== 'all' && groupComposition(st) !== mapFilters.comp) return false;
+    return true;
+  }
+
+  // Группы лидера, которые показываем иконкой на карте (с учётом фильтров)
+  function visibleGroupsOfLeader(userId) { return groupsOwnedBy(userId).filter(groupPassesFilters); }
+
+  function updateFilterDot() {
+    const dot = document.getElementById('filter-dot');
+    if (dot) dot.hidden = !filtersActive();
+  }
+
+  let filtersApplyTimer = null;
+  function applyMapFilters() {
+    saveFilters();
+    updateFilterDot();
+    clearTimeout(filtersApplyTimer);
+    // Профили нужны лидерам, которые только что прошли фильтр
+    filtersApplyTimer = setTimeout(async () => { await loadGroupMemberProfiles(); loadUserLocations(); }, 200);
+  }
+
   /* Перечитать группы, match и связанные с ними маркеры на карте */
   async function refreshGroupsWorld() {
-    await Promise.all([loadGroupsFromDB(), loadGroupMatchesFromDB()]);
+    await Promise.all([loadGroupsFromDB(), loadGroupMatchesFromDB(), loadGroupStats()]);
     await loadGroupMemberProfiles();
     await loadUserLocations();
     refreshMyMarker();
@@ -2891,9 +3025,11 @@
     if (!myId) return ids;
     for (const f of friends) ids.add(f.id);
     for (const g of groups) {
-      ids.add(g.ownerId);
+      const mine = isGroupParticipant(g, myId);
+      // Лидер чужой группы виден, только если группа проходит фильтры
+      if (mine || groupPassesFilters(g)) ids.add(g.ownerId);
       // Участники всех групп, где я состою (лидером или участником), видят друг друга
-      if (!isGroupParticipant(g, myId)) continue;
+      if (!mine) continue;
       for (const m of (g.members || [])) ids.add(m.id);
     }
     for (const m of myAcceptedMatches()) {
@@ -3123,7 +3259,7 @@
     // иконку группы вместо имени показываем только лидерам групп, где меня нет
     const sharesGroup = sharesGroupWithMe(userId);
     const groupLabel = sharesGroup || !isFriend ? sharedGroupsLabel(userId) : '';
-    const ownedGroups = sharesGroup ? [] : groupsOwnedBy(userId);
+    const ownedGroups = sharesGroup ? [] : visibleGroupsOfLeader(userId);
     const groupsKey = mapGroupsKey(ownedGroups);
     if (existing) {
       const same =
@@ -4182,7 +4318,7 @@
           <div class="user-profile-hero">
             <div class="user-profile-avatar ${g.photo ? 'no-3d' : ''}" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
             <div class="user-profile-name">${escapeHtml(g.name)}</div>
-            <div class="user-profile-handle">${escapeHtml(membersLabel(people.length))}</div>
+            <div class="user-profile-handle">${escapeHtml([membersLabel(people.length), groupStatsText(g)].filter(Boolean).join(' · '))}</div>
           </div>
           <div><div class="user-profile-section-title">Желание группы</div>${wishHtml}</div>
           <div><div class="user-profile-section-title">Match</div>${isMember ? ownGroupMatchesHtml(g) : groupMatchSectionHtml(g)}</div>
@@ -5092,6 +5228,45 @@
           </ul>`;
       }
     },
+    filters: {
+      title: 'Фильтры',
+      render: () => {
+        const f = mapFilters;
+        const compOpt = (key, emoji) =>
+          `<button type="button" class="seg-opt" data-flt-comp="${key}" aria-pressed="${f.comp === key}"><span class="seg-emoji">${emoji}</span>${COMP_LABELS[key]}</button>`;
+        return `
+          <div class="filters">
+            <div class="filter-note">Фильтры скрывают на карте чужие группы, которые не подходят. Ваши группы, друзья и группы с match видны всегда.</div>
+            ${groupStatsFailed ? `<div class="filter-note" style="color:#C0392B">Сводка по группам недоступна — выполните supabase_group_filters.sql в Supabase.</div>` : ''}
+            <div class="filter-block ${f.ageOn ? '' : 'is-off'}" id="flt-age-block">
+              <div class="filter-head">
+                <span class="filter-title">Средний возраст группы</span>
+                <button class="switch" type="button" role="switch" data-flt-age-toggle aria-checked="${!!f.ageOn}" aria-label="Фильтр по возрасту"></button>
+              </div>
+              <div class="filter-range">
+                <input type="range" id="flt-age" min="14" max="70" value="${f.age}" aria-label="Средний возраст">
+                <span class="filter-val" id="flt-age-val"></span>
+              </div>
+              <div class="filter-range">
+                <input type="range" id="flt-spread" min="0" max="10" value="${f.spread}" aria-label="Допустимое отклонение">
+                <span class="filter-val" id="flt-spread-val"></span>
+              </div>
+              <div class="filter-sub" id="flt-age-sub"></div>
+            </div>
+            <div class="filter-block">
+              <div class="filter-head"><span class="filter-title">Состав группы</span></div>
+              <div class="seg" id="flt-comp">
+                ${compOpt('all', '🌍')}${compOpt('mixed', '👫')}${compOpt('male', '👨')}${compOpt('female', '👩')}
+              </div>
+            </div>
+            <div class="filter-sub" id="flt-count"></div>
+            <div class="filter-actions">
+              <button type="button" class="btn" data-flt-reset>Сбросить</button>
+              <button type="button" class="btn btn-primary" data-flt-done>Показать на карте</button>
+            </div>
+          </div>`;
+      }
+    },
     settings: {
       title: 'Настройки',
       render: () => `
@@ -5228,6 +5403,7 @@
     items.forEach((li) => { li.dataset.open = String(li.querySelector('.dock-btn').dataset.app === openApp); });
     const nBtn = document.getElementById('notif-btn'); if (nBtn) nBtn.classList.toggle('is-active', openApp === 'notifications');
     const sBtn = document.getElementById('settings-btn'); if (sBtn) sBtn.classList.toggle('is-active', openApp === 'settings');
+    const fBtn = document.getElementById('filter-btn'); if (fBtn) fBtn.classList.toggle('is-active', openApp === 'filters');
   }
 
   function showMapApp() {
@@ -5271,6 +5447,7 @@
     setDots();
     win.focus({ preventScroll: true });
     if (id === 'settings') syncSettingsUi();
+    if (id === 'filters') syncFiltersUi();
     if (id === 'notifications' && currentUser) {
       supabaseClient.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
         .then(() => { notifications = notifications.map((n) => ({ ...n, read: true })); updateBadge(); });
@@ -5278,6 +5455,27 @@
   }
 
   function closeApp() { showMapApp(); }
+
+  // Подписи и счётчик на экране фильтров
+  function syncFiltersUi() {
+    if (openApp !== 'filters') return;
+    const f = mapFilters;
+    const q = (s) => winBody.querySelector(s);
+    if (!q('#flt-age')) return;
+    q('#flt-age-block').classList.toggle('is-off', !f.ageOn);
+    q('#flt-age-val').textContent = `${f.age} лет`;
+    q('#flt-spread-val').textContent = `± ${f.spread}`;
+    q('#flt-age-sub').textContent = f.spread
+      ? `Группы со средним возрастом от ${f.age - f.spread} до ${f.age + f.spread} лет`
+      : `Группы со средним возрастом ${f.age} лет`;
+    winBody.querySelectorAll('[data-flt-comp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fltComp === f.comp)));
+    const myId = currentUser && currentUser.id;
+    const others = groups.filter((g) => !isGroupParticipant(g, myId));
+    const passed = others.filter(groupPassesFilters).length;
+    q('#flt-count').textContent = others.length
+      ? `Подходит групп: ${passed} из ${others.length}`
+      : 'Других групп пока нет';
+  }
 
   function refreshNotifications() {
     if (openApp === 'notifications') { winBody.innerHTML = APPS.notifications.render(); winBody.scrollTop = 0; }
@@ -5710,6 +5908,21 @@
           </div>
           <label class="edit-field"><span class="edit-label">Имя</span><input class="edit-input" type="text" id="edit-name" maxlength="60" value="${escapeHtml(profile.name)}"></label>
           <label class="edit-field"><span class="edit-label">Имя пользователя</span><div class="username-wrap"><span class="username-prefix">@</span><input class="edit-input username-input" type="text" id="edit-username" maxlength="20" value="${escapeHtml(profile.handle.replace(/^@/, ''))}"></div></label>
+          <div class="edit-field">
+            <span class="edit-label">Пол</span>
+            <div class="seg" id="edit-gender">
+              <button type="button" class="seg-opt" data-gender="male" aria-pressed="${profile.gender === 'male'}"><span class="seg-emoji">👨</span>Мужской</button>
+              <button type="button" class="seg-opt" data-gender="female" aria-pressed="${profile.gender === 'female'}"><span class="seg-emoji">👩</span>Женский</button>
+            </div>
+          </div>
+          <div class="edit-field">
+            <span class="edit-label">Возраст</span>
+            <div class="filter-range">
+              <input type="range" id="edit-age" min="10" max="100" value="${Number(profile.age) || 18}">
+              <span class="filter-val" id="edit-age-val">${profile.age ? escapeHtml(String(profile.age)) : '—'}</span>
+            </div>
+            <span class="edit-hint">По полу и возрасту считаются состав и средний возраст ваших групп в фильтрах.</span>
+          </div>
           <label class="edit-field"><span class="edit-label">О себе</span><textarea class="edit-textarea" id="edit-bio" maxlength="300">${escapeHtml(profile.bio)}</textarea></label>
           <div class="edit-actions">
             <button type="button" class="btn" id="edit-cancel">Отмена</button>
@@ -5746,6 +5959,15 @@
         };
         reader.readAsDataURL(file);
       });
+      let editGender = profile.gender || '';
+      let editAge = Number(profile.age) || null;
+      winBody.querySelector('#edit-gender').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-gender]'); if (!b) return;
+        editGender = b.dataset.gender;
+        winBody.querySelectorAll('#edit-gender [data-gender]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.gender === editGender)));
+      });
+      const ageEl = winBody.querySelector('#edit-age');
+      ageEl.addEventListener('input', () => { editAge = Number(ageEl.value); winBody.querySelector('#edit-age-val').textContent = ageEl.value; });
       removeBtn.addEventListener('click', () => { previewEl.style.backgroundImage = ''; previewEl.textContent = nameEl.value.trim().charAt(0).toUpperCase() || '?'; delete previewEl.dataset.pending; removeBtn.hidden = true; });
       winBody.querySelector('#edit-cancel').addEventListener('click', goBack);
       winBody.querySelector('#edit-form').addEventListener('submit', async (e) => {
@@ -5763,8 +5985,9 @@
           usernameEl.focus();
           return;
         }
-        const { error: saveErr } = await supabaseClient.from('profiles').upsert({
+        const { error: saveErr } = await upsertProfileRow({
           id: currentUser.id, name: newName, username: uname, bio: newBio, avatar: newAvatar,
+          gender: editGender || null, age: editAge || null,
         });
         if (saveErr) {
           console.error('[profiles] save:', saveErr);
@@ -5772,7 +5995,8 @@
           return;
         }
         // Локальный профиль меняем только после успешного сохранения
-        profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar };
+        profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar, gender: editGender, age: editAge };
+        loadGroupStats(); // мой пол и возраст влияют на сводку моих групп
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
         loadUserLocations();
         showProfileScreen();
@@ -5787,7 +6011,33 @@
     winBody.querySelectorAll('.group-row.revealed').forEach((r) => r.classList.remove('revealed'));
   });
 
+  // Ползунки фильтров: применяем сразу, карта обновляется с небольшой задержкой
+  winBody.addEventListener('input', (e) => {
+    if (e.target.id !== 'flt-age' && e.target.id !== 'flt-spread') return;
+    if (e.target.id === 'flt-age') mapFilters.age = Number(e.target.value);
+    else mapFilters.spread = Number(e.target.value);
+    syncFiltersUi();
+    applyMapFilters();
+  });
+
   winBody.addEventListener('click', async (e) => {
+    // ── фильтры групп ──
+    if (e.target.closest('[data-flt-age-toggle]')) {
+      e.stopImmediatePropagation(); // общий обработчик .switch не должен переключить его второй раз
+      mapFilters.ageOn = !mapFilters.ageOn;
+      e.target.closest('[data-flt-age-toggle]').setAttribute('aria-checked', String(mapFilters.ageOn));
+      syncFiltersUi(); applyMapFilters();
+      return;
+    }
+    const compBtn = e.target.closest('[data-flt-comp]');
+    if (compBtn) { mapFilters.comp = compBtn.dataset.fltComp; syncFiltersUi(); applyMapFilters(); return; }
+    if (e.target.closest('[data-flt-reset]')) {
+      mapFilters = { ...DEFAULT_FILTERS };
+      winBody.innerHTML = APPS.filters.render(); syncFiltersUi(); applyMapFilters();
+      return;
+    }
+    if (e.target.closest('[data-flt-done]')) { showMapApp(); return; }
+
     // ── чат: вложения, запись, просмотр ──
     if (e.target.closest('[data-chat-attach]')) { const f = winBody.querySelector('#chat-file'); if (f) f.click(); return; }
     const recBtn = e.target.closest('[data-chat-rec]');
@@ -6089,6 +6339,8 @@
 
   const notifBtn = document.getElementById('notif-btn');
   if (notifBtn) notifBtn.addEventListener('click', () => { if (openApp === 'notifications') showMapApp(); else showApp('notifications', notifBtn); });
+  const filterBtn = document.getElementById('filter-btn');
+  if (filterBtn) filterBtn.addEventListener('click', () => { if (openApp === 'filters') showMapApp(); else showApp('filters', filterBtn); });
   const settingsBtn = document.getElementById('settings-btn');
   if (settingsBtn) settingsBtn.addEventListener('click', () => { if (openApp === 'settings') showMapApp(); else showApp('settings', settingsBtn); });
 
