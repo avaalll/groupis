@@ -1020,7 +1020,6 @@
     .support-chat-send:hover { background: #2F3EA0; }
     @media (prefers-color-scheme: dark) { .support-chat-send:hover { background: #5D6EE0; } }
 
-    /* ─── Список чатов ─── */
     .chats-list {
       flex: 1;
       overflow-y: auto;
@@ -1267,10 +1266,6 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
-
-    /* ═══════════════════════════════════════════════════════
-       МОБИЛЬНАЯ АДАПТАЦИЯ
-       ═══════════════════════════════════════════════════════ */
 
     @media (max-width: 900px) {
       .window {
@@ -2496,8 +2491,10 @@
 
   /* ═══════ ГЕОПОЗИЦИИ ДРУЗЕЙ И УЧАСТНИКОВ ГРУПП ═══════ */
   const friendMarkers = new Map();
+  // Отдельная карта для проверки попадания клика по маркеру.
+  const friendMarkerCoords = new Map(); // userId → { coords:[lon,lat], person }
   let userLocationsById = new Map();
-  let userAvatarCfgById = new Map();  // userId → avatar_config
+  let userAvatarCfgById = new Map();
   let groupMemberProfiles = new Map();
 
   function computeRelevantUserIds() {
@@ -2576,6 +2573,7 @@
       for (const [id, fm] of [...friendMarkers.entries()]) {
         try { fm.marker.destroy(); } catch {}
         friendMarkers.delete(id);
+        friendMarkerCoords.delete(id);
       }
       return;
     }
@@ -2586,7 +2584,6 @@
     if (error) { console.warn('[user_locations] load:', error.message); return; }
 
     console.log('[user_locations] rows:', data);
-    console.log('[user_locations] relevant ids:', ids);
 
     const found = new Set();
     for (const row of (data || [])) {
@@ -2610,6 +2607,7 @@
       if (!relevant.has(userId) || !found.has(userId)) {
         try { fm.marker.destroy(); } catch {}
         friendMarkers.delete(userId);
+        friendMarkerCoords.delete(userId);
       }
     }
   }
@@ -2627,6 +2625,7 @@
       if (same) {
         try { existing.marker.setCoordinates(coords); } catch {}
         existing.location = coords;
+        friendMarkerCoords.set(userId, { coords, person });
         return;
       }
       try { existing.marker.destroy(); } catch {}
@@ -2638,14 +2637,6 @@
       html,
       anchor: [0.5, 0.85],
       preventMapInteractions: false,
-      onClick: (e) => {
-        if (e && e.stopPropagation) e.stopPropagation();
-        const p = personById(userId) || groupMemberProfiles.get(userId) || friends.find((f) => f.id === userId);
-        if (p) {
-          console.log('[mapgl onClick] open friend profile', userId, p);
-          showFriendProfile(userId, p);
-        }
-      },
     });
     friendMarkers.set(userId, {
       marker,
@@ -2655,6 +2646,8 @@
       personName: person.name || '',
       personAvatar: person.avatar || '',
     });
+    // Запоминаем координаты и человека — пригодится для проверки попадания клика.
+    friendMarkerCoords.set(userId, { coords, person });
   }
 
   async function applyUserLocationChange(payload) {
@@ -2672,6 +2665,7 @@
       userAvatarCfgById.delete(userId);
       const fm = friendMarkers.get(userId);
       if (fm) { try { fm.marker.destroy(); } catch {} friendMarkers.delete(userId); }
+      friendMarkerCoords.delete(userId);
       return;
     }
 
@@ -2729,9 +2723,51 @@
     try {
       await loadScript('https://mapgl.2gis.com/api/js/v1');
       map2gis = new mapgl.Map('map', { center: MAP_START_LOCATION.center, zoom: MAP_START_LOCATION.zoom, key: MAPGL_API_KEY });
-      map2gis.on('click', () => { if (openApp !== null) closeApp(); else closePopup(); });
+
+      // ⚡ Главный обработчик клика: проверяем попадание по координатам.
+      // DOM-события 2ГИС не передаёт на вложенные элементы HtmlMarker,
+      // поэтому ловим клик по карте и вручную ищем ближайший маркер друга.
+      map2gis.on('click', (e) => {
+        const hit = findFriendMarkerAtClick(e);
+        if (hit) {
+          console.log('[map click] hit friend marker', hit.userId, hit.person);
+          showFriendProfile(hit.userId, hit.person);
+          return;
+        }
+        if (openApp !== null) closeApp(); else closePopup();
+      });
+
       syncPostMarkers(); syncWishMarkers(); startGeolocation();
     } catch (err) { console.error('[карта]', err); }
+  }
+
+  /* Проверяем, попал ли клик по карте в область какого-нибудь маркера друга.
+     Работает по координатам, не через DOM — поэтому 2ГИС не может помешать. */
+  function findFriendMarkerAtClick(e) {
+    if (!e || !e.lngLat || !map2gis) return null;
+    const cx = (typeof e.lngLat.lng === 'number') ? e.lngLat.lng
+             : (typeof e.lngLat.lon === 'number') ? e.lngLat.lon : null;
+    const cy = (typeof e.lngLat.lat === 'number') ? e.lngLat.lat : null;
+    if (typeof cx !== 'number' || typeof cy !== 'number') return null;
+
+    // Радиус попадания в градусах. 1° ≈ 111 км, значит 0.0006° ≈ 66 м.
+    // Хватает, чтобы клик по бейджу над маркером засчитался.
+    const RADIUS_DEG = 0.0008;
+    const R2 = RADIUS_DEG * RADIUS_DEG;
+
+    let best = null, bestD2 = Infinity;
+    for (const [userId, info] of friendMarkerCoords.entries()) {
+      if (!info || !Array.isArray(info.coords)) continue;
+      const [lon, lat] = info.coords;
+      const dx = lon - cx;
+      const dy = lat - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < R2 && d2 < bestD2) {
+        bestD2 = d2;
+        best = { userId, person: info.person };
+      }
+    }
+    return best;
   }
 
   /* ═══════ НАСТРОЙКИ ═══════ */
@@ -2833,8 +2869,6 @@
     } catch (err) { console.warn('[аватар]', err); return false; }
   }
 
-  /* Кэш статичных снимков 3D-аватара — чтобы не рисовать WebGL повторно
-     и чтобы корректно вставлять аватар в HTML-маркер карты 2ГИС. */
   const avatarSnapshotCache = new Map();
 
   function avatarCfgKey(cfg) {
@@ -3626,13 +3660,8 @@
     });
   }
 
-  /* ═══════ ЭКРАН «СООБЩЕНИЯ» = СПИСОК ЧАТОВ ═══════ */
   async function showMessengerScreen() {
-    if (!currentUser) {
-      console.warn('[messenger] нет currentUser, откроем карту');
-      showMapApp();
-      return;
-    }
+    if (!currentUser) { showMapApp(); return; }
     clearTimeout(closeTimer);
     closePostMenus();
     if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
@@ -3665,12 +3694,10 @@
     document.body.classList.add('app-window');
     setDots();
     win.focus({ preventScroll: true });
-
     currentBackHandler = () => { closeApp(); };
 
-    try {
-      await renderChatsList();
-    } catch (err) {
+    try { await renderChatsList(); }
+    catch (err) {
       console.warn('[messenger] renderChatsList error:', err);
       const el = winBody.querySelector('#chats-list');
       if (el) el.innerHTML = `<div class="empty-msg">Ошибка загрузки. Попробуйте ещё раз.</div>`;
@@ -3679,26 +3706,14 @@
 
   async function renderChatsList() {
     const listEl = winBody.querySelector('#chats-list');
-    if (!listEl) {
-      console.warn('[chats] нет #chats-list в DOM');
-      return;
-    }
-
-    if (!currentUser || !Array.isArray(friends)) {
+    if (!listEl) return;
+    if (!currentUser || !Array.isArray(friends) || !friends.length) {
       listEl.innerHTML = `<div class="empty-msg">Пока нет друзей.<br>Найдите их через приложение «Друзья».</div>`;
       return;
     }
-
-    if (!friends.length) {
-      listEl.innerHTML = `<div class="empty-msg">Пока нет друзей.<br>Найдите их через приложение «Друзья».</div>`;
-      return;
-    }
-
     const ids = friends.map((f) => f.id);
     const myId = currentUser.id;
-
     let lastByPeer = new Map();
-
     try {
       const { data, error } = await supabaseClient
         .from('dm_messages')
@@ -3706,19 +3721,14 @@
         .or(`from_id.eq.${myId},to_id.eq.${myId}`)
         .order('created_at', { ascending: false })
         .limit(500);
-
-      if (error) {
-        console.warn('[dm] list load:', error.message);
-      } else {
+      if (!error) {
         for (const m of (data || [])) {
           const peer = m.from_id === myId ? m.to_id : m.from_id;
           if (!ids.includes(peer)) continue;
           if (!lastByPeer.has(peer)) lastByPeer.set(peer, m);
         }
       }
-    } catch (err) {
-      console.warn('[dm] list load exception:', err);
-    }
+    } catch (err) { console.warn('[dm] list load exception:', err); }
 
     const rows = friends.map((f) => {
       const last = lastByPeer.get(f.id);
@@ -3826,14 +3836,12 @@
     const peer = friends.find((f) => f.id === currentDmPeerId);
     const peerName = peer ? peer.name : 'Пользователь';
     const myId = String(currentUser.id);
-
     const rowsHtml = dmMessages.length
       ? dmMessages.map((m) => {
           const mine = String(m.from_id) === myId;
           return `<div class="chat-msg ${mine ? 'me' : 'them'}" data-msg-id="${m.id}">${escapeHtml(m.content)}<span class="chat-msg-time">${fmtTime(m.created_at)}</span></div>`;
         }).join('')
       : `<div class="empty-msg">Начните диалог.</div>`;
-
     winBody.innerHTML = `
       <div class="support-chat" style="height:100%">
         <div class="support-chat-head">Чат с ${escapeHtml(peerName)}</div>
@@ -3847,30 +3855,19 @@
 
     const form = winBody.querySelector('#dm-form');
     const input = winBody.querySelector('#dm-input');
-
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = input.value.trim();
       if (!text || !currentUser || !currentDmPeerId) return;
       input.value = '';
-
       const tempId = 'tmp-' + Date.now() + Math.random().toString(36).slice(2, 6);
-      const optimistic = {
-        id: tempId,
-        from_id: currentUser.id,
-        to_id: currentDmPeerId,
-        content: text,
-        created_at: new Date().toISOString(),
-      };
+      const optimistic = { id: tempId, from_id: currentUser.id, to_id: currentDmPeerId, content: text, created_at: new Date().toISOString() };
       dmMessages.push(optimistic);
       appendDmMessage(optimistic);
-
       const { data, error } = await supabaseClient
         .from('dm_messages')
         .insert({ from_id: currentUser.id, to_id: currentDmPeerId, content: text })
-        .select()
-        .single();
-
+        .select().single();
       if (error) {
         console.warn('[dm] insert:', error.message);
         dmMessages = dmMessages.filter((m) => m.id !== tempId);
@@ -4793,46 +4790,6 @@
   }
 
   updateBadge();
-
-  /* ═══════ ГЛОБАЛЬНЫЙ ПЕРЕХВАТ КЛИКА ПО МАРКЕРУ ДРУГА ═══════
-     Резервный путь — если 2ГИС по какой-то причине не вызвал onClick. */
-  document.addEventListener('click', (e) => {
-    let el = e.target;
-    while (el && el !== document && el !== document.documentElement) {
-      if (el.dataset && el.dataset.userId) {
-        const uid = el.dataset.userId;
-        const person = personById(uid) || groupMemberProfiles.get(uid) || friends.find((f) => f.id === uid);
-        if (person) {
-          e.stopPropagation();
-          e.preventDefault();
-          console.log('[document click] open friend profile', uid, person);
-          showFriendProfile(uid, person);
-        } else {
-          console.warn('[document click] no person for uid', uid);
-        }
-        return;
-      }
-      el = el.parentNode;
-    }
-  }, true);
-
-  document.addEventListener('pointerdown', (e) => {
-    let el = e.target;
-    while (el && el !== document && el !== document.documentElement) {
-      if (el.dataset && el.dataset.userId) {
-        const uid = el.dataset.userId;
-        const person = personById(uid) || groupMemberProfiles.get(uid) || friends.find((f) => f.id === uid);
-        if (person) {
-          e.stopPropagation();
-          e.preventDefault();
-          console.log('[document pointerdown] open friend profile', uid, person);
-          showFriendProfile(uid, person);
-        }
-        return;
-      }
-      el = el.parentNode;
-    }
-  }, true);
 
   /* ═══════ СТАРТ ═══════ */
   async function bootApp() {
