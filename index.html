@@ -1110,6 +1110,11 @@
     .chat-circle-sound { right: 26px; bottom: 30px; }
     .chat-circle-wrap.is-playing .chat-circle-sound { display: none; }
     .chat-msg.is-circle .chat-msg-time { color: var(--ink-soft); }
+    .chat-media-fallback {
+      display: inline-block; margin: 4px 6px; padding: 8px 12px; border-radius: 10px;
+      background: rgba(0,0,0,.18); color: inherit; font-weight: 600; text-decoration: none;
+    }
+    .chat-media-fallback:hover { background: rgba(0,0,0,.28); }
 
     .chat-recbar {
       display: flex; align-items: center; gap: 8px;
@@ -4181,8 +4186,23 @@
       if (!cached) continue;
       // когда медиа загрузится, высота сообщения вырастет — держим ленту внизу
       el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); }, { once: true });
+      if (el.tagName !== 'IMG') el.addEventListener('error', () => showMediaFallback(el, cached.url), { once: true });
       el.src = cached.url;
     }
+  }
+
+  // Браузер не смог декодировать запись (например, формат другого устройства) —
+  // вместо пустого плеера даём открыть файл напрямую
+  function showMediaFallback(el, url) {
+    const box = el.closest('.chat-circle-wrap') || el.closest('.chat-voice') || el;
+    const a = document.createElement('a');
+    a.className = 'chat-media-fallback';
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    const kind = el.closest('.chat-circle-wrap') ? 'circle' : (el.tagName === 'AUDIO' ? 'voice' : 'video');
+    a.textContent = { circle: '⭕ Открыть видеосообщение', voice: '🎤 Открыть голосовое', video: '🎬 Открыть видео' }[kind];
+    const msg = box.closest('.chat-msg');
+    if (msg) msg.classList.remove('is-circle');
+    box.replaceWith(a);
   }
 
   function renderChatView() {
@@ -4261,7 +4281,7 @@
     return ({
       'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
       'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
-      'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3',
+      'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/aac': 'aac',
     })[baseMime(type)] || 'bin';
   }
 
@@ -4397,9 +4417,12 @@
   let chatRec = null; // { kind, recorder, stream, chunks, startedAt, timer, discard, chat }
 
   function pickRecorderMime(kind) {
+    // Сначала MP4 (H.264/AAC): так пишет iPhone, и такой файл играет и в Safari, и в Chrome.
+    // WebM — запасной вариант для браузеров без записи в MP4.
     const list = kind === 'voice'
-      ? ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
-      : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+      ? ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+      : ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4',
+         'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
     return list.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
   }
 
@@ -4436,10 +4459,13 @@
       if (rec.discard || !rec.chunks.length || chat !== rec.chat) return;
       const duration = (Date.now() - rec.startedAt) / 1000;
       if (duration < 0.7) return; // случайное нажатие
-      const type = recorder.mimeType || mimeType || (kind === 'voice' ? 'audio/webm' : 'video/webm');
+      const type = recorder.mimeType || (rec.chunks[0] && rec.chunks[0].type) || mimeType
+        || (kind === 'voice' ? 'audio/mp4' : 'video/mp4');
       sendChatMessage({ kind, blob: new Blob(rec.chunks, { type }), duration: Math.round(duration * 10) / 10 });
     };
-    recorder.start(250);
+    // Без timeslice: Safari на iPhone при записи кусками склеивает битый файл,
+    // который потом не воспроизводится. Весь файл придёт одним куском при stop().
+    recorder.start();
     setRecordingUi(true, kind, stream);
 
     const maxSec = kind === 'voice' ? MAX_VOICE_SEC : MAX_CIRCLE_SEC;
