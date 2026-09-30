@@ -291,6 +291,15 @@
     .user-badge-inner.is-group .user-badge-name { color: #fff; }
     .user-badge-inner.is-group .user-badge-group { color: #FFD9A0; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
     .user-dot-marker.is-group { background: #5C3418 !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
+    /* Друг из общей группы: зелёная плашка */
+    .user-badge-inner.is-friend-group {
+      background: rgba(22, 104, 50, .94);
+      border-color: rgba(150, 240, 170, .4);
+      box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.25);
+    }
+    .user-badge-inner.is-friend-group .user-badge-name { color: #fff; }
+    .user-badge-inner.is-friend-group .user-badge-group { color: #B8F5C6; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
+    .user-dot-marker.is-friend-group { background: #1E7A3C !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
     .user-badge-status {
       position: absolute; left: 50%; bottom: 100%;
       transform: translate(-50%, 2px);
@@ -2883,7 +2892,8 @@
     for (const f of friends) ids.add(f.id);
     for (const g of groups) {
       ids.add(g.ownerId);
-      if (g.ownerId !== myId) continue;
+      // Участники всех групп, где я состою (лидером или участником), видят друг друга
+      if (!isGroupParticipant(g, myId)) continue;
       for (const m of (g.members || [])) ids.add(m.id);
     }
     for (const m of myAcceptedMatches()) {
@@ -2977,6 +2987,11 @@
     return ownedGroups.map((g) => [g.id, g.name, g.photo, g.wish, (g.members || []).length].join('|')).join('¦');
   }
 
+  function sharesGroupWithMe(userId) {
+    const myId = currentUser && currentUser.id;
+    return !!myId && groups.some((g) => isGroupParticipant(g, myId) && isGroupParticipant(g, userId));
+  }
+
   function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = []) {
     const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
     let label = (person.name || '').trim() || person.handle || 'Пользователь';
@@ -2990,20 +3005,24 @@
     const imgUrl = cfg ? getAvatarSnapshotDataURL(cfg) : null;
     const isLeader = ownedGroups.length > 0;
 
+    // Цвет плашки: друг из общей группы — зелёная, не друг — коричневая, просто друг — обычная
+    const tone = isFriend ? (groupLabel ? 'is-friend-group' : '') : 'is-group';
+    const dotColor = { '': 'var(--you)', 'is-friend-group': '#1E7A3C', 'is-group': '#5C3418' }[tone];
+
     const bottom = imgUrl
       ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
       : isLeader
         ? `<div class="user-dot-marker is-leader"></div>`
-        : `<div class="user-dot-marker ${isFriend ? '' : 'is-group'}" style="background:${isFriend ? 'var(--you)' : '#5C3418'}"></div>`;
+        : `<div class="user-dot-marker ${tone}" style="background:${dotColor}"></div>`;
 
-    // У лидера группы вместо плашки с именем — иконка группы (и облако с её желанием)
+    // Лидер чужой группы: вместо плашки с именем — иконка группы (и облако с её желанием)
     const badge = isLeader
       ? `<div class="user-badge is-leader" data-clickable="true">${mapGroupBadgesHtml(ownedGroups)}</div>`
       : `<div class="user-badge" data-clickable="true">
-          <div class="user-badge-inner ${isFriend ? '' : 'is-group'}">
+          <div class="user-badge-inner ${tone}">
             ${avatarInner}
             <span class="user-badge-name">${escapeHtml(label)}</span>
-            ${isFriend ? '' : `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel || 'группа')}</span>`}
+            ${groupLabel || !isFriend ? `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel || 'группа')}</span>` : ''}
           </div>
         </div>`;
 
@@ -3100,8 +3119,11 @@
     if (!map2gis) return;
     const existing = friendMarkers.get(userId);
     const cfgKey = avatarCfgKey(avatarCfg);
-    const groupLabel = isFriend ? '' : sharedGroupsLabel(userId);
-    const ownedGroups = groupsOwnedBy(userId);
+    // Со мной в одной группе — вижу его по имени с названием нашей группы;
+    // иконку группы вместо имени показываем только лидерам групп, где меня нет
+    const sharesGroup = sharesGroupWithMe(userId);
+    const groupLabel = sharesGroup || !isFriend ? sharedGroupsLabel(userId) : '';
+    const ownedGroups = sharesGroup ? [] : groupsOwnedBy(userId);
     const groupsKey = mapGroupsKey(ownedGroups);
     if (existing) {
       const same =
@@ -3374,23 +3396,14 @@
       : `<div class="user-badge-avatar">${escapeHtml(nameInitial)}</div>`;
     const badge = document.createElement('div');
     badge.className = 'user-badge'; badge.dataset.clickable = 'true';
-    // Если я лидер группы — у меня на карте, как и у всех, иконка группы вместо имени
-    const ownedGroups = currentUser ? groupsOwnedBy(currentUser.id) : [];
-    if (ownedGroups.length) {
-      badge.classList.add('is-leader');
-      badge.innerHTML = mapGroupBadgesHtml(ownedGroups);
-    } else {
-      badge.innerHTML = `
-        <div class="user-badge-inner">
-          ${avatarInner}
-          <span class="user-badge-name">${escapeHtml(label)}</span>
-          <span class="user-badge-status" aria-hidden="true"></span>
-        </div>`;
-    }
-    badge.addEventListener('click', (e) => {
-      if (openMapGroup(e)) return;
-      e.stopPropagation(); showApp('profile'); showUserProfileScreen();
-    });
+    // Себя я всегда вижу просто по имени — иконку группы видят только те, кто не в ней
+    badge.innerHTML = `
+      <div class="user-badge-inner">
+        ${avatarInner}
+        <span class="user-badge-name">${escapeHtml(label)}</span>
+        <span class="user-badge-status" aria-hidden="true"></span>
+      </div>`;
+    badge.addEventListener('click', (e) => { e.stopPropagation(); showApp('profile'); showUserProfileScreen(); });
     wrap.appendChild(badge);
     if (use3D) {
       const inner = document.createElement('div'); inner.className = 'user-avatar-marker';
