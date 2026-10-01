@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Groupies</title>
-  <meta name="description" content="Groupies — карта с друзьями, группами и мессенджером">
+  <title>Groupis</title>
+  <meta name="description" content="Groupis — карта с друзьями, группами и мессенджером">
 
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#ECEAF5" media="(prefers-color-scheme: light)">
@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Groupies">
+  <meta name="apple-mobile-web-app-title" content="Groupis">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
 
   <style>
-    /* Палитра Groupies: фиолетовый (основной) + лайм (акцент) на чернильной/лавандовой базе */
+    /* Палитра Groupis: фиолетовый (основной) + лайм (акцент) на чернильной/лавандовой базе */
     :root {
       color-scheme: light dark;
       --land: #ECEAF5;
@@ -437,6 +437,40 @@
     .person-card.is-link { cursor: pointer; }
     .person-card.is-link:hover { background: rgba(139,115,255,.08); }
     .match-chat-avatar { background: linear-gradient(#C86BFF, #6A2BC4); color: #fff; font-size: 20px; display: grid; place-items: center; }
+
+    /* ── Голосование о союзе в совместном чате ── */
+    .match-vote {
+      margin: 0 12px 6px; padding: 12px 14px; border-radius: 20px;
+      background: var(--field); display: grid; gap: 9px;
+    }
+    .match-vote:empty { display: none; }
+    .match-vote[data-state="open"] { background: linear-gradient(135deg, rgba(139, 115, 255, .16), rgba(200, 245, 66, .12)); }
+    .match-vote[data-state="approved"] { background: linear-gradient(135deg, rgba(255, 143, 177, .2), rgba(139, 115, 255, .2)); }
+    .mv-head { display: flex; align-items: baseline; gap: 10px; }
+    .mv-title { flex: 1; font-weight: 800; font-size: 14px; }
+    .mv-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .mv-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(120, 116, 150, .2); }
+    .mv-yes { background: var(--lime); transition: width .5s var(--ease); }
+    .mv-no  { background: var(--hot); transition: width .5s var(--ease); margin-left: auto; }
+    .mv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mv-btn {
+      border: 1.5px solid transparent; border-radius: 14px; padding: 10px 12px; cursor: pointer;
+      font: inherit; font-weight: 800; background: var(--win); color: var(--ink);
+      transition: transform .3s var(--spring), border-color .2s, background .2s;
+    }
+    .mv-btn:active { transform: scale(.94); }
+    .mv-btn.yes.is-on { background: var(--lime); color: var(--lime-ink); }
+    .mv-btn.no.is-on  { background: var(--hot); color: #fff; }
+    .mv-btn:disabled { opacity: .6; }
+    .mv-hint { font-size: 12px; color: var(--ink-soft); line-height: 1.35; }
+    .mv-start {
+      justify-self: start; border: 0; border-radius: 14px; padding: 10px 16px; cursor: pointer;
+      font: inherit; font-weight: 800; background: var(--lime); color: var(--lime-ink);
+      box-shadow: 0 8px 20px rgba(160, 200, 40, .25);
+      transition: transform .3s var(--spring);
+    }
+    .mv-start:active { transform: scale(.94); }
+    .mv-done { font-weight: 800; font-size: 13.5px; }
 
     .map-popup {
       width: 220px; padding: 8px;
@@ -2102,7 +2136,7 @@
 
   <!-- Плавающая «таблетка» с логотипом -->
   <header class="menubar">
-    <strong class="brand"><img src="icons/logo.svg" alt="" aria-hidden="true"><span>Groupies</span></strong>
+    <strong class="brand"><img src="icons/logo.svg" alt="" aria-hidden="true"><span>Groupis</span></strong>
     <div class="menubar-right">
       <span id="offline-badge" hidden>Офлайн</span>
       <button id="install-btn" type="button" hidden>Установить</button>
@@ -2764,7 +2798,7 @@
   function authHeader({ title, sub = '', icon = '🔐', logo = false }) {
     return `
       ${logo
-        ? `<img class="auth-logo auth-logo-img" src="icons/logo.svg" alt="Groupies">`
+        ? `<img class="auth-logo auth-logo-img" src="icons/logo.svg" alt="Groupis">`
         : `<div class="auth-logo" aria-hidden="true">${icon}</div>`}
       <h1 class="auth-title">${escapeHtml(title)}</h1>
       <p class="auth-sub">${escapeHtml(sub)}</p>
@@ -2889,7 +2923,7 @@
 
   function paintAuthLogin() {
     authCard.innerHTML = `
-      ${authHeader({ title: 'Добро пожаловать в Groupies', sub: 'Войдите, чтобы продолжить', logo: true })}
+      ${authHeader({ title: 'Добро пожаловать в Groupis', sub: 'Войдите, чтобы продолжить', logo: true })}
       <form class="auth-form" id="auth-login-form" novalidate>
         <label class="auth-field">
           <span class="auth-label">Почта или @username</span>
@@ -3331,6 +3365,7 @@
       id: g.id, ownerId: g.owner_id, name: g.name, photo: g.photo,
       visibility: g.visibility, members: membersByGroup[g.id] || [],
       wish: (g.wish || '').trim(), wishAt: g.wish_at || null,
+      unionWith: g.union_with != null ? String(g.union_with) : null,
     }));
   }
 
@@ -3346,7 +3381,62 @@
     groupMatches = (data || []).map((r) => ({
       id: String(r.id), fromGroup: String(r.from_group), toGroup: String(r.to_group),
       fromOwner: r.from_owner, toOwner: r.to_owner, status: r.status, createdAt: r.created_at,
+      voteState: r.vote_state || 'none', voteStartedBy: r.vote_started_by || null,
     }));
+  }
+
+  /* ═══════ СОЮЗ ГРУПП И ГОЛОСОВАНИЕ ═══════
+     Закреплённый союз (≥ 50% «за»): участники двух групп видят на карте только друг друга,
+     а сами группы скрыты от остальных. Распавшийся союз (≥ 50% «против»): группы больше
+     не видят друг друга и не могут снова сделать match. */
+  function unionPartner(g) {
+    if (!g || !g.unionWith) return null;
+    return groupById(g.unionWith);   // партнёр мог удалить группу — тогда союза нет
+  }
+  // Мой закреплённый союз: { mine, partner } или null
+  function myUnion() {
+    for (const g of myGroups()) {
+      const partner = unionPartner(g);
+      if (partner) return { mine: g, partner };
+    }
+    return null;
+  }
+  // Союз с группой распался (статус dissolved) — она для нас скрыта навсегда
+  function dissolvedWithMyGroups(g) {
+    const gid = String(g.id);
+    const mine = new Set(myGroups().map((x) => String(x.id)));
+    return groupMatches.some((m) => m.status === 'dissolved' &&
+      ((m.fromGroup === gid && mine.has(m.toGroup)) || (m.toGroup === gid && mine.has(m.fromGroup))));
+  }
+  // Скрыта ли чужая группа от меня на карте и в списках
+  function groupHiddenForMe(g) {
+    const myId = currentUser && currentUser.id;
+    if (!g || isGroupParticipant(g, myId)) return false;
+    const u = myUnion();
+    if (u) return String(g.id) !== String(u.partner.id);   // в союзе видим только партнёра
+    if (unionPartner(g)) return true;                        // чужой закреплённый союз скрыт от всех
+    return dissolvedWithMyGroups(g);
+  }
+
+  // Все участники союза: лидеры и участники обеих групп
+  function matchParticipantIds(m) {
+    const ids = new Set();
+    for (const gid of [m.fromGroup, m.toGroup]) {
+      const g = groupById(gid);
+      if (!g) continue;
+      ids.add(g.ownerId);
+      for (const mem of (g.members || [])) ids.add(mem.id);
+    }
+    return [...ids];
+  }
+  function isMatchLeader(m, uid) {
+    return [m.fromGroup, m.toGroup].some((gid) => { const g = groupById(gid); return g && g.ownerId === uid; });
+  }
+
+  async function loadMatchVotes(matchId) {
+    const { data, error } = await supabaseClient.from('match_votes').select('user_id, vote').eq('match_id', Number(matchId));
+    if (error) { console.warn('[match votes] load:', error.message); return []; }
+    return data || [];
   }
 
   function groupById(id) { return groups.find((g) => String(g.id) === String(id)) || null; }
@@ -3461,7 +3551,7 @@
   }
 
   // Группы лидера, которые показываем иконкой на карте (с учётом фильтров)
-  function visibleGroupsOfLeader(userId) { return groupsOwnedBy(userId).filter(groupPassesFilters); }
+  function visibleGroupsOfLeader(userId) { return groupsOwnedBy(userId).filter((g) => !groupHiddenForMe(g) && groupPassesFilters(g)); }
 
   function updateFilterDot() {
     const dot = document.getElementById('filter-dot');
@@ -3490,6 +3580,7 @@
     clearTimeout(groupsWorldTimer);
     groupsWorldTimer = setTimeout(async () => {
       await refreshGroupsWorld();
+      onMatchesChanged();   // открытый совместный чат: обновить голосование или закрыть, если союз распался
       // Открытый список групп перерисовываем, чтобы он не показывал устаревшее
       if (openApp === 'profile' && winTitle.textContent === 'Группы') showGroupsScreen();
     }, 300);
@@ -3611,9 +3702,12 @@
             if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
           });
         }
-        if (n.type === 'group_match' || n.type === 'group_match_accept') {
-          // Новый запрос на match или match состоялся — нужны свежие match, чаты и геопозиции
-          refreshGroupsWorld().then(() => { if (openApp === 'notifications') refreshNotifications(); });
+        if (['group_match', 'group_match_accept', 'match_vote', 'match_vote_result'].includes(n.type)) {
+          // Запрос на match, match состоялся, голосование о союзе — нужны свежие match, чаты и геопозиции
+          refreshGroupsWorld().then(() => {
+            if (openApp === 'notifications') refreshNotifications();
+            onMatchesChanged();
+          });
         }
         updateBadge();
         if (openApp === 'notifications') refreshNotifications();
@@ -3644,6 +3738,14 @@
         onIncomingChatRow(normMatchRow(payload.new));
       }).subscribe();
     rtChannels.push(chMatchMsg);
+
+    // Голоса в совместном чате — счётчик обновляется у всех сразу
+    const chMatchVotes = supabaseClient.channel('rt:match_votes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_votes' }, (payload) => {
+        const row = payload.new && payload.new.match_id != null ? payload.new : payload.old;
+        if (chat && chat.type === 'match' && row && String(row.match_id) === String(chat.matchId)) refreshMatchVotePanel();
+      }).subscribe();
+    rtChannels.push(chMatchVotes);
 
     // Новые группы, их желания, составы и match — сразу на карте у всех
     const chGroupsWorld = supabaseClient.channel('rt:groups_world')
@@ -3688,7 +3790,8 @@
     for (const g of groups) {
       const mine = isGroupParticipant(g, myId);
       // Лидер чужой группы виден, только если группа проходит фильтры
-      if (mine || groupPassesFilters(g)) ids.add(g.ownerId);
+      // Скрытые группы (закреплённый союз, распавшийся союз) не показываем вовсе
+      if (mine || (!groupHiddenForMe(g) && groupPassesFilters(g))) ids.add(g.ownerId);
       // Участники всех групп, где я состою (лидером или участником), видят друг друга
       if (!mine) continue;
       for (const m of (g.members || [])) ids.add(m.id);
@@ -4881,6 +4984,16 @@
   /* Блок match в карточке чужой группы: предложить, ждать ответа, принять или открыть общий чат */
   function groupMatchSectionHtml(g) {
     const myId = currentUser && currentUser.id;
+    const u = myUnion();
+    if (u) {
+      const m = matchBetween(u.mine.id, u.partner.id);
+      if (String(g.id) === String(u.partner.id) && m) {
+        return `<div class="match-hint">💞 Союз закреплён — вы видите только друг друга.</div>
+          <ul class="rows match-rows"><li class="match-row"><div class="person-main"><div class="person-name">${escapeHtml(matchTitle(m))}</div></div>
+          <button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button></li></ul>`;
+      }
+      return `<div class="match-hint">Ваша группа в закреплённом союзе с «${escapeHtml(u.partner.name)}» — новые match недоступны.</div>`;
+    }
     const led = groupsOwnedBy(myId);
     if (!led.length) {
       const inSomeGroup = myGroups().length > 0;
@@ -4913,14 +5026,15 @@
   function ownGroupMatchesHtml(g) {
     const myId = currentUser && currentUser.id;
     const gid = String(g.id);
-    const list = groupMatches.filter((m) => (m.fromGroup === gid || m.toGroup === gid) && m.status !== 'declined');
+    const list = groupMatches.filter((m) => (m.fromGroup === gid || m.toGroup === gid) && m.status !== 'declined' && m.status !== 'dissolved');
     if (!list.length) return `<div class="match-hint">Пока нет match. Найдите на карте группу с похожим желанием и откройте её карточку.</div>`;
     return `<ul class="rows match-rows">${list.map((m) => {
       const otherId = m.fromGroup === gid ? m.toGroup : m.fromGroup;
       const other = groupById(otherId);
       let action, sub;
       if (m.status === 'accepted') {
-        sub = 'Общий чат и геопозиции открыты';
+        sub = m.voteState === 'approved' ? '💞 Союз закреплён — только вы друг у друга'
+          : m.voteState === 'open' ? '🗳 Идёт голосование о союзе' : 'Общий чат и геопозиции открыты';
         action = `<button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>`;
       } else if (m.toGroup === gid && m.toOwner === myId) {
         sub = 'Хотят match с вашей группой';
@@ -5024,7 +5138,7 @@
       winBody.innerHTML = `
         <div class="legal-page">
           <h3>1. Общие положения</h3>
-          <p>Настоящие Правила регулируют использование приложения «Groupies» и определяют права и обязанности Пользователя и Разработчика.</p>
+          <p>Настоящие Правила регулируют использование приложения «Groupis» и определяют права и обязанности Пользователя и Разработчика.</p>
           <p>Используя Приложение, вы подтверждаете, что ознакомились с Правилами и принимаете их.</p>
           <h3>2. Что делает Пользователь</h3>
           <p>• не размещать материалы, нарушающие закон, права третьих лиц, содержащие угрозы или оскорбления;</p>
@@ -5219,7 +5333,7 @@
         ts: last ? Date.parse(last.createdAt) : Date.parse(m.createdAt) || 0,
         html: rowHtml({
           attr: `data-open-match-chat="${escapeHtml(m.id)}"`,
-          avatar: `<span class="avatar group-chat-avatar match-chat-avatar" style="width:44px;height:44px">⚡</span>`,
+          avatar: `<span class="avatar group-chat-avatar match-chat-avatar" style="width:44px;height:44px">${m.voteState === 'approved' ? '💞' : m.voteState === 'open' ? '🗳' : '⚡'}</span>`,
           name: matchTitle(m), preview: previewOf(last, 'Match! Напишите первыми', true), last,
         }),
       });
@@ -5254,7 +5368,7 @@
               ${escapeHtml(m.content)}
               <span class="chat-msg-time">${fmtTime(m.created_at)}</span>
             </div>`).join('')
-            : `<div class="chat-msg them">Здравствуйте! Это техподдержка приложения «Groupies». Опишите вашу проблему.<span class="chat-msg-time">${fmtTime()}</span></div>`}
+            : `<div class="chat-msg them">Здравствуйте! Это техподдержка приложения «Groupis». Опишите вашу проблему.<span class="chat-msg-time">${fmtTime()}</span></div>`}
         </div>
         <form class="support-chat-form" id="support-form">
           <input class="support-chat-input" type="text" id="support-input" placeholder="Опишите проблему…" maxlength="500" autocomplete="off">
@@ -5505,6 +5619,7 @@
     winBody.innerHTML = `
       <div class="support-chat chat-view" style="height:100%">
         <div class="support-chat-head">${escapeHtml(chat.headTitle)}</div>
+        ${chat.type === 'match' ? '<div class="match-vote" id="match-vote"></div>' : ''}
         <div class="support-chat-body" id="chat-view-body">${rows}</div>
         <div class="chat-rec-preview" id="chat-rec-preview" hidden><video playsinline muted></video><span class="chat-rec-ring"></span></div>
         <form class="support-chat-form chat-composer" id="chat-composer">
@@ -5533,6 +5648,79 @@
     scrollChatToBottom();
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
     winBody.querySelector('#chat-file').addEventListener('change', onChatFilesPicked);
+    if (chat.type === 'match') refreshMatchVotePanel();
+  }
+
+  /* ── Голосование в совместном чате ── */
+  async function refreshMatchVotePanel() {
+    const c = chat;
+    if (!c || c.type !== 'match') return;
+    const m = groupMatches.find((x) => x.id === String(c.matchId));
+    if (!m) return;
+    const votes = m.voteState === 'open' ? await loadMatchVotes(m.id) : [];
+    if (chat !== c) return;
+    renderMatchVotePanel(m, votes);
+  }
+
+  function renderMatchVotePanel(m, votes) {
+    const el = winBody.querySelector('#match-vote');
+    if (!el) return;
+    const myId = currentUser && currentUser.id;
+    const total = Math.max(1, matchParticipantIds(m).length);
+    const yes = votes.filter((v) => v.vote).length;
+    const no = votes.filter((v) => !v.vote).length;
+    const mine = votes.find((v) => v.user_id === myId);
+    const need = Math.ceil(total / 2);
+    el.dataset.state = m.voteState;
+    if (m.voteState === 'approved') {
+      el.innerHTML = `<div class="mv-done">💞 Союз закреплён — на карте вы видите только друг друга</div>`;
+    } else if (m.voteState === 'open') {
+      el.innerHTML = `
+        <div class="mv-head"><span class="mv-title">Остаёмся только друг с другом?</span><span class="mv-count">${yes + no} из ${total}</span></div>
+        <div class="mv-bar"><span class="mv-yes" style="width:${(yes / total * 100).toFixed(1)}%"></span><span class="mv-no" style="width:${(no / total * 100).toFixed(1)}%"></span></div>
+        <div class="mv-actions">
+          <button type="button" class="mv-btn yes ${mine && mine.vote ? 'is-on' : ''}" data-vote-yes>❤ За · ${yes}</button>
+          <button type="button" class="mv-btn no ${mine && !mine.vote ? 'is-on' : ''}" data-vote-no>✕ Против · ${no}</button>
+        </div>
+        <div class="mv-hint">Решает ${need} из ${total}: «за» — группы видят только друг друга, «против» — союз распадётся и чат удалится</div>`;
+    } else if (isMatchLeader(m, myId)) {
+      el.innerHTML = `
+        <button type="button" class="mv-start" data-vote-start>🗳 Начать голосование</button>
+        <div class="mv-hint">Остаться только друг с другом или разойтись — решат участники обеих групп</div>`;
+    } else {
+      el.innerHTML = `<div class="mv-hint">🗳 Голосование о союзе может начать лидер одной из групп</div>`;
+    }
+  }
+
+  // match изменился (realtime или наш голос): распался — закрываем чат, иначе обновляем панель
+  function onMatchesChanged() {
+    const c = chat;
+    if (!c || c.type !== 'match') return;
+    const m = groupMatches.find((x) => x.id === String(c.matchId));
+    if (!m || m.status !== 'accepted') {
+      leaveChat();
+      winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+      showMessengerScreen();
+      setTimeout(() => alert('Союз распался — совместный чат удалён'), 50);
+      return;
+    }
+    refreshMatchVotePanel();
+  }
+
+  async function startMatchVote(matchId) {
+    const { error } = await supabaseClient.rpc('start_match_vote', { match_id: Number(matchId) });
+    if (error) { alert('Не удалось начать голосование: ' + error.message); return; }
+    await loadGroupMatchesFromDB();
+    refreshMatchVotePanel();
+  }
+
+  async function castMatchVote(matchId, vote) {
+    const { data: result, error } = await supabaseClient.rpc('cast_match_vote', { match_id: Number(matchId), vote });
+    if (error) { alert('Не удалось проголосовать: ' + error.message); return; }
+    if (result === 'open') { refreshMatchVotePanel(); return; }
+    // голосование решено — союз закреплён или распался: обновляем карту, чаты, группы
+    await refreshGroupsWorld();
+    onMatchesChanged();
   }
 
   function scrollChatToBottom() {
@@ -6065,6 +6253,8 @@
     friend_accept:  `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`,
     group_match:    `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
     group_match_accept: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
+    match_vote:        `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#15131F" d="M5 3h14v12H5zM8 7h8v2H8zm0 3h5v2H8zM3 17h18v4H3z"/></svg>`,
+    match_vote_result: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
     group:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
   };
   const NOTIF_COLOR = {
@@ -6076,6 +6266,8 @@
     friend_accept:  'linear-gradient(#6df27c, #0bbf3f)',
     group_match:        'linear-gradient(#C86BFF, #6A2BC4)',
     group_match_accept: 'linear-gradient(#FF8FB1, #C4285E)',
+    match_vote:         'linear-gradient(#D4FF4A, #8BC21A)',
+    match_vote_result:  'linear-gradient(#FF8FB1, #8B73FF)',
   };
   function friendRequestActionsHtml(n) {
     if (n.type !== 'friend_request' || !n.requestId) return '';
@@ -6091,9 +6283,10 @@
   }
   function groupMatchActionsHtml(n) {
     if (!n.requestId) return '';
-    if (n.type === 'group_match_accept') {
-      return `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(n.requestId)}">Открыть чат</button></div>`;
-    }
+    const live = groupMatches.find((x) => x.id === n.requestId && x.status === 'accepted');
+    const openBtn = `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(n.requestId)}">Открыть чат</button></div>`;
+    // Голосование и match: кнопка чата — только пока союз жив (распавшийся чат удалён)
+    if (n.type === 'match_vote' || n.type === 'match_vote_result' || n.type === 'group_match_accept') return live ? openBtn : '';
     if (n.type !== 'group_match') return '';
     const outcome = groupMatchOutcome.get(n.requestId);
     if (outcome === 'accepted') return `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(n.requestId)}">Открыть чат</button></div>`;
@@ -6203,7 +6396,7 @@
       : `Группы со средним возрастом ${f.age} лет`;
     winBody.querySelectorAll('[data-flt-comp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fltComp === f.comp)));
     const myId = currentUser && currentUser.id;
-    const others = groups.filter((g) => !isGroupParticipant(g, myId));
+    const others = groups.filter((g) => !isGroupParticipant(g, myId) && !groupHiddenForMe(g));
     const passed = others.filter(groupPassesFilters).length;
     q('#flt-count').textContent = others.length
       ? `Подходит групп: ${passed} из ${others.length}`
@@ -6826,6 +7019,14 @@
       const fromList = !!winBody.querySelector('#chats-list');
       const back = groupDetailsBack;
       await showGroupChatScreen(gid, fromList ? null : () => showGroupDetailsScreen(gid, back));
+      return;
+    }
+    // ── голосование о союзе в совместном чате ──
+    if (e.target.closest('[data-vote-start]') && chat && chat.type === 'match') { await startMatchVote(chat.matchId); return; }
+    const voteBtn = e.target.closest('[data-vote-yes], [data-vote-no]');
+    if (voteBtn && chat && chat.type === 'match') {
+      winBody.querySelectorAll('.mv-btn').forEach((b) => { b.disabled = true; });
+      await castMatchVote(chat.matchId, voteBtn.hasAttribute('data-vote-yes'));
       return;
     }
     const matchChatBtn = e.target.closest('[data-open-match-chat]');
