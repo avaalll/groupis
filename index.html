@@ -2328,6 +2328,7 @@
         <stop offset="1" stop-color="#FF5B2E"/>
       </linearGradient>
       <clipPath id="featClipA"><circle cx="17" cy="22" r="11"/></clipPath>
+      <linearGradient id="wishCloudGradDark" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#FF7A50"/>
         <stop offset="1" stop-color="#E0401A"/>
       </linearGradient>
@@ -4441,12 +4442,11 @@
   async function init2GisMap() {
     try {
       await loadScript('https://mapgl.2gis.com/api/js/v1');
-      // Кнопки масштаба — посередине справа, чтобы не прятались под кнопками шапки; на телефоне масштаб жестами
-      const touch = matchMedia('(pointer: coarse)').matches;
+      // Без кнопок масштаба 2GIS: приближение колесом мыши, жестами и двойным нажатием
       const mapStyleId = MAP_STYLE[resolvedTheme()];
       map2gis = new mapgl.Map('map', {
         center: MAP_START_LOCATION.center, zoom: MAP_START_LOCATION.zoom, key: MAPGL_API_KEY,
-        zoomControl: touch ? false : 'centerRight',
+        zoomControl: false,
         ...(mapStyleId ? { style: mapStyleId } : {}),
       });
 
