@@ -2110,6 +2110,15 @@
     .ph-caption { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 2; color: #fff; pointer-events: none; }
     .ph-name { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 1px 10px rgba(0,0,0,.35); }
     .ph-handle { margin-top: 3px; font-size: 14px; color: rgba(255,255,255,.78); }
+    /* Профиль с фото и 3D-аватаром целиком помещается в окно: фото занимает то, что осталось */
+    .friend-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(170px, calc(min(680px, 100dvh - 116px) - 372px), 420px); }
+    .friend-fit .user-profile-view { padding: 12px 16px 14px; gap: 10px; }
+    .friend-fit .user-profile-section-title { margin: 0 0 2px; }
+    .friend-fit .friend-avatar-stage { height: 168px; }
+    .friend-fit .friend-avatar-stage canvas { width: 168px; height: 168px; }
+    @media (max-width: 640px) {
+      .friend-fit .photo-hero { height: clamp(160px, calc(100dvh - 446px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
+    }
     .profile-bio.ph-bio { text-align: left; margin: 0; }
     .profile-bio.ph-bio-own { padding: 14px 18px 4px; }
     @media (max-width: 640px) {
@@ -7283,12 +7292,15 @@
             </div>`
           : '';
 
+        // Фото + 3D-аватар: ужимаем фото по высоте окна, чтобы аватар был виден без прокрутки
         winBody.innerHTML = `
+          <div class="${avatarBelow ? 'friend-fit' : ''}">
           ${headHtml}
             <div class="friend-actions">
               <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
             </div>
             ${avatarBelow}
+          </div>
           </div>`;
 
         if (use3D) {
