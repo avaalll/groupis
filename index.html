@@ -2056,7 +2056,7 @@
       .win-title { font-size: 16px; }
     }
     @media (max-width: 380px) {
-      .menubar .brand span { display: none; }
+      .menubar .brand .brand-wordmark svg { height: 19px; }
       .dock-btn { padding: 0 11px; }
     }
     @media (max-height: 480px) and (orientation: landscape) {
@@ -2068,6 +2068,72 @@
       .geo-btn { width: 42px; height: 42px; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
       .window { inset: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(64px + env(safe-area-inset-bottom, 0px)) 8px; max-height: none; height: auto; }
     }
+
+    /* ── Фото профиля во всю ширину, листаются (как в Telegram) ── */
+    .photo-hero {
+      position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: min(62vh, 560px);
+      overflow: hidden; background: #0D0B16; -webkit-user-select: none; user-select: none;
+    }
+    .photo-hero.is-many { cursor: pointer; }
+    .ph-track {
+      display: flex; height: 100%; overflow-x: auto; overflow-y: hidden;
+      scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none;
+    }
+    .ph-track::-webkit-scrollbar { display: none; }
+    .ph-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+    .ph-slide img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .photo-hero::before, .photo-hero::after { content: ''; position: absolute; left: 0; right: 0; pointer-events: none; z-index: 1; }
+    .photo-hero::before { top: 0; height: 70px; background: linear-gradient(rgba(8,7,15,.38), transparent); }
+    .photo-hero::after { bottom: 0; height: 46%; background: linear-gradient(transparent, rgba(8,7,15,.85)); }
+    .ph-bars { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; gap: 4px; pointer-events: none; }
+    .ph-bars span { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.35); transition: background .2s ease; }
+    .ph-bars span.is-on { background: #fff; }
+    .ph-caption { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 2; color: #fff; pointer-events: none; }
+    .ph-name { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 1px 10px rgba(0,0,0,.35); }
+    .ph-handle { margin-top: 3px; font-size: 14px; color: rgba(255,255,255,.78); }
+    .profile-bio.ph-bio { text-align: left; margin: 0; }
+    .profile-bio.ph-bio-own { padding: 14px 18px 4px; }
+    @media (max-width: 640px) {
+      .ph-name { font-size: 23px; }
+      .ph-caption { left: 16px; bottom: 14px; }
+    }
+
+    /* ── Сетка фото в редактировании профиля ── */
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; transition: opacity .2s; }
+    .photo-grid.is-busy { opacity: .55; pointer-events: none; }
+    .pg-item, .pg-add { position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; }
+    .pg-item { background: var(--field) center / cover no-repeat; cursor: pointer; }
+    .pg-item.is-main { cursor: default; box-shadow: inset 0 0 0 2px #8B73FF; }
+    .pg-badge {
+      position: absolute; left: 6px; bottom: 6px; padding: 3px 8px; border-radius: 999px;
+      background: var(--lime); color: #15131F; font-size: 10.5px; font-weight: 800;
+    }
+    .pg-del {
+      position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border: 0; border-radius: 50%;
+      display: grid; place-items: center; background: rgba(8,7,15,.62); color: #fff;
+      font-size: 16px; line-height: 1; cursor: pointer;
+    }
+    .pg-del:hover { background: #E5484D; }
+    .pg-add {
+      display: grid; place-content: center; justify-items: center; gap: 4px;
+      border: 1.5px dashed var(--ink-soft); background: transparent; color: var(--ink-soft);
+      font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .pg-add:hover { color: var(--ink); border-color: var(--ink); }
+    .pg-add svg { width: 22px; height: 22px; }
+
+    /* ── Логотип-надпись Groupis (метка вместо «o») ── */
+    .menubar .brand .brand-wordmark { display: block; padding: 0 10px 0 12px; color: var(--ink); line-height: 0; }
+    .menubar .brand .brand-wordmark svg { display: block; height: 24px; width: auto; }
+    /* «тень» под меткой: на светлой теме лайм почти не виден — там она фиолетовая */
+    .brand-wordmark .wm-shadow { fill: #5A3DF0; opacity: .4; }
+    @media (prefers-color-scheme: dark) { .brand-wordmark .wm-shadow { fill: var(--lime); opacity: 1; } }
+    .auth-wordmark { display: block; height: 52px; width: auto; max-width: 100%; margin: 2px auto 16px; }
+    @media (max-width: 640px) {
+      .menubar .brand .brand-wordmark { padding: 0 8px 0 10px; }
+      .menubar .brand .brand-wordmark svg { height: 21px; }
+    }
+    @media (orientation: portrait) { .auth-wordmark { height: 42px; margin-bottom: 12px; } }
 
     /* Низкий телефон стоя (SE и т. п.): карточке нужно больше места */
     @media (orientation: portrait) and (max-height: 700px) {
@@ -2136,7 +2202,16 @@
 
   <!-- Плавающая «таблетка» с логотипом -->
   <header class="menubar">
-    <strong class="brand"><img src="icons/logo.svg" alt="" aria-hidden="true"><span>Groupis</span></strong>
+    <strong class="brand"><span class="brand-wordmark" role="img" aria-label="Groupis"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="-60 -885 5078 1185"><g transform="scale(1 -1)">
+    <defs><mask id="wmiCut" maskUnits="userSpaceOnUse" x="1261" y="-571" width="1279" height="1713"><rect x="1261" y="-571" width="1279" height="1713" fill="#fff"/><path d="M1901.0 -11.4 L1731.8 94.1 A319.8 319.8 0 1 0 2070.2 94.1 Z" fill="#000" stroke="#000" stroke-width="225.5" stroke-linejoin="round"/></mask>
+      <linearGradient id="wmiPin" gradientUnits="userSpaceOnUse" x1="0" y1="628" x2="0" y2="0">
+        <stop offset="0" stop-color="#A08CFF"/><stop offset="1" stop-color="#5A3DF0"/>
+      </linearGradient>
+    </defs>
+    <g class="wm-text" fill="currentColor"><path transform="translate(0 0)" d="M838 325Q835 257 810.5 195.5Q786 134 739.5 86.0Q693 38 623.5 11.0Q554 -16 462 -16Q374 -16 297.0 9.5Q220 35 161.5 85.0Q103 135 70.5 208.0Q38 281 38 375Q38 469 71.0 542.0Q104 615 163.5 665.0Q223 715 301.5 740.5Q380 766 473 766Q597 766 687.0 728.0Q777 690 832.0 624.0Q887 558 903 471H694Q684 509 653.5 536.5Q623 564 577.5 578.5Q532 593 474 593Q404 593 353.0 568.5Q302 544 274.0 495.5Q246 447 246 375Q246 302 276.0 252.0Q306 202 361.5 177.0Q417 152 492 152Q565 152 621.0 172.5Q677 193 710.5 233.0Q744 273 749 329ZM512 242V388H910V0H763L734 297L773 242Z"/><path transform="translate(964 0)" d="M29 571H237L271 367V0H67V379ZM539 580V406Q509 412 482.5 414.5Q456 417 434 417Q390 417 353.0 399.5Q316 382 293.5 342.0Q271 302 271 235L232 283Q240 345 256.0 399.5Q272 454 299.5 496.5Q327 539 368.0 563.5Q409 588 468 588Q485 588 503.0 586.0Q521 584 539 580Z"/><path transform="translate(2297 0)" d="M302 -16Q222 -16 165.5 17.0Q109 50 79.0 110.5Q49 171 49 252V571H253V281Q253 218 284.0 184.0Q315 150 373 150Q416 150 445.0 167.5Q474 185 490.0 218.0Q506 251 506 297L569 264Q558 173 519.5 110.5Q481 48 425.0 16.0Q369 -16 302 -16ZM543 0 506 229V571H710V197L747 0Z"/><path transform="translate(3074 0)" d="M56 571H261V407L252 383V223L261 176V-165H56ZM196 285Q209 378 250.5 445.5Q292 513 356.0 550.5Q420 588 501 588Q585 588 648.5 550.0Q712 512 747.5 444.0Q783 376 783 285Q783 196 747.5 127.5Q712 59 648.5 21.5Q585 -16 501 -16Q420 -16 356.0 21.5Q292 59 251.0 127.0Q210 195 196 285ZM577 285Q577 328 559.5 361.0Q542 394 510.5 413.0Q479 432 439 432Q398 432 361.0 413.0Q324 394 296.0 361.0Q268 328 253 285Q268 243 296.0 210.0Q324 177 361.0 158.5Q398 140 439 140Q479 140 510.5 158.5Q542 177 559.5 210.0Q577 243 577 285Z"/><path transform="translate(3889 0)" d="M56 580 159 560 261 580V0H56ZM158 627Q105 627 72.0 653.5Q39 680 39 726Q39 771 72.0 798.0Q105 825 158 825Q213 825 245.5 798.0Q278 771 278 726Q278 680 245.5 653.5Q213 627 158 627Z"/><path transform="translate(4210 0)" d="M718 186Q718 120 678.0 75.0Q638 30 564.0 7.0Q490 -16 386 -16Q279 -16 198.5 10.0Q118 36 73.0 83.0Q28 130 25 192H232Q239 169 259.5 152.5Q280 136 314.0 127.5Q348 119 395 119Q456 119 487.5 131.0Q519 143 519 167Q519 186 495.0 195.5Q471 205 413 210L312 218Q211 225 151.5 248.5Q92 272 66.0 309.5Q40 347 40 395Q40 460 80.5 502.5Q121 545 193.5 566.5Q266 588 363 588Q459 588 534.0 563.0Q609 538 654.0 493.5Q699 449 706 389H499Q494 408 477.0 423.5Q460 439 430.0 449.0Q400 459 353 459Q298 459 269.5 447.0Q241 435 241 413Q241 396 258.5 386.0Q276 376 324 372L457 362Q556 356 613.0 333.5Q670 311 694.0 274.0Q718 237 718 186Z"/></g>
+    <ellipse class="wm-shadow" fill="#D4FF4A" fill-opacity="1" cx="1901.0" cy="-40.0" rx="313.4" ry="97.1" mask="url(#wmiCut)"/>
+    <path fill="url(#wmiPin)" fill-rule="evenodd" d="M1901.0 -11.4 L1731.8 94.1 A319.8 319.8 0 1 0 2070.2 94.1 Z M2011.7 365.4 A110.7 110.7 0 1 0 1790.3 365.4 A110.7 110.7 0 1 0 2011.7 365.4 Z"/>
+  </g></svg></span></strong>
     <div class="menubar-right">
       <span id="offline-badge" hidden>Офлайн</span>
       <button id="install-btn" type="button" hidden>Установить</button>
@@ -2709,6 +2784,52 @@
   let currentUser = null;
   let profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
 
+  /* Фото профиля: их может быть несколько (таблица profile_photos), свежее — главное.
+     Уменьшенная копия главного фото хранится в profiles.avatar — её видно на карте и в чатах. */
+  const PHOTO_MAX_SIDE = 1080, PHOTO_QUALITY = 0.82, PHOTOS_LIMIT = 10;
+  let myPhotos = null;               // [{ id, url }], свежие первыми; null — ещё не загружали
+  let profilePhotosMissing = false;  // таблицы нет (не выполнен supabase_profile_photos.sql) — одно фото, как раньше
+
+  function isMissingTableError(error) {
+    return !!error && (error.code === '42P01' || error.code === 'PGRST205');
+  }
+
+  async function loadProfilePhotos(userId) {
+    if (profilePhotosMissing || !userId) return null;
+    try {
+      const { data, error } = await supabaseClient.from('profile_photos')
+        .select('id, data, created_at').eq('user_id', userId)
+        .order('created_at', { ascending: false }).limit(PHOTOS_LIMIT);
+      if (error) {
+        if (isMissingTableError(error)) profilePhotosMissing = true;
+        console.warn('[profile_photos] load:', error.message);
+        return null;
+      }
+      return (data || []).map((r) => ({ id: r.id, url: r.data, at: r.created_at }));
+    } catch (err) { console.warn('[profile_photos] exception:', err); return null; }
+  }
+
+  // Что показывать: фото из таблицы, а если их нет — единственное старое фото из profiles.avatar
+  function photosOrAvatar(rows, avatar) {
+    if (rows && rows.length) return rows;
+    return avatar ? [{ id: null, url: avatar }] : [];
+  }
+
+  function downscaleDataUrl(url, maxSide = 256, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('image decode error'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = url;
+    });
+  }
+
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const USERNAME_RE_AUTH = /^[a-zA-Z][a-zA-Z0-9_.]{2,19}$/;
 
@@ -2764,6 +2885,7 @@
     if (!currentUser && !authScreen.hidden) return;
     currentUser = null;
     profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
+    myPhotos = null;
 
     rtChannels.forEach((c) => { try { supabaseClient.removeChannel(c); } catch {} });
     rtChannels = [];
@@ -2798,7 +2920,7 @@
   function authHeader({ title, sub = '', icon = '🔐', logo = false }) {
     return `
       ${logo
-        ? `<img class="auth-logo auth-logo-img" src="icons/logo.svg" alt="Groupis">`
+        ? `<img class="auth-wordmark" src="icons/wordmark.svg" alt="Groupis">`
         : `<div class="auth-logo" aria-hidden="true">${icon}</div>`}
       <h1 class="auth-title">${escapeHtml(title)}</h1>
       <p class="auth-sub">${escapeHtml(sub)}</p>
@@ -3029,7 +3151,7 @@
   const REG_STEPS = ['name', 'username', 'gender', 'password', 'age', 'photo', 'bio'];
 
   function renderAuthRegister() {
-    const draft = { name: '', username: '', gender: '', password: '', age: 18, avatar: '', bio: '', email: '' };
+    const draft = { name: '', username: '', gender: '', password: '', age: 18, avatar: '', photo: '', bio: '', email: '' };
     let stepIdx = 0;
 
     // Каждый шаг регистрации — новый крестик: вперёд пунктир к следующему, назад — возврат к прошлому
@@ -3147,6 +3269,8 @@
         inp.addEventListener('change', () => {
           const file = inp.files && inp.files[0];
           if (!file || !file.type.startsWith('image/')) return;
+          // крупная копия — первое фото в галерее профиля, маленькая (draft.avatar) — для карты
+          fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY).then((u) => { draft.photo = u; }).catch(() => { draft.photo = ''; });
           const reader = new FileReader();
           reader.onload = () => {
             const img = new Image();
@@ -3167,7 +3291,7 @@
           reader.readAsDataURL(file);
         });
         rm.addEventListener('click', () => {
-          draft.avatar = '';
+          draft.avatar = ''; draft.photo = '';
           prev.style.backgroundImage = '';
           prev.textContent = (draft.name || '?').charAt(0).toUpperCase() || '?';
           rm.hidden = true;
@@ -3261,6 +3385,10 @@
         }
 
         currentUser = signUpData.user;
+        if (draft.photo && draft.avatar) {
+          const { error: phErr } = await supabaseClient.from('profile_photos').insert({ user_id: currentUser.id, data: draft.photo });
+          if (phErr) console.warn('[profile_photos] first photo:', phErr.message);
+        }
         applyUserToProfileFromRow({
           name: draft.name, username: draft.username,
           bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
@@ -4662,7 +4790,7 @@
       winBody.scrollTop = 0;
       const rowsHtml = friends.length
         ? `<ul class="rows">${friends.map((f) => `
-            <li class="person-card">
+            <li class="person-card is-link" data-view-profile="${escapeHtml(f.id)}" data-profile-back="friends" role="button" tabindex="0">
               ${avatarCircleHtml(f, 40)}
               <div class="person-main">
                 <div class="person-name">${escapeHtml(f.name)}</div>
@@ -6093,7 +6221,7 @@
       render: () => {
         const rowsHtml = friends.length
           ? `<ul class="rows">${friends.map((f) => `
-              <li class="person-card">
+              <li class="person-card is-link" data-view-profile="${escapeHtml(f.id)}" data-profile-back="friends" role="button" tabindex="0">
                 ${avatarCircleHtml(f, 40)}
                 <div class="person-main">
                   <div class="person-name">${escapeHtml(f.name)}</div>
@@ -6114,13 +6242,19 @@
     },
     profile: {
       title: 'Профиль',
-      render: () => `
-        <div class="profile-head">
-          ${profileAvatarHtml(84)}
-          <div class="profile-name">${escapeHtml(profile.name)}</div>
-          <div class="profile-handle">${escapeHtml(profile.handle)}</div>
-          ${profile.bio ? `<div class="profile-bio">${escapeHtml(profile.bio)}</div>` : ''}
-        </div>
+      render: () => {
+        const photos = photosOrAvatar(myPhotos, profile.avatar).filter((ph) => safeUrl(ph.url));
+        const head = photos.length
+          ? `${photoHeroHtml(photos, profile.name, profile.handle)}
+             ${profile.bio ? `<div class="profile-bio ph-bio ph-bio-own">${escapeHtml(profile.bio)}</div>` : ''}`
+          : `<div class="profile-head">
+              ${profileAvatarHtml(84)}
+              <div class="profile-name">${escapeHtml(profile.name)}</div>
+              <div class="profile-handle">${escapeHtml(profile.handle)}</div>
+              ${profile.bio ? `<div class="profile-bio">${escapeHtml(profile.bio)}</div>` : ''}
+            </div>`;
+        return `
+        ${head}
         <ul class="rows">
           <li class="row" data-action="open-avatar" role="button" tabindex="0"><div class="row-main row-name">Мой аватар</div><span class="chev">›</span></li>
           <li class="row" data-action="open-places" role="button" tabindex="0"><div class="row-main row-name">Воспоминания</div><span class="chev">›</span></li>
@@ -6128,7 +6262,8 @@
           <li class="row" data-action="open-groups" role="button" tabindex="0"><div class="row-main row-name">Группы</div><span class="chev">›</span></li>
           <li class="row" data-action="edit-profile" role="button" tabindex="0"><div class="row-main row-name">Редактировать профиль</div><span class="chev">›</span></li>
           <li class="row danger" data-action="logout" role="button" tabindex="0"><div class="row-main row-name">Выйти из аккаунта</div><span class="chev">›</span></li>
-        </ul>`
+        </ul>`;
+      }
     },
     notifications: {
       title: 'Уведомления',
@@ -6223,6 +6358,31 @@
     const letter = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
     if (person.avatar) return `<span class="avatar" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(person.avatar)}')"></span>`;
     return `<span class="avatar" style="width:${size}px;height:${size}px;background:linear-gradient(#8B73FF,#5A3DF0)">${escapeHtml(letter)}</span>`;
+  }
+
+  /* Шапка профиля с фото во всю ширину. Несколько фото листаются свайпом
+     или нажатием на левую/правую половину, полоски сверху показывают, какое открыто. */
+  function photoHeroHtml(photos, name, handle) {
+    const many = photos.length > 1;
+    return `
+      <div class="photo-hero ${many ? 'is-many' : ''}" data-photo-hero>
+        <div class="ph-track">${photos.map((ph, i) => `
+          <div class="ph-slide"><img src="${safeUrl(ph.url)}" alt="" draggable="false" ${i ? 'loading="lazy"' : ''}></div>`).join('')}
+        </div>
+        ${many ? `<div class="ph-bars" aria-hidden="true">${photos.map((_, i) => `<span class="${i ? '' : 'is-on'}"></span>`).join('')}</div>` : ''}
+        <div class="ph-caption">
+          <div class="ph-name">${escapeHtml(name)}</div>
+          <div class="ph-handle">${escapeHtml(handle)}</div>
+        </div>
+      </div>`;
+  }
+
+  function photoHeroStep(hero, delta) {
+    const track = hero.querySelector('.ph-track');
+    const n = track.children.length;
+    const cur = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    const next = Math.max(0, Math.min(n - 1, cur + delta));
+    if (next !== cur) track.scrollTo({ left: next * track.clientWidth, behavior: reduceMotion ? 'auto' : 'smooth' });
   }
 
   function profileAvatarHtml(size = 84) {
@@ -6374,6 +6534,7 @@
     win.focus({ preventScroll: true });
     if (id === 'settings') syncSettingsUi();
     if (id === 'filters') syncFiltersUi();
+    if (id === 'profile') ensureMyPhotos();
     if (id === 'notifications' && currentUser) {
       supabaseClient.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
         .then(() => { notifications = notifications.map((n) => ({ ...n, read: true })); updateBadge(); });
@@ -6719,7 +6880,95 @@
       winTitle.textContent = 'Профиль';
       winBody.innerHTML = APPS.profile.render();
       winBody.scrollTop = 0;
+      ensureMyPhotos();
     }, null);
+  }
+
+  // Свои фото грузим при первом открытии профиля и перерисовываем экран, если он ещё открыт
+  async function ensureMyPhotos() {
+    if (myPhotos !== null || profilePhotosMissing || !currentUser) return;
+    const rows = await loadProfilePhotos(currentUser.id);
+    if (!rows || myPhotos !== null) return;
+    myPhotos = rows;
+    if (openApp === 'profile' && !win.hidden && winBody.querySelector('[data-action="edit-profile"]')) {
+      winBody.innerHTML = APPS.profile.render();
+    }
+  }
+
+  function photoGridHtml() {
+    const photos = photosOrAvatar(myPhotos, profile.avatar);
+    const tiles = photos.map((ph, i) => `
+      <div class="pg-item ${i ? '' : 'is-main'}" ${i && ph.id ? `data-pg-main="${escapeHtml(ph.id)}" role="button" tabindex="0" title="Сделать главным"` : ''} style="background-image:url('${safeUrl(ph.url)}')">
+        ${i ? '' : '<span class="pg-badge">Главное</span>'}
+        <button type="button" class="pg-del" data-pg-del="${escapeHtml(ph.id || '')}" aria-label="Удалить фото">×</button>
+      </div>`).join('');
+    const add = photos.length < PHOTOS_LIMIT
+      ? `<button type="button" class="pg-add" id="avatar-pick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Добавить</span></button>`
+      : '';
+    return tiles + add;
+  }
+
+  async function reloadMyPhotos() {
+    const rows = await loadProfilePhotos(currentUser.id);
+    if (rows) myPhotos = rows;
+  }
+
+  // Уменьшенная копия главного фото → profiles.avatar (карта, чаты, списки)
+  async function saveMyAvatar(thumb) {
+    const { error } = await supabaseClient.from('profiles').update({ avatar: thumb }).eq('id', currentUser.id);
+    if (error) throw error;
+    profile.avatar = thumb;
+    if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
+    loadUserLocations();
+  }
+  async function syncMyAvatar() {
+    const main = myPhotos && myPhotos[0];
+    await saveMyAvatar(main ? await downscaleDataUrl(main.url, 256, 0.85) : '');
+  }
+
+  async function addMyPhotos(files) {
+    if (myPhotos === null && !profilePhotosMissing) await reloadMyPhotos();
+    const room = PHOTOS_LIMIT - photosOrAvatar(myPhotos, profile.avatar).length;
+    if (room <= 0) return;
+    const urls = [];
+    for (const file of files.slice(0, room)) urls.push(await fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY));
+    if (profilePhotosMissing) {
+      // таблицы фото нет — как раньше, одно фото в profiles.avatar
+      await saveMyAvatar(await downscaleDataUrl(urls[urls.length - 1], 256, 0.85));
+      alert('Сохранено одно фото. Чтобы добавлять несколько, выполните supabase_profile_photos.sql в Supabase.');
+      return;
+    }
+    // старое единственное фото (из profiles.avatar) сначала переносим в галерею, чтобы оно не пропало
+    if ((!myPhotos || !myPhotos.length) && profile.avatar) urls.unshift(profile.avatar);
+    // по одному — created_at идут по порядку, последнее выбранное фото станет главным
+    for (const data of urls) {
+      const { error } = await supabaseClient.from('profile_photos').insert({ user_id: currentUser.id, data });
+      if (error) {
+        if (isMissingTableError(error)) { profilePhotosMissing = true; return addMyPhotos(files); }
+        throw error;
+      }
+    }
+    await reloadMyPhotos();
+    await syncMyAvatar();
+  }
+
+  async function deleteMyPhoto(id) {
+    if (!id) { await saveMyAvatar(''); return; }   // старое единственное фото из profiles.avatar
+    const { error } = await supabaseClient.from('profile_photos').delete().eq('id', id);
+    if (error) throw error;
+    if (myPhotos) myPhotos = myPhotos.filter((ph) => ph.id !== id);
+    await reloadMyPhotos();
+    await syncMyAvatar();
+  }
+
+  async function makeMyPhotoMain(id) {
+    // «главное» = самое свежее; берём время позже текущего главного, даже если часы устройства отстают
+    const newest = myPhotos && myPhotos[0] && Date.parse(myPhotos[0].at);
+    const at = new Date(Math.max(Date.now(), (newest || 0) + 1000)).toISOString();
+    const { error } = await supabaseClient.from('profile_photos').update({ created_at: at }).eq('id', id);
+    if (error) throw error;
+    await reloadMyPhotos();
+    await syncMyAvatar();
   }
   function showUserProfileScreen() { showProfileScreen(); }
 
@@ -6734,6 +6983,7 @@
 
       (async () => {
         let p = null;
+        const photosReq = loadProfilePhotos(userId);
         try {
           const { data, error } = await supabaseClient
             .from('profiles')
@@ -6743,6 +6993,7 @@
           if (error) console.warn('[friend profile] load:', error.message);
           p = data;
         } catch (err) { console.warn('[friend profile] exception:', err); }
+        const photoRows = await photosReq;
 
         // Пока грузили, пользователь мог уйти на другой экран — не затираем его
         if (!loadingEl.isConnected || win.hidden) return;
@@ -6767,17 +7018,28 @@
         const handle = '@' + (p.username || 'user');
         const initial = (name.charAt(0) || '?').toUpperCase();
 
-        // Есть фото — оно главное в шапке профиля, а 3D-аватар показываем ниже, под «Написать».
+        // Есть фото — они во всю ширину шапки и листаются, а 3D-аватар показываем ниже, под «Написать».
         // Фото нет — в шапке 3D-аватар (или буква, если и аватара нет).
-        const photo = safeUrl(p.avatar);
+        const photos = photosOrAvatar(photoRows, p.avatar).filter((ph) => safeUrl(ph.url));
+        const photo = photos.length > 0;
         const avatarCanvas = `<canvas id="friend-avatar-canvas" width="256" height="256"></canvas>`;
-        let avatarHtml;
+        let headHtml;
         if (photo) {
-          avatarHtml = `<div class="user-profile-avatar no-3d" style="background-image:url('${photo}')"></div>`;
-        } else if (use3D) {
-          avatarHtml = `<div class="user-profile-avatar">${avatarCanvas}</div>`;
+          headHtml = `${photoHeroHtml(photos, name, handle)}
+            <div class="user-profile-view">
+              ${p.bio ? `<div class="profile-bio ph-bio">${escapeHtml(p.bio)}</div>` : ''}`;
         } else {
-          avatarHtml = `<div class="user-profile-avatar no-3d">${escapeHtml(initial)}</div>`;
+          const avatarHtml = use3D
+            ? `<div class="user-profile-avatar">${avatarCanvas}</div>`
+            : `<div class="user-profile-avatar no-3d">${escapeHtml(initial)}</div>`;
+          headHtml = `
+            <div class="user-profile-view">
+              <div class="user-profile-hero">
+                ${avatarHtml}
+                <div class="user-profile-name">${escapeHtml(name)}</div>
+                <div class="user-profile-handle">${escapeHtml(handle)}</div>
+                ${p.bio ? `<div class="profile-bio">${escapeHtml(p.bio)}</div>` : ''}
+              </div>`;
         }
         const avatarBelow = photo && use3D
           ? `<div class="friend-avatar-card">
@@ -6787,13 +7049,7 @@
           : '';
 
         winBody.innerHTML = `
-          <div class="user-profile-view">
-            <div class="user-profile-hero">
-              ${avatarHtml}
-              <div class="user-profile-name">${escapeHtml(name)}</div>
-              <div class="user-profile-handle">${escapeHtml(handle)}</div>
-              ${p.bio ? `<div class="profile-bio">${escapeHtml(p.bio)}</div>` : ''}
-            </div>
+          ${headHtml}
             <div class="friend-actions">
               <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
             </div>
@@ -6838,14 +7094,9 @@
         <form class="edit-form" id="edit-form" novalidate>
           <div class="edit-field">
             <span class="edit-label">Фото профиля</span>
-            <div class="avatar-edit">
-              <div id="avatar-preview" class="avatar-preview">${profile.avatar ? '' : escapeHtml((profile.name || '?').charAt(0).toUpperCase())}</div>
-              <div class="avatar-edit-side">
-                <button type="button" class="btn" id="avatar-pick">Выбрать фото</button>
-                <button type="button" class="btn-ghost" id="avatar-remove" ${profile.avatar ? '' : 'hidden'}>Удалить фото</button>
-                <input type="file" id="avatar-input" accept="image/*" hidden>
-              </div>
-            </div>
+            <div class="photo-grid" id="photo-grid"></div>
+            <input type="file" id="avatar-input" accept="image/*" multiple hidden>
+            <span class="edit-hint">Первое фото — главное: его видно на карте и в чатах. Нажмите на другое фото, чтобы сделать его главным. До ${PHOTOS_LIMIT} фото.</span>
           </div>
           <label class="edit-field"><span class="edit-label">Имя</span><input class="edit-input" type="text" id="edit-name" maxlength="60" value="${escapeHtml(profile.name)}"></label>
           <label class="edit-field"><span class="edit-label">Имя пользователя</span><div class="username-wrap"><span class="username-prefix">@</span><input class="edit-input username-input" type="text" id="edit-username" maxlength="20" value="${escapeHtml(profile.handle.replace(/^@/, ''))}"></div></label>
@@ -6870,35 +7121,31 @@
             <button type="submit" class="btn btn-primary">Сохранить</button>
           </div>
         </form>`;
-      const previewEl = winBody.querySelector('#avatar-preview');
-      const removeBtn = winBody.querySelector('#avatar-remove');
       const fileInput = winBody.querySelector('#avatar-input');
+      const gridEl = winBody.querySelector('#photo-grid');
       const nameEl = winBody.querySelector('#edit-name');
       const usernameEl = winBody.querySelector('#edit-username');
-      if (profile.avatar) { previewEl.style.backgroundImage = `url('${profile.avatar}')`; previewEl.textContent = ''; }
-      nameEl.addEventListener('input', () => { if (profile.avatar) return; previewEl.textContent = nameEl.value.trim().charAt(0).toUpperCase() || '?'; });
-      winBody.querySelector('#avatar-pick').addEventListener('click', () => fileInput.click());
+      // Фото сохраняются сразу (как в Telegram), не дожидаясь кнопки «Сохранить»
+      const renderPhotoGrid = () => { gridEl.innerHTML = photoGridHtml(); };
+      renderPhotoGrid();
+      ensureMyPhotos().then(() => { if (gridEl.isConnected && !gridEl.classList.contains('is-busy')) renderPhotoGrid(); });
+      const photoOp = async (fn) => {
+        gridEl.classList.add('is-busy');
+        try { await fn(); }
+        catch (err) { console.error('[profile photos]', err); alert('Не удалось обновить фото: ' + (err.message || err)); }
+        finally { if (gridEl.isConnected) { gridEl.classList.remove('is-busy'); renderPhotoGrid(); } }
+      };
+      gridEl.addEventListener('click', (e) => {
+        if (e.target.closest('#avatar-pick')) { fileInput.click(); return; }
+        const del = e.target.closest('[data-pg-del]');
+        if (del) { if (confirm('Удалить это фото?')) photoOp(() => deleteMyPhoto(del.dataset.pgDel)); return; }
+        const main = e.target.closest('[data-pg-main]');
+        if (main) photoOp(() => makeMyPhotoMain(main.dataset.pgMain));
+      });
       fileInput.addEventListener('change', () => {
-        const file = fileInput.files && fileInput.files[0];
-        if (!file || !file.type.startsWith('image/')) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => {
-            const max = 256;
-            const scale = Math.min(1, max / Math.max(img.width, img.height));
-            const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            previewEl.style.backgroundImage = `url('${dataUrl}')`;
-            previewEl.textContent = '';
-            previewEl.dataset.pending = dataUrl;
-            removeBtn.hidden = false;
-          };
-          img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
+        const files = [...(fileInput.files || [])].filter((file) => file.type.startsWith('image/'));
+        fileInput.value = '';
+        if (files.length) photoOp(() => addMyPhotos(files));
       });
       let editGender = profile.gender || '';
       let editAge = Number(profile.age) || null;
@@ -6909,7 +7156,6 @@
       });
       const ageEl = winBody.querySelector('#edit-age');
       ageEl.addEventListener('input', () => { editAge = Number(ageEl.value); winBody.querySelector('#edit-age-val').textContent = ageEl.value; });
-      removeBtn.addEventListener('click', () => { previewEl.style.backgroundImage = ''; previewEl.textContent = nameEl.value.trim().charAt(0).toUpperCase() || '?'; delete previewEl.dataset.pending; removeBtn.hidden = true; });
       winBody.querySelector('#edit-cancel').addEventListener('click', goBack);
       winBody.querySelector('#edit-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -6917,10 +7163,7 @@
         const newBio = winBody.querySelector('#edit-bio').value.trim();
         const uname = normalizeUsernameInput(usernameEl.value);
         if (!isValidUsernameInput(uname)) { usernameEl.focus(); return; }
-        let newAvatar;
-        if (previewEl.dataset.pending !== undefined) newAvatar = previewEl.dataset.pending;
-        else if (previewEl.style.backgroundImage) newAvatar = profile.avatar;
-        else newAvatar = '';
+        const newAvatar = profile.avatar;
         if (uname !== normalizeUsername(profile.handle) && await isUsernameTakenRemote(uname)) {
           alert('Этот username уже занят');
           usernameEl.focus();
@@ -6950,6 +7193,26 @@
   winBody.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.group-row')) return;
     winBody.querySelectorAll('.group-row.revealed').forEach((r) => r.classList.remove('revealed'));
+  });
+
+  // Галерея фото в профиле: полоски следят за прокруткой (scroll не всплывает — ловим на погружении)
+  winBody.addEventListener('scroll', (e) => {
+    const track = e.target;
+    if (!track.classList || !track.classList.contains('ph-track')) return;
+    const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    track.parentElement.querySelectorAll('.ph-bars span').forEach((s, i) => s.classList.toggle('is-on', i === idx));
+  }, true);
+  winBody.addEventListener('click', (e) => {
+    const hero = e.target.closest('.photo-hero.is-many');
+    if (!hero) return;
+    const r = hero.getBoundingClientRect();
+    photoHeroStep(hero, e.clientX - r.left < r.width / 2 ? -1 : 1);
+  });
+  win.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const hero = winBody.querySelector('.photo-hero.is-many');
+    if (!hero || e.target.closest('input, textarea')) return;
+    photoHeroStep(hero, e.key === 'ArrowLeft' ? -1 : 1);
   });
 
   // Ползунки фильтров: применяем сразу, карта обновляется с небольшой задержкой
@@ -7040,9 +7303,11 @@
 
     // ── группы и match ──
     const viewProfile = e.target.closest('[data-view-profile]');
-    if (viewProfile) {
+    // кнопки внутри строки («Чат», «×») обрабатываются ниже — профиль по ним не открываем
+    if (viewProfile && !e.target.closest('button')) {
       const uid = viewProfile.dataset.viewProfile;
-      showFriendProfile(uid, personById(uid), reopenGroupDetails);
+      const back = viewProfile.dataset.profileBack === 'friends' ? showFriendsScreen : reopenGroupDetails;
+      showFriendProfile(uid, personById(uid), back);
       return;
     }
     if (e.target.closest('[data-group-wish-clear]')) {
