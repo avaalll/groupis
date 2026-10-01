@@ -1,84 +1,7850 @@
-/* Service worker: оболочка приложения (app shell) доступна офлайн.
-   При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Groupis</title>
+  <meta name="description" content="Groupis — карта с друзьями, группами и мессенджером">
 
-const VERSION = 'v1.0.81';
-const CACHE = `groupis-${VERSION}`;
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#E9EBE6" id="meta-theme-color">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    /* Тема до первой отрисовки, чтобы не мигало: выбор из настроек (auto / light / dark), «авто» — как в системе */
+    (function () {
+      var pref = 'auto';
+      try { pref = localStorage.getItem('app.theme') || 'auto'; } catch (e) {}
+      var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+  </script>
+  <link rel="icon" href="icons/logo.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Groupis">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-const APP_SHELL = [
-  './',
-  './index.html',
-  './three.min.js',
-  './manifest.webmanifest',
-  './icons/logo.svg',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png',
-];
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
 
-// Внешние скрипты, без которых приложение не стартует — кешируем их по мере загрузки
-const CACHEABLE_EXTERNAL = [
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-];
+  <style>
+    /* Палитра Groupis «Сигнал»: сигнальный красно-оранжевый (--you) + сонарная мята (--lime)
+       на холодном «тумане» (светлая тема) или хвойно-чёрном (тёмная). Тему задаёт data-theme на <html>. */
+    :root {
+      color-scheme: light;
+      --land: #E9EBE6;
+      --you: #FF5B2E;
+      --you-rgb: 255, 91, 46;
+      --you-2: #FF8457;
+      --you-deep: #E0401A;
+      --you-soft: #FFB69E;
+      --lime: #3EE6C1;
+      --lime-rgb: 62, 230, 193;
+      --lime-deep: #0FA383;
+      --lime-ink: #06221B;
+      --hot: #FF2E5B;
+      --glass: rgba(250, 251, 248, 0.84);
+      --glass-edge: rgba(18, 21, 20, 0.07);
+      --glass-shadow: rgba(10, 22, 18, 0.14);
+      --bar: rgba(250, 251, 248, 0.84);
+      --ink: #121514;
+      --ink-soft: #69706C;
+      --win: #FAFBF8;
+      --win-2: #F1F3EE;
+      --win-line: rgba(18, 21, 20, 0.08);
+      --row-hover: rgba(18, 21, 20, 0.045);
+      --field: rgba(18, 21, 20, 0.05);
+      --tip: rgba(18, 21, 20, 0.92);
+      --tip-ink: #EEF2EF;
+      --dock: #121514;
+      --dock-ink: rgba(238, 242, 239, .58);
+      --dock-on: #EEF2EF;
+      --dock-on-ink: #121514;
+      --spring: cubic-bezier(.34, 1.56, .64, 1);
+      --ease: cubic-bezier(.2, .9, .25, 1);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --land: #090C0B;
+      --you: #FF6A3D;
+      --you-rgb: 255, 106, 61;
+      --you-2: #FF8C63;
+      --you-deep: #E8481F;
+      --you-soft: #FFB79F;
+      --lime: #4FF0CB;
+      --lime-rgb: 79, 240, 203;
+      --glass: rgba(20, 25, 23, 0.86);
+      --glass-edge: rgba(255, 255, 255, 0.07);
+      --glass-shadow: rgba(0, 0, 0, 0.5);
+      --bar: rgba(20, 25, 23, 0.86);
+      --ink: #EEF2EF;
+      --ink-soft: #8D9792;
+      --win: #111514;
+      --win-2: #171C1A;
+      --win-line: rgba(255, 255, 255, 0.07);
+      --row-hover: rgba(255, 255, 255, 0.05);
+      --field: rgba(255, 255, 255, 0.055);
+      --tip: rgba(238, 242, 239, 0.94);
+      --tip-ink: #090C0B;
+      --dock: #1A201E;
+      --dock-ink: rgba(238, 242, 239, .55);
+      --dock-on: #EEF2EF;
+      --dock-on-ink: #0B0F0D;
+    }
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
-  );
-});
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+    /* Текстовый курсор только в полях ввода: в режиме «просмотра с курсором» (F7)
+       браузер иначе рисует мигающую палочку в любом месте, куда кликнули */
+    body { caret-color: transparent; }
+    input, textarea, select, [contenteditable="true"] { caret-color: auto; }
+    input[type="range"], input[type="checkbox"], input[type="radio"] { caret-color: transparent; }
+    body {
+      background: var(--land);
+      color: var(--ink);
+      font: 14px/1.45 "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-user-select: none; user-select: none;
+    }
+    button { font: inherit; color: inherit; }
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
+    .map-app { position: fixed; inset: 0; z-index: 1; }
+    .map-layer { position: fixed; inset: 0; }
+    #map { z-index: 1; background: var(--land); }
 
-function staleWhileRevalidate(event, request) {
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          // opaque — ответ на no-cors запрос <script> к CDN, его статус не виден, но он валиден
-          if (response.ok || response.type === 'opaque') {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached || Response.error());
-      return cached || network;
-    })
-  );
-}
+    body.app-map .window { display: none !important; }
+    body.app-window #geo-btn,
+    body.app-window #notif-btn,
+    body.app-window #settings-btn,
+    body.app-window #filter-btn { display: none !important; }
 
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  if (request.method !== 'GET') return;
-  const url = new URL(request.url);
+    body.auth-locked .menubar,
+    body.auth-locked .dock-wrap,
+    body.auth-locked #geo-btn,
+    body.auth-locked #notif-btn,
+    body.auth-locked #settings-btn,
+    body.auth-locked #filter-btn,
+    body.auth-locked #window { display: none !important; }
 
-  if (url.origin !== self.location.origin) {
-    if (CACHEABLE_EXTERNAL.includes(request.url)) staleWhileRevalidate(event, request);
-    // Остальные внешние запросы (Supabase API, 2ГИС и т. д.) пропускаем как есть
-    return;
+    .geo-btn {
+      position: fixed; right: 14px;
+      bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+      z-index: 5; width: 42px; height: 42px;
+      border-radius: 12px; border: 1px solid var(--win-line);
+      background: var(--win);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 8px 20px var(--glass-shadow);
+      cursor: pointer; display: grid; place-items: center;
+      color: var(--you);
+      transition: transform .12s ease-out, background .15s;
+    }
+    .geo-btn:hover { transform: scale(1.06); }
+    .geo-btn:active { transform: scale(.96); }
+    .geo-btn svg { width: 20px; height: 20px; }
+    .geo-btn.is-active { color: #fff; background: var(--you); border-color: transparent; }
+
+    #notif-btn, #settings-btn, #filter-btn {
+      position: fixed;
+      top: calc(38px + env(safe-area-inset-top, 0px));
+      z-index: 19; width: 42px; height: 42px;
+      border-radius: 12px; border: 1px solid var(--win-line);
+      background: var(--win);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 8px 20px var(--glass-shadow);
+      cursor: pointer; display: grid; place-items: center;
+      color: var(--you-soft);
+      transition: transform .12s ease-out, background .15s, color .15s;
+    }
+    #notif-btn { left: 14px; }
+    #settings-btn { right: 14px; }
+    #filter-btn { right: 64px; }
+    #notif-btn:hover, #settings-btn:hover, #filter-btn:hover { transform: scale(1.06); color: var(--you); }
+    #notif-btn:active, #settings-btn:active, #filter-btn:active { transform: scale(.96); }
+    #notif-btn svg, #settings-btn svg, #filter-btn svg { width: 20px; height: 20px; display: block; }
+    #notif-btn.is-active, #settings-btn.is-active, #filter-btn.is-active { color: #fff; background: var(--you); border-color: transparent; }
+    #notif-btn .badge {
+      position: absolute; top: -5px; right: -5px;
+      min-width: 18px; height: 18px; padding: 0 5px;
+      border-radius: 9px;
+      background: #C0392B; color: #fff;
+      font-size: 11px; font-weight: 700; line-height: 18px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,.35), inset 0 0 0 1.5px rgba(255,255,255,.7);
+      pointer-events: none;
+    }
+    #notif-btn .badge[hidden] { display: none !important; }
+    /* Точка на кнопке фильтров: фильтр включён */
+    #filter-btn .filter-dot {
+      position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%;
+      background: #34c759; box-shadow: 0 0 0 1.5px var(--win); pointer-events: none;
+    }
+    #filter-btn .filter-dot[hidden] { display: none !important; }
+
+    /* ── Экран фильтров ── */
+    .filters { display: grid; gap: 18px; padding: 16px; }
+    .filter-block { display: grid; gap: 10px; }
+    .filter-head { display: flex; align-items: center; gap: 10px; }
+    .filter-title { font-weight: 700; font-size: 14px; flex: 1; }
+    .filter-sub { font-size: 12.5px; color: var(--ink-soft); }
+    .filter-range { display: flex; align-items: center; gap: 12px; }
+    .filter-range input[type="range"] { flex: 1; accent-color: var(--you); }
+    .filter-range .filter-val { min-width: 64px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .filter-block.is-off .filter-range { opacity: .4; pointer-events: none; }
+    .seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .seg-opt {
+      display: flex; align-items: center; gap: 8px; justify-content: center;
+      padding: 11px 10px; border-radius: 12px; cursor: pointer;
+      border: 1.5px solid var(--win-line); background: transparent; color: var(--ink);
+      font: inherit; font-weight: 600; font-size: 13px;
+    }
+    .seg-opt[aria-pressed="true"] { border-color: var(--you); background: rgba(var(--you-rgb), .14); }
+    .seg-opt .seg-emoji { font-size: 18px; }
+    .filter-note { font-size: 12px; color: var(--ink-soft); }
+    .filter-actions { display: flex; gap: 8px; justify-content: space-between; }
+
+    .memory-marker {
+      position: relative; cursor: pointer; pointer-events: auto;
+      transform-origin: 50% 100%; transition: transform .18s ease-out;
+      width: 84px; height: 84px;
+    }
+    .memory-marker:hover { transform: scale(1.08); }
+    .memory-marker::after {
+      content: ""; position: absolute; left: 50%; bottom: -4px;
+      width: 14px; height: 14px; background: var(--you);
+      transform: translateX(-50%) rotate(45deg);
+      border-radius: 3px; box-shadow: 0 0 0 2px #fff; z-index: 0;
+    }
+    :root[data-theme="dark"] .memory-marker::after { background: var(--you); }
+    .memory-fan { position: relative; width: 100%; height: 100%; transform: rotate(-4deg); }
+    .memory-card {
+      position: absolute; left: 50%; top: 50%;
+      width: 60px; height: 66px; padding: 4px 4px 10px;
+      background: var(--you); border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.4), 0 6px 14px rgba(21,19,31,.35), 0 0 0 .5px rgba(0,0,0,.15);
+      transform-origin: 50% 100%; overflow: hidden; will-change: transform;
+    }
+    :root[data-theme="dark"] .memory-card { background: var(--you); }
+    .memory-card .mc-img {
+      width: 100%; height: 100%;
+      background-size: cover; background-position: center;
+      background-color: #DDD; border-radius: 2px;
+    }
+    .memory-card .mc-img.no-photo {
+      background: rgba(255,255,255,.18); display: grid; place-items: center;
+      color: #fff; font-size: 22px;
+    }
+    .memory-card .mc-img.no-photo::before { content: "📷"; }
+    .memory-card::after {
+      content: ""; position: absolute; left: 8px; right: 8px; bottom: 3px;
+      height: 2px; border-radius: 2px; background: rgba(255,255,255,.55);
+    }
+    :root[data-theme="dark"] .memory-card::after { background: rgba(6, 12, 10, .5); }
+    .memory-more {
+      position: absolute; right: -6px; top: -6px;
+      min-width: 22px; height: 22px; padding: 0 5px;
+      border-radius: 11px; background: var(--you); color: #fff;
+      font-size: 12px; font-weight: 700; line-height: 22px; text-align: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,.4), inset 0 0 0 1.5px rgba(255,255,255,.5);
+      z-index: 20;
+    }
+    :root[data-theme="dark"] .memory-more { background: var(--you); }
+
+    .wish-marker {
+      position: relative; pointer-events: auto; cursor: pointer;
+      transition: transform .18s ease-out;
+      width: 220px; height: 140px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .wish-marker:hover { transform: scale(1.05); }
+    .wish-cloud-shape {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      filter: drop-shadow(0 8px 16px rgba(var(--you-rgb), .45));
+      pointer-events: none;
+    }
+    .wish-cloud-shape .cloud-body {
+      fill: url(#wishCloudGrad);
+      stroke: rgba(255,255,255,.45);
+      stroke-width: 1; stroke-linejoin: round;
+    }
+    :root[data-theme="dark"] .wish-cloud-shape .cloud-body { fill: url(#wishCloudGradDark); stroke: rgba(var(--you-rgb), .35); }
+    .wish-cloud-content {
+      position: relative; z-index: 1; width: 74%; max-width: 180px;
+      padding: 0 6px; text-align: center;
+      color: #FFFFFF; font-size: 12.5px; font-weight: 650;
+      line-height: 1.25; letter-spacing: .01em;
+      white-space: normal; word-break: break-word;
+      text-shadow: 0 1px 2px rgba(6, 12, 10, .35);
+    }
+    .wish-author {
+      display: block; margin-top: 4px; font-size: 10px;
+      font-weight: 700; letter-spacing: .04em;
+      text-transform: uppercase; opacity: .85;
+    }
+    .wish-empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; }
+    .wish-empty svg { width: 44px; height: 44px; opacity: .35; display: block; margin: 0 auto 10px; }
+    .wish-card {
+      display: grid; gap: 6px; padding: 12px;
+      border-radius: 12px; border: 1px solid var(--win-line);
+      background: rgba(255,255,255,.45); margin: 8px;
+    }
+    :root[data-theme="dark"] .wish-card { background: rgba(255,255,255,.06); }
+    .wish-card .wish-card-text { font-weight: 600; white-space: pre-wrap; word-break: break-word; }
+    .wish-card .wish-card-meta { color: var(--ink-soft); font-size: 12px; }
+    .wish-card .wish-card-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+
+    .user-avatar-wrap { position: relative; width: 26px; height: 26px; }
+    .user-avatar-wrap[data-clickable="true"] { pointer-events: auto !important; cursor: pointer !important; }
+    .user-avatar-wrap[data-clickable="true"] .user-badge,
+    .user-avatar-wrap[data-clickable="true"] .user-badge-inner,
+    .user-avatar-wrap[data-clickable="true"] .user-badge-name,
+    .user-avatar-wrap[data-clickable="true"] .user-badge-avatar { pointer-events: auto !important; cursor: pointer !important; }
+    .user-avatar-wrap .user-avatar-marker {
+      display: block; width: 100%; height: 100%;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
+    }
+    .user-avatar-marker canvas,
+    .user-avatar-marker img {
+      display: block; width: 100%; height: 100%;
+      pointer-events: none; -webkit-user-drag: none; user-select: none;
+    }
+    .user-badge {
+      position: absolute; left: 50%; bottom: calc(100% + 8px);
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center;
+      gap: 3px; pointer-events: auto;
+      animation: user-badge-in .35s ease-out;
+    }
+    @keyframes user-badge-in {
+      from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    .user-badge::after {
+      content: ""; position: absolute; left: 50%; bottom: -6px;
+      width: 8px; height: 8px; margin-left: -4px;
+      background: var(--win);
+      border-right: 1px solid var(--win-line);
+      border-bottom: 1px solid var(--win-line);
+      transform: rotate(45deg); border-radius: 1px;
+    }
+    .user-badge-inner {
+      position: relative; display: flex; align-items: center; gap: 6px;
+      padding: 3px 8px 3px 3px; border-radius: 999px;
+      background: var(--win);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid var(--win-line);
+      box-shadow: 0 4px 12px var(--glass-shadow), 0 0 0 .5px rgba(0,0,0,.08);
+      z-index: 2; transition: transform .15s ease-out;
+    }
+    .user-badge[data-clickable="true"] { pointer-events: auto; cursor: pointer; }
+    .user-badge[data-clickable="true"]:hover .user-badge-inner { transform: translateY(-1px); }
+    .user-badge-avatar {
+      flex: none; width: 22px; height: 22px; border-radius: 50%;
+      background-size: cover; background-position: center;
+      background-color: var(--you); color: #fff;
+      display: grid; place-items: center; font-size: 11px; font-weight: 700;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.1);
+    }
+    .user-badge-name {
+      font-size: 12px; font-weight: 650; color: var(--ink); line-height: 1;
+      white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* Участник группы, не друг: тёмная плашка, чтобы не сливалась со светлой картой */
+    .user-badge-inner.is-group {
+      background: rgba(92, 52, 24, .92);
+      border-color: rgba(255, 214, 150, .35);
+      box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.25);
+    }
+    .user-badge-inner.is-group .user-badge-name { color: #fff; }
+    .user-badge-inner.is-group .user-badge-group { color: #FFD9A0; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
+    .user-dot-marker.is-group { background: #5C3418 !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
+    /* Друг из общей группы: зелёная плашка */
+    .user-badge-inner.is-friend-group {
+      background: rgba(22, 104, 50, .94);
+      border-color: rgba(150, 240, 170, .4);
+      box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.25);
+    }
+    .user-badge-inner.is-friend-group .user-badge-name { color: #fff; }
+    .user-badge-inner.is-friend-group .user-badge-group { color: #B8F5C6; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
+    .user-dot-marker.is-friend-group { background: #1E7A3C !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
+    .user-badge-status {
+      position: absolute; left: 50%; bottom: 100%;
+      transform: translate(-50%, 2px);
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #34c759; box-shadow: 0 0 0 1.5px #fff; z-index: 3;
+    }
+    .user-dot-marker {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--you); border: 2.5px solid #fff;
+      box-shadow: 0 0 0 4px rgba(var(--you-rgb), .3), 0 2px 6px rgba(0,0,0,.35);
+      pointer-events: none;
+    }
+
+    /* ── Лидер группы на карте: иконка группы и облако с желанием ── */
+    .user-badge.is-leader::after { background: #0E1412; border-color: rgba(var(--you-rgb), .45); }
+    .user-dot-marker.is-leader { background: #0E1412 !important; box-shadow: 0 0 0 4px rgba(14, 20, 18, .35), 0 2px 6px rgba(0,0,0,.35); }
+    .map-group-chip, .map-group-wish { pointer-events: auto !important; cursor: pointer !important; }
+    .map-group-chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 8px 3px 3px; border-radius: 999px;
+      background: rgba(14, 20, 18, .96); color: #fff;
+      border: 1px solid rgba(var(--you-rgb), .45);
+      box-shadow: 0 4px 14px rgba(0,0,0,.4);
+      transition: transform .15s ease-out;
+    }
+    .map-group-chip:hover { transform: translateY(-1px); }
+    .map-group-ava {
+      flex: none; width: 24px; height: 24px; border-radius: 8px;
+      background: linear-gradient(145deg, #34D6B2, #0E8C72); background-size: cover; background-position: center;
+      display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
+    }
+    .map-group-name { font-size: 12.5px; font-weight: 700; line-height: 1; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+    .map-group-count {
+      font-size: 10.5px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px;
+      background: rgba(255,255,255,.16); color: var(--you-soft); white-space: nowrap;
+    }
+    .map-group-count::before { content: "👥 "; }
+    /* Облако-«мысль» с желанием группы */
+    .map-group-wish {
+      position: relative; margin-bottom: 12px;
+      width: max-content; max-width: 210px; padding: 9px 14px;
+      border-radius: 20px;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
+      border: 1px solid rgba(255,255,255,.45);
+      box-shadow: 0 8px 18px rgba(var(--you-rgb), .45);
+      color: #fff; font-size: 12.5px; font-weight: 650; line-height: 1.25;
+      text-align: center; text-shadow: 0 1px 2px rgba(6, 12, 10, .35);
+      animation: map-wish-in .4s ease-out;
+    }
+    @keyframes map-wish-in {
+      from { opacity: 0; transform: translateY(6px) scale(.9); }
+      to   { opacity: 1; transform: none; }
+    }
+    .map-group-wish span {
+      display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden; word-break: break-word; white-space: normal;
+    }
+    .map-group-wish::before, .map-group-wish::after {
+      content: ""; position: absolute; left: 50%; border-radius: 50%;
+      background: var(--you-deep); border: 1px solid rgba(255,255,255,.45);
+    }
+    .map-group-wish::before { width: 9px; height: 9px; bottom: -8px; margin-left: -10px; }
+    .map-group-wish::after  { width: 5px; height: 5px; bottom: -13px; margin-left: -4px; }
+
+    /* ── Карточка группы: желание и match ── */
+    .group-map-hint { margin: 0; }
+    .group-wish-form { display: grid; gap: 8px; padding: 4px 12px 8px; }
+    .group-wish-form .edit-actions { margin: 0; }
+    .group-wish-cloud {
+      margin: 4px 12px; padding: 12px 16px; border-radius: 18px;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep)); color: #fff;
+      font-weight: 650; word-break: break-word;
+    }
+    .match-hint { padding: 8px 12px; color: var(--ink-soft); font-size: 13px; }
+    .match-rows { margin: 0; }
+    .match-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 10px 12px; border-bottom: 1px solid var(--win-line);
+    }
+    .match-row:last-child { border-bottom: 0; }
+    .match-row .person-main { flex: 1 1 160px; min-width: 0; }
+    .match-row .notif-actions { margin-top: 0; }
+    .match-status { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+    .person-card.is-link { cursor: pointer; }
+    .person-card.is-link:hover { background: rgba(var(--you-rgb), .08); }
+    .match-chat-avatar { background: linear-gradient(135deg, var(--you) 0 50%, var(--lime) 50% 100%); color: #fff; font-size: 20px; display: grid; place-items: center; }
+
+    /* ── Голосование о союзе в совместном чате ── */
+    .match-vote {
+      margin: 0 12px 6px; padding: 12px 14px; border-radius: 20px;
+      background: var(--field); display: grid; gap: 9px;
+    }
+    .match-vote:empty { display: none; }
+    .match-vote[data-state="open"] { background: linear-gradient(135deg, rgba(var(--you-rgb), .16), rgba(var(--lime-rgb), .12)); }
+    .match-vote[data-state="approved"] { background: linear-gradient(135deg, rgba(255, 143, 177, .2), rgba(var(--you-rgb), .2)); }
+    .mv-head { display: flex; align-items: baseline; gap: 10px; }
+    .mv-title { flex: 1; font-weight: 800; font-size: 14px; }
+    .mv-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .mv-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(120, 116, 150, .2); }
+    .mv-yes { background: var(--lime); transition: width .5s var(--ease); }
+    .mv-no  { background: var(--hot); transition: width .5s var(--ease); margin-left: auto; }
+    .mv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mv-btn {
+      border: 1.5px solid transparent; border-radius: 14px; padding: 10px 12px; cursor: pointer;
+      font: inherit; font-weight: 800; background: var(--win); color: var(--ink);
+      transition: transform .3s var(--spring), border-color .2s, background .2s;
+    }
+    .mv-btn:active { transform: scale(.94); }
+    .mv-btn.yes.is-on { background: var(--lime); color: var(--lime-ink); }
+    .mv-btn.no.is-on  { background: var(--hot); color: #fff; }
+    .mv-btn:disabled { opacity: .6; }
+    .mv-hint { font-size: 12px; color: var(--ink-soft); line-height: 1.35; }
+    .mv-start {
+      justify-self: start; border: 0; border-radius: 14px; padding: 10px 16px; cursor: pointer;
+      font: inherit; font-weight: 800; background: var(--lime); color: var(--lime-ink);
+      box-shadow: 0 8px 20px rgba(var(--lime-rgb), .25);
+      transition: transform .3s var(--spring);
+    }
+    .mv-start:active { transform: scale(.94); }
+    .mv-done { font-weight: 800; font-size: 13.5px; }
+
+    .map-popup {
+      width: 220px; padding: 8px;
+      background: var(--win);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      backdrop-filter: blur(30px) saturate(180%);
+      border: 1px solid var(--win-line); border-radius: 12px;
+      box-shadow: 0 12px 32px var(--glass-shadow), 0 0 0 .5px rgba(0,0,0,.08);
+      pointer-events: auto;
+    }
+    .map-popup .pop-img {
+      width: 100%; aspect-ratio: 4 / 3;
+      object-fit: cover; border-radius: 8px; display: block;
+      background: rgba(0,0,0,.08);
+    }
+    .map-popup .pop-place { font-weight: 700; margin-top: 6px; }
+    .map-popup .pop-caption {
+      color: var(--ink-soft); font-size: 12px; margin-top: 2px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3; line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .map-popup .pop-open {
+      display: inline-block; margin-top: 6px;
+      font-size: 12px; font-weight: 600; color: var(--you);
+      background: transparent; border: 0; padding: 0; cursor: pointer;
+    }
+    .map-popup .pop-open:hover { text-decoration: underline; }
+
+    .menubar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      height: calc(28px + env(safe-area-inset-top, 0px));
+      padding: env(safe-area-inset-top, 0px) max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+      background: var(--bar);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      backdrop-filter: blur(24px) saturate(180%);
+      border-bottom: 1px solid var(--win-line);
+      font-size: 13px;
+    }
+    .menubar strong { font-weight: 650; }
+    .menubar .brand { display: flex; align-items: center; gap: 6px; }
+    .menubar .brand img { width: 18px; height: 18px; border-radius: 5px; display: block; }
+    .menubar-right { display: flex; align-items: center; gap: 8px; }
+    #offline-badge { color: var(--ink-soft); }
+    #install-btn {
+      border: 0; background: transparent; padding: 2px 4px;
+      border-radius: 5px; cursor: pointer; font-weight: 600;
+    }
+    #install-btn:hover { background: var(--row-hover); }
+    #fs-btn {
+      border: 0; background: transparent; padding: 3px 5px; border-radius: 6px;
+      cursor: pointer; color: var(--ink); display: grid; place-items: center;
+    }
+    #fs-btn:hover { background: var(--row-hover); }
+    #fs-btn.is-active { color: var(--you); }
+    #fs-btn svg { display: block; }
+    [hidden] { display: none !important; }
+
+    .dock-wrap {
+      position: fixed; left: 0; right: 0; z-index: 30;
+      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      display: flex; justify-content: center;
+      pointer-events: none;
+    }
+    .dock {
+      pointer-events: auto;
+      display: flex; align-items: flex-end; gap: 20px;
+      margin: 0; padding: 9px 14px; list-style: none;
+      border-radius: 26px;
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid var(--glass-edge);
+      box-shadow: 0 12px 32px var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.35);
+    }
+    .dock-item { position: relative; width: 56px; height: 56px; }
+    .dock-btn {
+      display: block; width: 56px; height: 56px; padding: 0; border: 0; background: none;
+      cursor: pointer; transform-origin: 50% 100%;
+      transform: scale(var(--s, 1));
+      transition: transform .14s ease-out;
+      -webkit-tap-highlight-color: transparent;
+      border-radius: 14px;
+    }
+    .dock-btn svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+    .dock-btn:focus-visible { outline: 3px solid var(--you); outline-offset: 3px; }
+    .dock-btn:active svg { filter: brightness(.86) drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+    .dock-btn.bounce svg { animation: bounce .7s cubic-bezier(.3,.7,.4,1) 1; }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-22px); }
+      55% { transform: translateY(0); }
+      75% { transform: translateY(-9px); }
+    }
+    .dock-item::after {
+      content: ""; position: absolute; left: 50%; bottom: -7px;
+      width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+      background: var(--ink); opacity: 0; transition: opacity .15s;
+    }
+    .dock-item[data-open="true"]::after { opacity: .75; }
+    .tip {
+      position: absolute; left: 50%; pointer-events: none; white-space: nowrap;
+      bottom: calc(100% + 12px + (var(--s, 1) - 1) * 56px);
+      transform: translateX(-50%);
+      padding: 4px 10px; border-radius: 8px;
+      background: var(--tip); color: var(--tip-ink);
+      font-size: 13px; font-weight: 500;
+      opacity: 0; transition: opacity .12s;
+    }
+    .dock-item:focus-within .tip { opacity: 1; }
+    @media (hover: hover) { .dock-item:hover .tip { opacity: 1; } }
+
+    .window {
+      position: fixed; z-index: 25;
+      inset: calc(44px + env(safe-area-inset-top, 0px)) 0 calc(112px + env(safe-area-inset-bottom, 0px)) 0;
+      margin: auto;
+      width: min(560px, calc(100% - 24px));
+      height: min(520px, calc(100dvh - 170px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+      display: flex; flex-direction: column;
+      background: var(--win);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      backdrop-filter: blur(30px) saturate(180%);
+      border: 1px solid var(--win-line); border-radius: 14px;
+      box-shadow: 0 24px 60px var(--glass-shadow), 0 0 0 .5px rgba(0,0,0,.12);
+      overflow: hidden;
+      opacity: 0; transform: scale(.7);
+      transition: opacity .18s ease-out, transform .22s cubic-bezier(.2,.8,.3,1);
+      outline: none;
+    }
+    .window.is-open { opacity: 1; transform: none; }
+    .win-head {
+      display: grid; grid-template-columns: 48px 1fr 48px; align-items: center;
+      height: 44px; padding: 0 14px;
+      border-bottom: 1px solid var(--win-line);
+    }
+    .win-back {
+      width: 32px; height: 32px; padding: 0;
+      border: 0; border-radius: 8px;
+      background: transparent; color: var(--you);
+      cursor: pointer; display: grid; place-items: center;
+      transition: background .15s, transform .12s ease-out;
+    }
+    .win-back:hover { background: var(--row-hover); }
+    .win-back:active { transform: scale(.94); }
+    .win-back svg { width: 20px; height: 20px; }
+    .win-title { margin: 0; text-align: center; font-size: 13px; font-weight: 650; }
+    .win-body { flex: 1; overflow: auto; -webkit-user-select: text; user-select: text; position: relative; }
+
+    .rows { list-style: none; margin: 0; padding: 6px; }
+    .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; }
+    .row:hover { background: var(--row-hover); }
+    .row-main { flex: 1; min-width: 0; }
+    .row-name { font-weight: 600; }
+    .row-sub { color: var(--ink-soft); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-time { color: var(--ink-soft); font-size: 12px; }
+    .row[data-action] { cursor: pointer; }
+    .row.danger .row-name { color: #C0392B; }
+    .avatar {
+      flex: none; width: 40px; height: 40px; border-radius: 50%;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 650; font-size: 15px;
+      background-size: cover; background-position: center; overflow: hidden;
+    }
+    .notif-icon {
+      flex: none; width: 40px; height: 40px; border-radius: 12px;
+      display: grid; place-items: center; color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.05);
+    }
+    .notif-icon svg { width: 22px; height: 22px; }
+    .notif-unread { position: relative; }
+    .notif-unread::before {
+      content: ""; position: absolute; left: 2px; top: 50%;
+      width: 6px; height: 6px; margin-top: -3px;
+      border-radius: 50%; background: var(--you);
+    }
+    .notif-empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; }
+    .notif-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .notif-actions .btn { padding: 6px 14px; font-size: 13px; }
+    .notif-status { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+
+    .profile-head { display: grid; justify-items: center; gap: 4px; padding: 26px 16px 14px; text-align: center; }
+    .profile-head .avatar { width: 84px; height: 84px; font-size: 32px; margin-bottom: 6px; }
+    .profile-name { font-size: 18px; font-weight: 700; }
+    .profile-handle { color: var(--ink-soft); }
+    .profile-bio {
+      color: var(--ink-soft); font-size: 13px; text-align: center;
+      max-width: 320px; margin: 2px auto 0; padding: 0 8px;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .chev { color: var(--ink-soft); }
+
+    .switch {
+      flex: none; position: relative; width: 42px; height: 26px; padding: 0;
+      border: 0; border-radius: 13px; cursor: pointer;
+      background: rgba(120,128,160,.45); transition: background .15s;
+    }
+    .switch::after {
+      content: ""; position: absolute; top: 2px; left: 2px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+      transition: transform .15s;
+    }
+    .switch[aria-checked="true"] { background: var(--you); }
+    .switch[aria-checked="true"]::after { transform: translateX(16px); }
+
+    .edit-form { display: grid; gap: 14px; padding: 18px 16px 20px; }
+    .edit-field { display: grid; gap: 6px; }
+    .edit-label { font-size: 12px; font-weight: 600; color: var(--ink-soft); padding-left: 4px; }
+    .edit-input, .edit-textarea {
+      width: 100%; font: inherit; color: var(--ink);
+      background: rgba(255,255,255,.55);
+      border: 1px solid var(--win-line); border-radius: 10px;
+      padding: 10px 12px; outline: none;
+      -webkit-user-select: text; user-select: text;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    :root[data-theme="dark"] .edit-input, :root[data-theme="dark"] .edit-textarea { background: rgba(255,255,255,.08); }
+    .edit-input:focus, .edit-textarea:focus {
+      border-color: var(--you);
+      box-shadow: 0 0 0 3px rgba(var(--you-rgb), .25);
+      background: rgba(255,255,255,.75);
+    }
+    :root[data-theme="dark"] .edit-input:focus, :root[data-theme="dark"] .edit-textarea:focus {
+        background: rgba(255,255,255,.14);
+        box-shadow: 0 0 0 3px rgba(var(--you-rgb), .3);
+      }
+    .edit-textarea { min-height: 84px; resize: vertical; }
+
+    .avatar-edit { display: flex; align-items: center; gap: 14px; }
+    .avatar-preview {
+      flex: none; width: 84px; height: 84px; border-radius: 50%;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 700; font-size: 30px;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
+      background-size: cover; background-position: center; overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    .avatar-edit-side { display: grid; gap: 8px; justify-items: start; }
+    .btn {
+      font: inherit; font-weight: 600;
+      border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer;
+      background: rgba(120,128,160,.22); color: var(--ink);
+      transition: background .15s, transform .05s;
+    }
+    .btn:hover { background: rgba(120,128,160,.32); }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: var(--you); color: #fff; }
+    .btn-primary:hover { background: var(--you-deep); }
+    :root[data-theme="dark"] .btn-primary:hover { background: var(--you-2); }
+    .btn-ghost { background: transparent; color: var(--you); padding: 8px 6px; }
+    .btn-ghost:hover { background: transparent; text-decoration: underline; }
+    .btn-danger { background: #C0392B; color: #fff; }
+    .btn-danger:hover { background: #A52F22; }
+
+    .edit-actions {
+      display: flex; justify-content: flex-end; gap: 10px;
+      padding-top: 4px; flex-wrap: wrap;
+    }
+
+    .username-wrap {
+      display: flex; align-items: center;
+      background: rgba(255,255,255,.55);
+      border: 1px solid var(--win-line); border-radius: 10px;
+      padding: 0 10px 0 12px;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    :root[data-theme="dark"] .username-wrap { background: rgba(255,255,255,.08); }
+    .username-wrap:focus-within {
+      border-color: var(--you);
+      box-shadow: 0 0 0 3px rgba(var(--you-rgb), .25);
+      background: rgba(255,255,255,.75);
+    }
+    .username-prefix { color: var(--ink-soft); font-weight: 600; padding-right: 2px; user-select: none; }
+    .username-input {
+      flex: 1;
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: 10px 0 !important;
+    }
+    .username-input:focus { outline: none; }
+    .edit-hint { font-size: 12px; color: var(--ink-soft); padding-left: 4px; }
+    .edit-input.is-invalid,
+    .username-wrap:has(.edit-input.is-invalid) {
+      border-color: #C0392B;
+      box-shadow: 0 0 0 3px rgba(192,57,43,.25);
+    }
+    .edit-hint.is-invalid { color: #C0392B; }
+
+    .places-toolbar {
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--win-line);
+      position: sticky; top: 0;
+      background: var(--win);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      z-index: 2;
+    }
+    .view-toggle {
+      display: flex; align-items: center; gap: 2px;
+      padding: 3px; border-radius: 10px;
+      background: rgba(120,128,160,.16);
+    }
+    .view-btn {
+      width: 34px; height: 30px; padding: 0; border: 0; border-radius: 8px;
+      background: transparent; cursor: pointer; color: var(--ink-soft);
+      display: grid; place-items: center;
+    }
+    .view-btn svg { width: 18px; height: 18px; }
+    .view-btn[aria-pressed="true"] {
+      background: rgba(255,255,255,.7); color: var(--ink);
+      box-shadow: 0 1px 3px rgba(0,0,0,.12);
+    }
+    :root[data-theme="dark"] .view-btn[aria-pressed="true"] { background: rgba(255,255,255,.14); color: var(--ink); }
+    .places-spacer { flex: 1; }
+
+    .feed { display: grid; gap: 12px; padding: 10px 10px 24px; }
+    .post {
+      background: rgba(255,255,255,.5);
+      border: 1px solid var(--win-line);
+      border-radius: 12px; overflow: hidden;
+    }
+    :root[data-theme="dark"] .post { background: rgba(255,255,255,.06); }
+    .post-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+    .post-head .avatar { width: 32px; height: 32px; font-size: 13px; }
+    .post-head .post-author { font-weight: 600; }
+    .post-head .post-place { color: var(--ink-soft); font-size: 12px; }
+    .post-media {
+      display: block; width: 100%; aspect-ratio: 4 / 3;
+      object-fit: cover; background: rgba(0,0,0,.08);
+    }
+    .post-body { padding: 10px 12px 12px; }
+    .post-caption { white-space: pre-wrap; word-break: break-word; }
+
+    .post-menu-btn {
+      flex: none; width: 30px; height: 30px; padding: 0;
+      border: 0; border-radius: 8px; cursor: pointer;
+      background: transparent; color: var(--ink-soft);
+      display: grid; place-items: center;
+    }
+    .post-menu-btn:hover { background: var(--row-hover); color: var(--ink); }
+    .post-menu-btn svg { width: 18px; height: 18px; }
+
+    .popover {
+      position: absolute; min-width: 210px; padding: 6px;
+      border-radius: 10px;
+      background: var(--win);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      backdrop-filter: blur(30px) saturate(180%);
+      border: 1px solid var(--win-line);
+      box-shadow: 0 16px 32px var(--glass-shadow), 0 0 0 .5px rgba(0,0,0,.08);
+      z-index: 5;
+    }
+    .popover .pop-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 9px 12px;
+      border: 0; border-radius: 8px; cursor: pointer;
+      background: transparent; color: var(--ink);
+      font: inherit; text-align: left;
+    }
+    .popover .pop-item:hover { background: var(--row-hover); }
+    .popover .pop-item.danger { color: #C0392B; }
+    .popover .pop-item.danger:hover { background: rgba(192,57,43,.12); }
+    .popover .pop-item svg { width: 18px; height: 18px; flex: none; }
+
+    .modal-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(6, 12, 10, .5);
+      display: grid; place-items: center;
+      z-index: 10; padding: 20px;
+    }
+    .modal {
+      width: min(360px, 100%);
+      background: var(--win);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      backdrop-filter: blur(30px) saturate(180%);
+      border: 1px solid var(--win-line); border-radius: 14px;
+      box-shadow: 0 24px 60px var(--glass-shadow), 0 0 0 .5px rgba(0,0,0,.12);
+      padding: 20px 18px 14px;
+    }
+    .modal-title { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
+    .modal-text { color: var(--ink-soft); font-size: 13px; margin: 0 0 16px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+    .post-carousel { position: relative; outline: none; }
+    .post-carousel .slides {
+      display: flex; overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      cursor: grab; user-select: none; -webkit-user-select: none;
+      touch-action: pan-y;
+    }
+    .post-carousel .slides::-webkit-scrollbar { display: none; }
+    .post-carousel .slide {
+      flex: 0 0 100%; scroll-snap-align: start;
+      aspect-ratio: 4 / 3; background: rgba(0,0,0,.08);
+      pointer-events: none;
+    }
+    .post-carousel .slide img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      -webkit-user-drag: none;
+    }
+    .post-carousel .dots {
+      position: absolute; left: 0; right: 0; bottom: 8px;
+      display: flex; justify-content: center; gap: 6px;
+      z-index: 2;
+    }
+    .post-carousel .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      border: 0; padding: 0; cursor: pointer;
+      background: rgba(255,255,255,.55);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.15);
+    }
+    .post-carousel .dot.active { background: #fff; }
+    .post-carousel .counter {
+      position: absolute; top: 8px; right: 8px;
+      padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; color: #fff;
+      background: rgba(21,19,31,.55);
+      pointer-events: none; z-index: 2;
+    }
+
+    .grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 3px; padding: 3px;
+    }
+    .grid-cell {
+      position: relative; aspect-ratio: 1 / 1;
+      background: rgba(0,0,0,.08); overflow: hidden; cursor: pointer;
+    }
+    .grid-cell img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transition: transform .25s ease-out;
+    }
+    .grid-cell:hover img { transform: scale(1.05); }
+    .grid-cell .cell-caption {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 16px 6px 6px;
+      font-size: 11px; color: #fff;
+      background: linear-gradient(transparent, rgba(21,19,31,.75));
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .grid-cell .cell-multi {
+      position: absolute; top: 6px; right: 6px;
+      width: 18px; height: 18px; border-radius: 5px;
+      background: rgba(21,19,31,.65); color: #fff;
+      font-size: 11px; font-weight: 700;
+      display: grid; place-items: center;
+    }
+
+    .places-empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; }
+    .places-empty svg { width: 44px; height: 44px; opacity: .35; display: block; margin: 0 auto 10px; }
+    .places-empty .btn { margin-top: 14px; }
+
+    .post-drop { display: grid; gap: 10px; justify-items: start; }
+    .post-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 6px; width: 100%;
+    }
+    .post-thumb {
+      position: relative; aspect-ratio: 1 / 1; border-radius: 10px;
+      background-size: cover; background-position: center;
+      background-color: rgba(0,0,0,.08);
+      border: 1px solid var(--win-line); overflow: hidden;
+    }
+    .post-thumb .remove {
+      position: absolute; top: 4px; right: 4px;
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 0; cursor: pointer; padding: 0;
+      background: rgba(21,19,31,.7); color: #fff;
+      font-size: 14px; line-height: 22px; text-align: center;
+    }
+    .post-thumb.cover-badge::after {
+      content: "Обложка";
+      position: absolute; left: 4px; bottom: 4px;
+      padding: 2px 6px; border-radius: 6px;
+      font-size: 10px; font-weight: 700; color: #fff;
+      background: rgba(var(--you-rgb), .92);
+    }
+    .post-drop.is-invalid { outline: 2px solid #C0392B; outline-offset: 4px; border-radius: 12px; }
+    .post-hint { font-size: 12px; color: var(--ink-soft); padding-left: 4px; }
+
+    .avatar-editor { padding: 14px 16px 20px; display: grid; gap: 16px; }
+    .avatar-stage {
+      position: relative; width: 100%; height: 240px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.12));
+      overflow: hidden;
+    }
+    .avatar-stage canvas { display: block; width: 100%; height: 100%; }
+    .avatar-group-title {
+      font-size: 12px; font-weight: 600; color: var(--ink-soft);
+      text-transform: uppercase; letter-spacing: .04em;
+      padding-left: 4px; margin-bottom: 2px;
+    }
+    .avatar-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .avatar-swatch {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 2px solid transparent; cursor: pointer; padding: 0;
+      transition: transform .12s ease-out, border-color .12s;
+    }
+    .avatar-swatch[aria-pressed="true"] { border-color: var(--you); transform: scale(1.1); }
+    .avatar-pill {
+      padding: 6px 12px; border-radius: 18px;
+      border: 1px solid var(--win-line); background: transparent; color: var(--ink);
+      cursor: pointer; font: inherit; font-size: 13px;
+    }
+    .avatar-pill[aria-pressed="true"] { background: var(--you); color: #fff; border-color: transparent; }
+
+    .user-profile-view { display: grid; gap: 14px; padding: 18px 16px 22px; }
+    .user-profile-hero {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 8px; text-align: center;
+    }
+    .user-profile-avatar {
+      width: 128px; height: 128px; border-radius: 50%;
+      background: linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.12));
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px var(--win-line), 0 8px 24px var(--glass-shadow);
+    }
+    .user-profile-avatar canvas { display: block; width: 100%; height: 100%; }
+    /* Профиль друга: кнопка «Написать» по центру, 3D-аватар отдельной карточкой под ней (если есть фото) */
+    .friend-actions { display: flex; justify-content: center; }
+    .friend-actions .btn { min-width: 180px; padding: 12px 22px; }
+    .friend-avatar-card { display: grid; gap: 6px; }
+    .friend-avatar-stage {
+      height: 220px; border-radius: 22px; overflow: hidden;
+      background: radial-gradient(circle at 50% 70%, rgba(var(--you-rgb), .22), transparent 65%), var(--field);
+      display: grid; place-items: center;
+    }
+    .friend-avatar-stage canvas { width: 220px; height: 220px; display: block; }
+    .user-profile-avatar.no-3d {
+      display: grid; place-items: center;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
+      color: #fff; font-size: 48px; font-weight: 700;
+      background-size: cover; background-position: center;
+    }
+    .user-profile-name { font-size: 20px; font-weight: 700; line-height: 1.15; }
+    .user-profile-handle { color: var(--ink-soft); font-size: 14px; }
+    .user-profile-section-title {
+      font-size: 12px; font-weight: 600; color: var(--ink-soft);
+      text-transform: uppercase; letter-spacing: .04em;
+      padding-left: 4px; margin: 4px 0 6px;
+    }
+
+    .sub-toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--win-line);
+      position: sticky; top: 0;
+      background: var(--win);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      z-index: 2;
+    }
+    .sub-toolbar-title { font-size: 13px; font-weight: 650; color: var(--ink-soft); }
+    .sub-toolbar-spacer { flex: 1; }
+    .icon-btn {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 0; background: var(--you); color: #fff;
+      cursor: pointer; display: grid; place-items: center;
+      box-shadow: 0 2px 6px rgba(var(--you-rgb), .35);
+    }
+    .icon-btn svg { width: 18px; height: 18px; }
+
+    .person-card {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 10px;
+    }
+    .person-card:hover { background: var(--row-hover); }
+    .person-card .person-main { flex: 1; min-width: 0; }
+    .person-card .person-name { font-weight: 600; }
+    .person-card .person-handle { color: var(--ink-soft); font-size: 12px; }
+
+    .friend-add-btn {
+      border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+      font: inherit; font-weight: 600; font-size: 12px;
+      background: var(--you); color: #fff;
+    }
+    .friend-add-btn[disabled] { background: rgba(120,128,160,.3); color: var(--ink-soft); cursor: default; }
+
+    .empty-msg { text-align: center; color: var(--ink-soft); padding: 32px 20px; font-size: 13px; }
+
+    .people-picker {
+      max-height: 220px; overflow: auto;
+      border: 1px solid var(--win-line); border-radius: 10px;
+      padding: 4px; background: rgba(255,255,255,.35);
+    }
+    :root[data-theme="dark"] .people-picker { background: rgba(255,255,255,.04); }
+    .people-picker .person-card { padding: 6px 8px; }
+    .person-check {
+      flex: none; width: 20px; height: 20px; border-radius: 6px;
+      border: 2px solid rgba(120,128,160,.5);
+      display: grid; place-items: center;
+    }
+    .person-card[aria-checked="true"] .person-check { background: var(--you); border-color: var(--you); }
+    .person-card[aria-checked="true"] .person-check::after { content: "✓"; color: #fff; font-size: 13px; line-height: 1; }
+
+    .group-row { position: relative; overflow: hidden; border-radius: 10px; }
+    .group-row .group-actions {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      display: flex; transform: translateX(100%);
+      transition: transform .22s cubic-bezier(.2,.8,.3,1);
+      z-index: 1;
+    }
+    .group-row.revealed .group-actions { transform: translateX(0); }
+    .group-action-btn {
+      width: 72px; height: 100%;
+      border: 0; padding: 0; cursor: pointer;
+      display: grid; place-items: center;
+      color: #fff; font: inherit;
+    }
+    .group-action-btn svg { width: 22px; height: 22px; }
+    .group-action-btn.settings { background: #69706C; }
+    .group-action-btn.danger   { background: #C0392B; }
+    .group-row .group-card {
+      position: relative; z-index: 2; background: var(--win);
+      transition: transform .22s cubic-bezier(.2,.8,.3,1);
+      touch-action: pan-y;
+    }
+    .group-row.revealed .group-card { transform: translateX(-144px); }
+    @media (hover: hover) and (pointer: fine) {
+      .group-row:hover .group-actions { transform: translateX(0); }
+      .group-row:hover .group-card { transform: translateX(-144px); }
+    }
+    .group-card {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer;
+    }
+    .group-avatar {
+      flex: none; width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
+      background-size: cover; background-position: center;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 700; font-size: 18px; overflow: hidden;
+    }
+    .group-main { flex: 1; min-width: 0; }
+    .group-name { font-weight: 600; }
+    .group-sub { color: var(--ink-soft); font-size: 12px; }
+
+    .group-form { display: grid; gap: 14px; padding: 16px; }
+    .group-photo-row { display: flex; align-items: center; gap: 14px; }
+    .group-photo {
+      flex: none; width: 72px; height: 72px; border-radius: 16px;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
+      background-size: cover; background-position: center;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 700; font-size: 26px; overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    .radio-row { display: flex; flex-direction: column; gap: 6px; }
+    .radio-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    }
+    .radio-opt input { accent-color: var(--you); }
+    .radio-opt .radio-label { font-size: 13px; }
+
+    .legal-page {
+      padding: 16px 18px 28px;
+      color: var(--ink);
+      font-size: 13.5px; line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .legal-page h3 { font-size: 14px; font-weight: 700; margin: 18px 0 6px; }
+    .legal-page h3:first-child { margin-top: 0; }
+    .legal-page p { margin: 0 0 10px; color: var(--ink-soft); }
+    .legal-page .legal-note {
+      margin-top: 16px; padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(var(--you-rgb), .1);
+      color: var(--ink); font-size: 12.5px;
+    }
+
+    .support-chat { display: flex; flex-direction: column; height: 100%; }
+    .support-chat-head {
+      padding: 10px 14px 6px;
+      color: var(--ink-soft); font-size: 12px; text-align: center;
+    }
+    .support-chat-body {
+      flex: 1; overflow-y: auto;
+      padding: 8px 12px 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .chat-msg {
+      max-width: 78%;
+      padding: 8px 12px;
+      border-radius: 14px;
+      font-size: 13.5px;
+      line-height: 1.4;
+      word-break: break-word;
+      white-space: normal;
+      width: fit-content;
+    }
+    .chat-msg.me {
+      align-self: flex-end;
+      background: var(--you); color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg.them {
+      align-self: flex-start;
+      background: rgba(120,128,160,.18);
+      color: var(--ink);
+      border-bottom-left-radius: 4px;
+    }
+    :root[data-theme="dark"] .chat-msg.them { background: rgba(255,255,255,.08); }
+    .chat-msg .chat-msg-time {
+      display: block; margin-top: 4px;
+      font-size: 10.5px; opacity: .75; text-align: right;
+    }
+    .chat-msg.them .chat-msg-time { text-align: left; }
+    .support-chat-form {
+      display: flex; gap: 8px;
+      padding: 8px 10px 10px;
+      border-top: 1px solid var(--win-line);
+      background: var(--win);
+    }
+    .support-chat-input {
+      flex: 1; font: inherit; color: var(--ink);
+      background: rgba(255,255,255,.55);
+      border: 1px solid var(--win-line);
+      border-radius: 10px;
+      padding: 10px 12px; outline: none;
+      -webkit-user-select: text; user-select: text;
+    }
+    :root[data-theme="dark"] .support-chat-input { background: rgba(255,255,255,.08); }
+    .support-chat-send {
+      flex: none;
+      border: 0; border-radius: 10px;
+      padding: 0 16px;
+      background: var(--you); color: #fff;
+      cursor: pointer; font: inherit; font-weight: 600;
+    }
+    .support-chat-send:hover { background: var(--you-deep); }
+    :root[data-theme="dark"] .support-chat-send:hover { background: var(--you-2); }
+
+    .chats-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 6px 12px;
+    }
+    .chat-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .chat-row:hover, .chat-row:focus { background: var(--row-hover); }
+    .chat-row .chat-main { flex: 1; min-width: 0; }
+    .chat-row .chat-name { font-weight: 600; }
+    .chat-row .chat-last {
+      color: var(--ink-soft); font-size: 12.5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .chat-row .chat-side {
+      display: grid; justify-items: end; gap: 4px;
+      flex: none;
+    }
+    .chat-row .chat-time {
+      color: var(--ink-soft); font-size: 11px;
+    }
+
+    /* ── Чат: панель ввода, медиа, голосовые, кружки ── */
+    .chat-view { position: relative; }
+    .chat-composer { align-items: center; gap: 4px; }
+    .chat-composer .support-chat-input { min-width: 0; }
+    .chat-tool {
+      flex: none; width: 36px; height: 36px; padding: 0;
+      border: 0; border-radius: 10px; background: transparent; color: var(--you);
+      display: grid; place-items: center; cursor: pointer;
+      transition: background .15s;
+    }
+    .chat-tool:hover { background: var(--row-hover); }
+    .chat-tool svg { width: 22px; height: 22px; }
+    .chat-composer .support-chat-send { width: 40px; height: 38px; padding: 0; display: grid; place-items: center; }
+    .chat-composer .support-chat-send svg { width: 20px; height: 20px; }
+
+    .chat-msg-author { display: block; font-size: 11.5px; font-weight: 700; color: var(--you-soft); margin-bottom: 2px; }
+    .chat-msg.has-media { padding: 4px; }
+    .chat-msg.has-media .chat-msg-author { padding: 2px 6px 0; }
+    .chat-msg.has-media .chat-msg-time { padding: 0 6px 2px; }
+    .chat-msg.is-pending { opacity: .6; }
+    .chat-photo, .chat-video {
+      display: block; max-width: min(260px, 100%); max-height: 320px;
+      min-width: 120px; min-height: 90px;
+      border-radius: 11px; background: rgba(0,0,0,.18); object-fit: cover;
+    }
+    .chat-photo { cursor: zoom-in; }
+    .chat-caption { padding: 4px 6px 0; }
+    .chat-voice { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
+    .chat-voice audio { width: 220px; max-width: 100%; height: 38px; }
+    .chat-voice-dur { font-size: 11px; opacity: .8; font-variant-numeric: tabular-nums; }
+    .chat-msg.is-circle { background: transparent !important; padding: 0; }
+    .chat-circle-wrap {
+      position: relative; width: 200px; height: 200px; border-radius: 50%;
+      overflow: hidden; cursor: pointer; background: #090C0B;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    }
+    .chat-circle { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .chat-circle-dur, .chat-circle-sound {
+      position: absolute; font-size: 11px; color: #fff;
+      background: rgba(0,0,0,.5); border-radius: 8px; padding: 1px 6px;
+    }
+    .chat-circle-dur { left: 50%; bottom: 10px; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+    .chat-circle-sound { right: 26px; bottom: 30px; }
+    .chat-circle-wrap.is-playing .chat-circle-sound { display: none; }
+    .chat-msg.is-circle .chat-msg-time { color: var(--ink-soft); }
+    .chat-media-fallback {
+      display: inline-block; margin: 4px 6px; padding: 8px 12px; border-radius: 10px;
+      background: rgba(0,0,0,.18); color: inherit; font-weight: 600; text-decoration: none;
+    }
+    .chat-media-fallback:hover { background: rgba(0,0,0,.28); }
+    /* Карточка файла (PDF, документ, архив) */
+    .chat-file {
+      display: flex; align-items: center; gap: 10px;
+      min-width: 200px; max-width: 280px; padding: 8px 10px 8px 8px; border-radius: 11px;
+      background: rgba(0,0,0,.14); color: inherit; text-decoration: none; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; transition: background .15s;
+    }
+    .chat-file:hover { background: rgba(0,0,0,.22); }
+    .chat-msg.them .chat-file { background: rgba(120,128,160,.16); }
+    .chat-msg.them .chat-file:hover { background: rgba(120,128,160,.26); }
+    .chat-file-ico {
+      flex: none; width: 40px; height: 46px; border-radius: 8px;
+      display: grid; place-items: center; color: #fff;
+      font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+    }
+    .chat-file-main { display: grid; gap: 2px; min-width: 0; }
+    .chat-file-name { font-weight: 650; font-size: 13px; line-height: 1.25; word-break: break-word;
+      display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .chat-file-size { font-size: 11.5px; opacity: .75; }
+
+    .chat-recbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px 10px; border-top: 1px solid var(--win-line); background: var(--win);
+    }
+    .chat-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #E0443A; animation: rec-blink 1s infinite; }
+    @keyframes rec-blink { 50% { opacity: .25; } }
+    .chat-rec-label { font-weight: 600; }
+    .chat-rec-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+    .chat-recbar .btn { padding: 6px 12px; font-size: 13px; }
+    .chat-rec-preview {
+      position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%);
+      width: 220px; height: 220px; border-radius: 50%; overflow: hidden;
+      background: #000; box-shadow: 0 12px 32px rgba(0,0,0,.5); z-index: 3;
+    }
+    .chat-rec-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    .chat-rec-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 4px #E0443A; pointer-events: none; }
+
+    .photo-viewer {
+      position: fixed; inset: 0; z-index: 200; padding: 20px;
+      background: rgba(5,6,14,.92); display: grid; place-items: center; cursor: zoom-out;
+    }
+    .photo-viewer img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+    .group-chat-avatar { border-radius: 12px; }
+
+    .auth-screen {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: flex-start;
+      padding: max(24px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+      background:
+        radial-gradient(1200px 700px at 15% 30%, rgba(var(--you-rgb), .35), transparent 60%),
+        radial-gradient(900px 600px at 100% 100%, rgba(6, 12, 10, .9), transparent 65%),
+        #090C0B;
+      overflow: hidden;
+    }
+    .auth-screen[hidden] { display: none !important; }
+    /* Полёт к Земле: в конце затемнение, потом экран входа растворяется и открывает карту */
+    .auth-screen { transition: opacity .8s ease; }
+    .auth-screen::after {
+      content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none;
+      background: radial-gradient(circle at 50% 50%, #0E1412 0%, #050807 70%);
+      opacity: 0; transition: opacity .7s ease-in;
+    }
+    .auth-screen.is-diving::after { opacity: 1; }
+    .auth-screen.is-diving .auth-card { pointer-events: none; }
+    .auth-screen.is-leaving { opacity: 0; pointer-events: none; }
+
+    .globe-canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 0; pointer-events: none;
+      display: block;
+    }
+
+    .auth-card {
+      position: relative; z-index: 2;
+      width: min(400px, 100%);
+      max-height: calc(100dvh - 48px);
+      overflow-y: auto; overflow-x: hidden;
+      background: rgba(6, 12, 10, 0.62);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      backdrop-filter: blur(40px) saturate(180%);
+      border: 1px solid rgba(var(--you-rgb), 0.14);
+      border-radius: 22px;
+      box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.55),
+        0 0 0 0.5px rgba(var(--you-rgb), 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      padding: 30px 26px 22px;
+      /* Появляется из крестика на глобусе (анимирует JS) — до этого скрыта */
+      opacity: 0;
+      will-change: transform, opacity;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(var(--you-rgb), .25) transparent;
+      color: #EEF2EF;
+    }
+    .auth-card::-webkit-scrollbar { width: 6px; }
+    .auth-card::-webkit-scrollbar-thumb { background: rgba(var(--you-rgb), .25); border-radius: 3px; }
+
+    @keyframes auth-in {
+      from { opacity: 0; transform: translateY(14px) scale(.98); }
+      to   { opacity: 1; transform: none; }
+    }
+    .auth-logo {
+      display: grid; place-items: center;
+      width: 64px; height: 64px; margin: 0 auto 12px;
+      border-radius: 18px;
+      background: linear-gradient(var(--you-2), var(--you));
+      color: #fff; font-size: 30px; font-weight: 800;
+      box-shadow: 0 10px 24px rgba(var(--you-rgb), .45);
+    }
+    .auth-logo-img { width: 84px; height: 84px; padding: 0; object-fit: cover; background: none; display: block; }
+    .auth-title { margin: 0 0 4px; text-align: center; font-size: 20px; font-weight: 700; color: #EEF2EF; }
+    .auth-sub { margin: 0 0 18px; text-align: center; color: #8D9792; font-size: 13px; }
+    .auth-sub:empty { display: none; margin: 0; }
+    .auth-form { display: grid; gap: 12px; }
+    .auth-field { display: grid; gap: 6px; }
+    .auth-label { font-size: 12px; font-weight: 600; color: var(--you-soft); padding-left: 4px; }
+    .auth-input {
+      width: 100%; font: inherit; color: #EEF2EF;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(var(--you-rgb), 0.14);
+      border-radius: 10px;
+      padding: 11px 12px; outline: none;
+      -webkit-user-select: text; user-select: text;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .auth-input::placeholder { color: #69706C; }
+    .auth-input:focus {
+      border-color: var(--you);
+      box-shadow: 0 0 0 3px rgba(var(--you-rgb), .28);
+      background: rgba(255,255,255,.08);
+    }
+    .auth-input.is-invalid { border-color: #C0392B; box-shadow: 0 0 0 3px rgba(192,57,43,.22); }
+    .auth-error {
+      color: #FF8A7A; font-size: 12.5px;
+      padding: 8px 10px; border-radius: 8px;
+      background: rgba(192,57,43,.14);
+    }
+    .auth-hint { font-size: 12px; color: #8D9792; padding-left: 4px; }
+    .auth-hint.is-invalid { color: #FF8A7A; }
+    .auth-btn {
+      width: 100%; border: 0; border-radius: 12px;
+      padding: 12px 16px;
+      font: inherit; font-weight: 650; font-size: 14px;
+      cursor: pointer;
+      background: linear-gradient(180deg, var(--you), var(--you));
+      color: #fff;
+      transition: filter .15s, transform .05s, opacity .15s;
+      box-shadow: 0 8px 20px rgba(var(--you-rgb), .35);
+    }
+    .auth-btn:hover { filter: brightness(1.08); }
+    .auth-btn:active { transform: scale(.99); }
+    .auth-btn[disabled] { opacity: .55; cursor: default; }
+    .auth-links {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-top: 4px; flex-wrap: wrap;
+    }
+    .auth-link {
+      border: 0; background: transparent; color: var(--you-soft);
+      font: inherit; font-weight: 600; cursor: pointer;
+      padding: 6px 4px; border-radius: 6px;
+    }
+    .auth-link:hover { text-decoration: underline; color: var(--you-soft); }
+    .auth-divider {
+      display: flex; align-items: center; gap: 10px;
+      color: #8D9792; font-size: 12px; margin: 4px 0;
+    }
+    .auth-divider::before, .auth-divider::after {
+      content: ""; flex: 1; height: 1px; background: rgba(var(--you-rgb), .14);
+    }
+    .auth-steps { display: flex; gap: 6px; justify-content: center; margin: 0 0 14px; }
+    .auth-step-dot {
+      width: 26px; height: 5px; border-radius: 3px;
+      background: rgba(120,128,160,.3);
+      transition: background .2s, transform .2s;
+    }
+    .auth-step-dot.active { background: var(--you); transform: scaleY(1.3); }
+    .auth-step-dot.done   { background: rgba(var(--you-rgb), .55); }
+    .auth-step-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; text-align: center; color: #EEF2EF; }
+    .auth-step-sub { font-size: 12.5px; color: #8D9792; text-align: center; margin: 0 0 16px; }
+    .gender-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .gender-opt {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 14px 10px; border-radius: 12px;
+      border: 2px solid rgba(var(--you-rgb), .14);
+      background: rgba(255,255,255,.04);
+      cursor: pointer;
+      font: inherit; color: #EEF2EF;
+    }
+    .gender-opt[aria-pressed="true"] { border-color: var(--you); background: rgba(var(--you-rgb), .16); }
+    .gender-opt .gender-emoji { font-size: 26px; }
+    .gender-opt .gender-label { font-size: 13px; font-weight: 600; }
+    .auth-avatar-row { display: flex; align-items: center; gap: 14px; }
+    .auth-avatar-preview {
+      flex: none; width: 84px; height: 84px; border-radius: 50%;
+      display: grid; place-items: center;
+      color: #fff; font-weight: 700; font-size: 30px;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
+      background-size: cover; background-position: center; overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    .auth-avatar-side { display: grid; gap: 8px; justify-items: start; }
+    .username-status {
+      font-size: 12px; padding-left: 4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .username-status.ok { color: #4AD07A; }
+    .username-status.busy { color: #FF8A7A; }
+    .username-status.checking { color: #8D9792; }
+    .username-status .spinner {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 2px solid currentColor; border-top-color: transparent;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .auth-age-row { display: flex; align-items: center; gap: 12px; }
+    .auth-age-row input[type="range"] { flex: 1; accent-color: var(--you); }
+    .auth-age-value { min-width: 42px; text-align: center; font-weight: 700; font-size: 15px; color: #EEF2EF; }
+
+    .auth-card .edit-input,
+    .auth-card .edit-textarea {
+      color: #EEF2EF;
+      background: rgba(255,255,255,.05);
+      border-color: rgba(var(--you-rgb), 0.14);
+    }
+    .auth-card .edit-input:focus,
+    .auth-card .edit-textarea:focus {
+      background: rgba(255,255,255,.08);
+      box-shadow: 0 0 0 3px rgba(var(--you-rgb), .28);
+      border-color: var(--you);
+    }
+    .auth-card .username-wrap {
+      background: rgba(255,255,255,.05);
+      border-color: rgba(var(--you-rgb), .14);
+    }
+    .auth-card .username-wrap:focus-within {
+      background: rgba(255,255,255,.08);
+      border-color: var(--you);
+      box-shadow: 0 0 0 3px rgba(var(--you-rgb), .28);
+    }
+    .auth-card .username-prefix { color: var(--you-soft); }
+    .auth-card .btn {
+      background: rgba(255,255,255,.08);
+      color: #EEF2EF;
+    }
+    .auth-card .btn:hover { background: rgba(255,255,255,.14); }
+    .auth-card .btn-ghost { background: transparent; color: var(--you-soft); }
+    .auth-card .btn-ghost:hover { background: transparent; text-decoration: underline; }
+
+    @media (max-width: 720px) {
+      .auth-screen { align-items: flex-end; justify-content: center; padding: 12px; }
+      .auth-card {
+        width: 100%;
+        max-height: 74dvh;
+        border-radius: 22px;
+        padding: 22px 20px 18px;
+      }
+    }
+
+    #map {
+      background: var(--land);
+      will-change: transform;
+      transform: translateZ(0);
+      contain: strict;
+    }
+    :fullscreen, :-webkit-full-screen { background: var(--land); }
+    :fullscreen .map-app, :-webkit-full-screen .map-app,
+    :fullscreen #map, :-webkit-full-screen #map {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    @media (max-width: 900px) {
+      .window {
+        inset: calc(38px + env(safe-area-inset-top, 0px)) 8px calc(96px + env(safe-area-inset-bottom, 0px)) 8px;
+        width: calc(100% - 16px);
+        height: auto;
+        max-height: calc(100dvh - 38px - 96px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        border-radius: 16px;
+      }
+      .win-body { padding-bottom: env(safe-area-inset-bottom, 0px); }
+    }
+
+    @media (max-width: 640px) {
+      .menubar {
+        height: calc(26px + env(safe-area-inset-top, 0px));
+        font-size: 12px;
+        padding: env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
+      }
+
+      #notif-btn, #settings-btn, #filter-btn {
+        width: 38px; height: 38px;
+        top: calc(34px + env(safe-area-inset-top, 0px));
+      }
+      #notif-btn { left: 10px; }
+      #settings-btn { right: 10px; }
+      #filter-btn { right: 56px; }
+      #notif-btn svg, #settings-btn svg, #filter-btn svg { width: 18px; height: 18px; }
+
+      .geo-btn {
+        width: 38px; height: 38px;
+        right: 10px;
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      }
+      .geo-btn svg { width: 18px; height: 18px; }
+
+      .dock-wrap {
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        padding: 0 8px;
+        box-sizing: border-box;
+      }
+      .dock {
+        gap: 12px;
+        padding: 7px 12px;
+        border-radius: 22px;
+        max-width: calc(100vw - 16px);
+        box-sizing: border-box;
+      }
+      .dock-item { width: 48px; height: 48px; }
+      .dock-btn { width: 48px; height: 48px; border-radius: 12px; }
+      .tip { display: none; }
+
+      .window {
+        inset: calc(34px + env(safe-area-inset-top, 0px)) 6px calc(80px + env(safe-area-inset-bottom, 0px)) 6px;
+        width: calc(100% - 12px);
+        height: auto;
+        max-height: calc(100dvh - 34px - 80px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        border-radius: 14px;
+      }
+      .win-head {
+        height: 40px;
+        padding: 0 10px;
+        grid-template-columns: 40px 1fr 40px;
+      }
+      .win-back { width: 30px; height: 30px; }
+      .win-back svg { width: 18px; height: 18px; }
+      .win-title { font-size: 12.5px; }
+
+      .edit-form { padding: 14px 12px 16px; gap: 12px; }
+      .rows { padding: 4px; }
+      .row { padding: 9px 10px; gap: 10px; }
+      .profile-head { padding: 18px 14px 10px; }
+      .profile-head .avatar { width: 72px; height: 72px; font-size: 28px; }
+
+      .places-toolbar { padding: 6px 8px; }
+      .sub-toolbar { padding: 6px 10px; }
+      .feed { padding: 8px 8px 20px; gap: 10px; }
+      .grid { gap: 2px; padding: 2px; }
+
+      .avatar-editor { padding: 12px 12px 16px; gap: 14px; }
+      .avatar-stage { height: 200px; }
+
+      .group-form { padding: 12px; gap: 12px; }
+      .user-profile-view { padding: 14px 12px 18px; gap: 12px; }
+      .user-profile-avatar { width: 108px; height: 108px; }
+
+      .post-head { padding: 8px 10px; }
+      .post-body { padding: 8px 10px 10px; }
+
+      .auth-screen { padding: 10px; }
+      .auth-card {
+        width: 100%;
+        max-height: calc(100dvh - 20px);
+        padding: 20px 16px 16px;
+        border-radius: 18px;
+      }
+      .auth-logo { width: 56px; height: 56px; font-size: 26px; margin-bottom: 10px; }
+      .auth-title { font-size: 18px; }
+      .auth-sub { font-size: 12px; margin-bottom: 14px; }
+      .auth-input { padding: 10px 12px; }
+      .auth-btn { padding: 11px 14px; }
+      .auth-steps { gap: 5px; margin-bottom: 12px; }
+      .auth-step-dot { width: 22px; height: 4px; }
+      .auth-step-title { font-size: 14px; }
+      .auth-step-sub { font-size: 12px; margin-bottom: 12px; }
+
+      .gender-row { gap: 8px; }
+      .gender-opt { padding: 12px 8px; }
+      .gender-opt .gender-emoji { font-size: 22px; }
+      .gender-opt .gender-label { font-size: 12px; }
+
+      .auth-age-row { gap: 10px; }
+
+      .modal { width: calc(100vw - 24px); padding: 16px 14px 12px; }
+      .popover { min-width: 180px; }
+
+      .memory-marker { width: 72px; height: 72px; }
+      .memory-card { width: 52px; height: 58px; }
+
+      .wish-marker { width: 190px; height: 120px; }
+      .wish-cloud-content { font-size: 11.5px; }
+    }
+
+    @media (max-width: 380px) {
+      .dock { gap: 8px; padding: 6px 10px; }
+      .dock-item { width: 44px; height: 44px; }
+      .dock-btn { width: 44px; height: 44px; }
+      .auth-card { padding: 16px 14px 14px; }
+      .auth-logo { width: 48px; height: 48px; font-size: 22px; }
+      .auth-title { font-size: 17px; }
+    }
+
+    @media (max-height: 480px) and (orientation: landscape) {
+      .menubar { height: calc(22px + env(safe-area-inset-top, 0px)); font-size: 11px; }
+      #notif-btn, #settings-btn, #filter-btn {
+        width: 34px; height: 34px;
+        top: calc(28px + env(safe-area-inset-top, 0px));
+      }
+      #notif-btn svg, #settings-btn svg, #filter-btn svg { width: 16px; height: 16px; }
+      #filter-btn { right: 56px; }
+      .geo-btn {
+        width: 34px; height: 34px;
+        bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+      }
+      .geo-btn svg { width: 16px; height: 16px; }
+      .dock-wrap { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+      .dock { gap: 10px; padding: 6px 10px; }
+      .dock-item { width: 42px; height: 42px; }
+      .dock-btn { width: 42px; height: 42px; }
+      .window {
+        inset: calc(28px + env(safe-area-inset-top, 0px)) 6px calc(64px + env(safe-area-inset-bottom, 0px)) 6px;
+        max-height: calc(100dvh - 28px - 64px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      }
+      /* Телефон лёжа: карточка слева, глобус справа — как на компьютере */
+      .auth-screen {
+        align-items: center; justify-content: flex-start;
+        padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+      }
+      .auth-card {
+        width: min(360px, 48vw);
+        max-height: calc(100dvh - 16px);
+        padding: 14px 16px 12px;
+      }
+      .auth-logo { width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px; }
+      .auth-title { font-size: 16px; margin-bottom: 2px; }
+      .auth-sub { font-size: 11.5px; margin-bottom: 10px; }
+      .auth-steps { margin-bottom: 8px; }
+    }
+
+    /* ── Вход на вертикальном экране (телефоны и планшеты стоя) ──
+       Глобус сверху (раскладку считает JS), карточка снизу по центру, с учётом «чёлки» и полоски «домой». */
+    @media (orientation: portrait) {
+      .auth-screen {
+        align-items: flex-end; justify-content: center;
+        padding:
+          max(12px, env(safe-area-inset-top, 0px))
+          max(12px, env(safe-area-inset-right, 0px))
+          max(14px, env(safe-area-inset-bottom, 0px))
+          max(12px, env(safe-area-inset-left, 0px));
+      }
+      .auth-card {
+        width: min(460px, 100%);
+        max-height: 56dvh;
+        padding: 20px 18px 16px;
+        border-radius: 22px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+      .auth-logo { width: 52px; height: 52px; font-size: 24px; margin-bottom: 8px; }
+      .auth-logo-img { width: 64px; height: 64px; }
+      .auth-title { font-size: 18px; }
+      .auth-sub { margin-bottom: 14px; }
+      .auth-steps { margin-bottom: 10px; }
+      .auth-step-sub { margin-bottom: 12px; }
+      /* 16px в полях — иначе iPhone приближает страницу при фокусе */
+      .auth-input, .auth-card .edit-input, .auth-card .edit-textarea { font-size: 16px; }
+      .auth-card .edit-textarea { min-height: 72px; }
+      .auth-btn, .auth-link { min-height: 44px; }
+    }
+    /* Планшет стоя: карточка шире и приподнята над нижним краем */
+    @media (orientation: portrait) and (min-width: 600px) {
+      .auth-screen { padding-bottom: max(40px, env(safe-area-inset-bottom, 0px)); }
+      .auth-card { max-height: 50dvh; padding: 26px 26px 20px; }
+      .auth-logo-img { width: 76px; height: 76px; }
+      .auth-title { font-size: 20px; }
+    }
+    /* ═══════════════════ ДИЗАЙН GROUPIES ═══════════════════
+       Плавающие элементы поверх карты, плотные поверхности, крупные скругления,
+       упругая реакция на нажатие. Блок стоит в конце и переопределяет старые правила. */
+
+    h1, h2, h3, .win-title, .profile-name, .user-profile-name, .auth-title { letter-spacing: -0.015em; }
+
+    /* ── Затемнение под окном ── */
+    .scrim {
+      position: fixed; inset: 0; z-index: 24;
+      background: rgba(6, 12, 10, .42);
+      opacity: 0; pointer-events: none; transition: opacity .3s ease;
+    }
+    body.app-window .scrim { opacity: 1; pointer-events: auto; }
+    body.auth-locked .scrim { display: none; }
+
+    /* ── Логотип-«таблетка» слева сверху ── */
+    .menubar {
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      left: max(12px, env(safe-area-inset-left, 0px)); right: auto;
+      height: 46px; padding: 0 6px 0 5px; gap: 4px;
+      border-radius: 999px;
+      background: var(--glass); border: 1px solid var(--glass-edge);
+      -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: 0 10px 28px var(--glass-shadow);
+      font-size: 15px;
+    }
+    body.app-window .menubar { opacity: 0; pointer-events: none; transform: translateY(-8px); }
+    .menubar { transition: opacity .25s ease, transform .3s var(--ease); }
+    .menubar .brand { gap: 8px; padding-right: 6px; }
+    .menubar .brand img { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--lime); }
+    .menubar .brand span { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+    .menubar-right { gap: 2px; }
+    #offline-badge {
+      font-size: 11.5px; font-weight: 700; color: #fff; background: var(--hot);
+      padding: 3px 9px; border-radius: 999px;
+    }
+    #install-btn {
+      font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+      background: var(--you); color: #fff;
+    }
+    #install-btn:hover { background: var(--you); filter: brightness(1.1); }
+    #fs-btn { width: 34px; height: 34px; border-radius: 50%; color: var(--ink-soft); transition: background .2s, color .2s, transform .25s var(--spring); }
+    #fs-btn:hover { background: var(--row-hover); color: var(--you); }
+    #fs-btn:active { transform: scale(.88); }
+
+    /* ── Круглые кнопки поверх карты ── */
+    .round-btn, #notif-btn, #settings-btn, #filter-btn, .geo-btn {
+      width: 46px; height: 46px; border-radius: 50%;
+      background: var(--glass); border: 1px solid var(--glass-edge); color: var(--ink);
+      -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: 0 10px 28px var(--glass-shadow);
+      transition: transform .3s var(--spring), background .2s, color .2s, box-shadow .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #notif-btn, #settings-btn, #filter-btn { top: calc(12px + env(safe-area-inset-top, 0px)); left: auto; }
+    #settings-btn { right: max(12px, env(safe-area-inset-right, 0px)); }
+    #filter-btn   { right: calc(max(12px, env(safe-area-inset-right, 0px)) + 54px); }
+    #notif-btn    { right: calc(max(12px, env(safe-area-inset-right, 0px)) + 108px); }
+    .round-btn svg, #notif-btn svg, #settings-btn svg, #filter-btn svg, .geo-btn svg { width: 21px; height: 21px; }
+    #notif-btn:hover, #settings-btn:hover, #filter-btn:hover, .geo-btn:hover { transform: translateY(-2px); color: var(--you); }
+    #notif-btn:active, #settings-btn:active, #filter-btn:active, .geo-btn:active { transform: scale(.86); transition-duration: .12s; }
+    #notif-btn.is-active, #settings-btn.is-active, #filter-btn.is-active, .geo-btn.is-active {
+      background: var(--you); color: #fff; border-color: transparent;
+      box-shadow: 0 10px 26px rgba(var(--you-rgb), .38);
+    }
+    #notif-btn .badge {
+      top: -3px; right: -3px; min-width: 19px; height: 19px; line-height: 19px; border-radius: 10px;
+      background: var(--hot); font-weight: 800; font-size: 10.5px;
+      box-shadow: 0 0 0 2.5px var(--land);
+    }
+    #filter-btn .filter-dot { top: 8px; right: 8px; width: 9px; height: 9px; background: var(--lime); box-shadow: 0 0 0 2px var(--glass); }
+    .geo-btn { right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(100px + env(safe-area-inset-bottom, 0px)); width: 50px; height: 50px; }
+
+    /* ── Таб-панель ── */
+    .dock-wrap { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); padding: 0 12px; }
+    .dock {
+      gap: 4px; padding: 6px; align-items: center;
+      border-radius: 999px;
+      background: #15131F; border: 1px solid rgba(255, 255, 255, .07);
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+      box-shadow: 0 18px 44px rgba(6, 12, 10, .38), inset 0 1px 0 rgba(255, 255, 255, .05);
+    }
+    :root[data-theme="dark"] .dock { background: #1A201E; }
+    .dock-item { width: auto; height: auto; }
+    .dock-item::after { display: none; }
+    .dock-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: auto; height: 50px; min-width: 50px; padding: 0 14px;
+      border-radius: 999px; color: rgba(242, 240, 250, .6);
+      transform: none;
+      transition: background .35s var(--ease), color .25s, padding .35s var(--ease), transform .3s var(--spring);
+    }
+    .dock-btn svg { width: 23px; height: 23px; flex: none; filter: none; }
+    .dock-btn:hover { color: #fff; }
+    .dock-btn:active { transform: scale(.88); transition-duration: .12s; }
+    .dock-btn:active svg { filter: none; }
+    .dock-btn:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+    .dock-label {
+      max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+      font-weight: 800; font-size: 14px; letter-spacing: -0.01em;
+      transition: max-width .4s var(--ease), opacity .25s ease, margin .4s var(--ease);
+    }
+    .dock-item[data-open="true"] .dock-btn { background: var(--lime); color: var(--lime-ink); padding: 0 18px 0 15px; }
+    .dock-item[data-open="true"] .dock-label { max-width: 110px; opacity: 1; margin-left: 8px; }
+    .tip { display: none !important; }
+
+    /* ── Окно ── */
+    .window {
+      inset: calc(16px + env(safe-area-inset-top, 0px)) 0 calc(96px + env(safe-area-inset-bottom, 0px)) 0;
+      width: min(580px, calc(100% - 24px));
+      height: min(680px, calc(100dvh - 116px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+      border-radius: 28px; background: var(--win); border: 1px solid var(--win-line);
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+      box-shadow: 0 30px 90px rgba(6, 12, 10, .35), 0 0 0 .5px rgba(0, 0, 0, .06);
+      transform: translateY(26px) scale(.97);
+      transition: opacity .22s ease, transform .45s var(--ease);
+    }
+    .window.is-open { transform: none; }
+    .win-head { height: 62px; padding: 0 12px; grid-template-columns: 46px 1fr 46px; border-bottom: 0; }
+    .win-back {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--field); color: var(--ink);
+      transition: background .2s, transform .3s var(--spring);
+    }
+    .win-back:hover { background: var(--row-hover); color: var(--you); }
+    .win-back:active { transform: scale(.86); }
+    .win-title { font-size: 17px; font-weight: 800; }
+
+    /* ── Списки, строки, карточки ── */
+    .rows { padding: 6px 10px 10px; }
+    .row, .person-card, .group-card, .chat-row { border-radius: 16px; }
+    .row { padding: 12px 14px; }
+    .row:hover, .person-card:hover, .chat-row:hover, .chat-row:focus { background: var(--row-hover); }
+    .row-name, .person-card .person-name, .chat-row .chat-name, .group-name { font-weight: 700; }
+    .chev { color: var(--ink-soft); opacity: .6; font-size: 18px; }
+    .avatar, .group-avatar, .notif-icon { box-shadow: none; }
+    .notif-icon { border-radius: 14px; }
+    .group-avatar, .group-chat-avatar { border-radius: 14px; }
+    .notif-unread::before { background: var(--lime); box-shadow: 0 0 0 2px var(--win); width: 8px; height: 8px; margin-top: -4px; }
+    .sub-toolbar {
+      padding: 4px 16px 10px; border-bottom: 0; background: var(--win);
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    .sub-toolbar-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .icon-btn {
+      width: 38px; height: 38px; border-radius: 13px;
+      background: var(--lime); color: var(--lime-ink);
+      box-shadow: 0 6px 16px rgba(var(--lime-rgb), .3);
+      transition: transform .3s var(--spring);
+    }
+    .icon-btn:active { transform: scale(.86); }
+    .profile-head { padding: 22px 16px 16px; }
+    .profile-name { font-size: 22px; font-weight: 800; }
+    .user-profile-name { font-weight: 800; font-size: 22px; }
+    .user-profile-section-title, .avatar-group-title { font-weight: 800; letter-spacing: .07em; }
+    .empty-msg, .notif-empty, .wish-empty, .places-empty { color: var(--ink-soft); }
+
+    /* ── Кнопки ── */
+    .btn {
+      border-radius: 14px; padding: 10px 16px; font-weight: 700;
+      background: var(--field); color: var(--ink);
+      transition: background .2s, transform .3s var(--spring), filter .2s;
+    }
+    .btn:hover { background: var(--row-hover); }
+    .btn:active { transform: scale(.95); transition-duration: .1s; }
+    .btn-primary { background: var(--you); color: #fff; box-shadow: 0 8px 20px rgba(var(--you-rgb), .28); }
+    .btn-primary:hover { background: var(--you); filter: brightness(1.08); }
+    .btn-danger { background: #E5484D; color: #fff; }
+    .btn-danger:hover { background: #E5484D; filter: brightness(1.08); }
+    .btn-ghost { color: var(--you); }
+    .friend-add-btn { border-radius: 12px; padding: 8px 14px; font-weight: 700; background: var(--you); }
+    .seg-opt { border-radius: 16px; border-width: 1.5px; font-weight: 700; transition: border-color .2s, background .2s, transform .3s var(--spring); }
+    .seg-opt:active { transform: scale(.96); }
+    .seg-opt[aria-pressed="true"] { border-color: var(--you); background: var(--row-hover); }
+    .switch { width: 46px; height: 28px; border-radius: 14px; background: rgba(120, 116, 150, .35); }
+    .switch::after { top: 3px; left: 3px; width: 22px; height: 22px; transition: transform .3s var(--spring); }
+    .switch[aria-checked="true"] { background: var(--you); }
+    .switch[aria-checked="true"]::after { transform: translateX(18px); }
+
+    /* ── Поля ввода ── */
+    .edit-input, .edit-textarea, .username-wrap, .support-chat-input {
+      border-radius: 14px; background: var(--field); border: 1.5px solid transparent;
+    }
+    .edit-input:focus, .edit-textarea:focus, .username-wrap:focus-within, .support-chat-input:focus {
+      background: var(--win); border-color: var(--you); box-shadow: 0 0 0 4px rgba(var(--you-rgb), .18);
+    }
+    .edit-label { font-weight: 700; }
+    .people-picker { border-radius: 16px; background: var(--field); border: 0; }
+
+    /* ── Чаты ── */
+    .chat-msg { border-radius: 20px; padding: 9px 14px; font-size: 14px; }
+    .chat-msg.me { background: var(--you); border-bottom-right-radius: 6px; }
+    .chat-msg.them { background: var(--field); border-bottom-left-radius: 6px; }
+    .chat-msg.has-media { padding: 4px; }
+    .chat-msg-author { color: var(--you); font-weight: 800; }
+    .chat-msg.me .chat-msg-author { color: #fff; }
+    .support-chat-head { font-weight: 700; }
+    .support-chat-form { border-top: 0; padding: 8px 12px 12px; gap: 6px; background: var(--win); }
+    .support-chat-input { border-radius: 999px; padding: 11px 16px; }
+    .support-chat-send { border-radius: 999px; background: var(--you); transition: transform .3s var(--spring), filter .2s; }
+    .support-chat-send:hover { background: var(--you); filter: brightness(1.08); }
+    .support-chat-send:active { transform: scale(.88); }
+    .chat-composer .support-chat-send { width: 44px; height: 44px; border-radius: 50%; }
+    .chat-tool { border-radius: 50%; transition: background .2s, transform .3s var(--spring); }
+    .chat-tool:active { transform: scale(.86); }
+    .chat-recbar { border-top: 0; }
+
+    /* ── Модальные окна, меню, попапы ── */
+    .modal { border-radius: 26px; background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none; padding: 22px 20px 16px; }
+    .modal-title { font-weight: 800; font-size: 17px; }
+    .modal-backdrop { background: rgba(6, 12, 10, .5); }
+    .popover { border-radius: 18px; background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .popover .pop-item { border-radius: 12px; font-weight: 600; }
+    .map-popup { border-radius: 20px; background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .map-popup .pop-img { border-radius: 14px; }
+    .post, .wish-card { border-radius: 20px; background: var(--win-2); border-color: var(--win-line); }
+    .places-toolbar { background: var(--win); border-bottom: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .view-toggle { border-radius: 14px; background: var(--field); }
+    .view-btn { border-radius: 11px; }
+    .view-btn[aria-pressed="true"] { background: var(--win); color: var(--you); box-shadow: 0 2px 8px rgba(6, 12, 10, .1); }
+
+    /* ── Маркеры на карте ── */
+    .user-badge-inner { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--win); box-shadow: 0 6px 16px rgba(6, 12, 10, .22); }
+    .user-badge::after { background: var(--win); }
+    .user-badge-status { background: var(--lime); }
+    .user-badge-name { font-weight: 700; }
+
+    /* ── Экран входа ── */
+    .auth-screen {
+      background:
+        radial-gradient(1100px 700px at 12% 25%, rgba(var(--you-rgb), .30), transparent 60%),
+        radial-gradient(800px 560px at 100% 100%, rgba(var(--lime-rgb), .07), transparent 62%),
+        #090C0B;
+    }
+    .auth-card {
+      border-radius: 28px; background: rgba(14, 19, 17, .74);
+      border-color: rgba(255, 255, 255, .08);
+    }
+    .auth-logo { border-radius: 20px; background: linear-gradient(145deg, var(--you-2), var(--you-deep)); box-shadow: 0 12px 28px rgba(var(--you-rgb), .45); }
+    .auth-logo-img { border-radius: 50%; box-shadow: 0 0 0 3px var(--lime), 0 14px 30px rgba(0, 0, 0, .45); }
+    .auth-title { font-weight: 800; }
+    .auth-input { border-radius: 14px; background: rgba(255, 255, 255, .06); border: 1.5px solid transparent; }
+    .auth-input:focus { border-color: var(--you); box-shadow: 0 0 0 4px rgba(var(--you-rgb), .22); }
+    .auth-btn {
+      border-radius: 16px; background: var(--lime); color: var(--lime-ink); font-weight: 800;
+      box-shadow: 0 12px 30px rgba(var(--lime-rgb), .22);
+      transition: transform .3s var(--spring), filter .2s;
+    }
+    .auth-btn:hover { filter: brightness(1.05); }
+    .auth-btn:active { transform: scale(.96); }
+    .auth-link { color: var(--you-soft); }
+    .auth-step-dot.active { background: var(--lime); }
+    .auth-step-dot.done { background: rgba(var(--lime-rgb), .45); }
+    .gender-opt { border-radius: 18px; }
+    .gender-opt[aria-pressed="true"] { border-color: var(--lime); background: rgba(var(--lime-rgb), .1); }
+
+    /* ── Телефоны ── */
+    @media (max-width: 640px) {
+      .menubar { height: 42px; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px)); padding: 0 4px 0 4px; }
+      .menubar .brand img { width: 32px; height: 32px; }
+      .menubar .brand span { font-size: 15px; }
+      #fs-btn { display: none; }
+      .round-btn, #notif-btn, #settings-btn, #filter-btn { width: 42px; height: 42px; }
+      #notif-btn, #settings-btn, #filter-btn { top: calc(10px + env(safe-area-inset-top, 0px)); left: auto; }
+      #settings-btn { right: max(10px, env(safe-area-inset-right, 0px)); }
+      #filter-btn   { right: calc(max(10px, env(safe-area-inset-right, 0px)) + 49px); }
+      #notif-btn    { right: calc(max(10px, env(safe-area-inset-right, 0px)) + 98px); }
+      .geo-btn { width: 46px; height: 46px; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
+      .dock-wrap { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+      .dock { gap: 2px; padding: 5px; max-width: calc(100vw - 20px); }
+      .dock-btn { height: 48px; min-width: 48px; padding: 0 13px; width: auto; }
+      .dock-item { width: auto; height: auto; }
+      .dock-item[data-open="true"] .dock-btn { padding: 0 16px 0 13px; }
+      .window {
+        inset: calc(10px + env(safe-area-inset-top, 0px)) 8px calc(78px + env(safe-area-inset-bottom, 0px)) 8px;
+        width: calc(100% - 16px); height: auto;
+        max-height: calc(100dvh - 88px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        border-radius: 26px;
+      }
+      .win-head { height: 56px; padding: 0 10px; grid-template-columns: 44px 1fr 44px; }
+      .win-title { font-size: 16px; }
+    }
+    @media (max-width: 380px) {
+      .menubar .brand .brand-wordmark svg { height: 19px; }
+      .dock-btn { padding: 0 11px; }
+    }
+    @media (max-height: 480px) and (orientation: landscape) {
+      .menubar { top: calc(8px + env(safe-area-inset-top, 0px)); height: 40px; }
+      #notif-btn, #settings-btn, #filter-btn { top: calc(8px + env(safe-area-inset-top, 0px)); width: 40px; height: 40px; }
+      #filter-btn { right: calc(max(10px, env(safe-area-inset-right, 0px)) + 48px); }
+      #notif-btn  { right: calc(max(10px, env(safe-area-inset-right, 0px)) + 96px); }
+      .dock-btn { height: 42px; min-width: 42px; }
+      .geo-btn { width: 42px; height: 42px; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+      .window { inset: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(64px + env(safe-area-inset-bottom, 0px)) 8px; max-height: none; height: auto; }
+    }
+
+    /* ── Фото профиля во всю ширину, листаются (как в Telegram) ── */
+    .photo-hero {
+      position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: min(62vh, 560px);
+      overflow: hidden; background: #090C0B; -webkit-user-select: none; user-select: none;
+    }
+    .photo-hero.is-many { cursor: pointer; }
+    .ph-track {
+      display: flex; height: 100%; overflow-x: auto; overflow-y: hidden;
+      scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none;
+    }
+    .ph-track::-webkit-scrollbar { display: none; }
+    .ph-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+    .ph-slide img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .photo-hero::before, .photo-hero::after { content: ''; position: absolute; left: 0; right: 0; pointer-events: none; z-index: 1; }
+    .photo-hero::before { top: 0; height: 70px; background: linear-gradient(rgba(8,7,15,.38), transparent); }
+    .photo-hero::after { bottom: 0; height: 46%; background: linear-gradient(transparent, rgba(8,7,15,.85)); }
+    .ph-bars { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; gap: 4px; pointer-events: none; }
+    .ph-bars span { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.35); transition: background .2s ease; }
+    .ph-bars span.is-on { background: #fff; }
+    .ph-caption { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 2; color: #fff; pointer-events: none; }
+    .ph-name { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 1px 10px rgba(0,0,0,.35); }
+    .ph-handle { margin-top: 3px; font-size: 14px; color: rgba(255,255,255,.78); }
+    /* Профиль с фото и 3D-аватаром целиком помещается в окно: фото занимает то, что осталось */
+    .friend-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(170px, calc(min(680px, 100dvh - 116px) - 372px), 420px); }
+    .friend-fit .user-profile-view { padding: 12px 16px 14px; gap: 10px; }
+    .friend-fit .user-profile-section-title { margin: 0 0 2px; }
+    .friend-fit .friend-avatar-stage { height: 168px; }
+    .friend-fit .friend-avatar-stage canvas { width: 168px; height: 168px; }
+    @media (max-width: 640px) {
+      .friend-fit .photo-hero { height: clamp(160px, calc(100dvh - 446px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
+    }
+    .profile-bio.ph-bio { text-align: left; margin: 0; }
+    .profile-bio.ph-bio-own { padding: 14px 18px 4px; }
+    @media (max-width: 640px) {
+      .ph-name { font-size: 23px; }
+      .ph-caption { left: 16px; bottom: 14px; }
+    }
+
+    /* ── Сетка фото в редактировании профиля ── */
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; transition: opacity .2s; }
+    .photo-grid.is-busy { opacity: .55; pointer-events: none; }
+    .pg-item, .pg-add { position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; }
+    .pg-item { background: var(--field) center / cover no-repeat; cursor: pointer; }
+    .pg-item.is-main { cursor: default; box-shadow: inset 0 0 0 2px var(--you); }
+    .pg-badge {
+      position: absolute; left: 6px; bottom: 6px; padding: 3px 8px; border-radius: 999px;
+      background: var(--lime); color: #15131F; font-size: 10.5px; font-weight: 800;
+    }
+    .pg-del {
+      position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border: 0; border-radius: 50%;
+      display: grid; place-items: center; background: rgba(8,7,15,.62); color: #fff;
+      font-size: 16px; line-height: 1; cursor: pointer;
+    }
+    .pg-del:hover { background: #E5484D; }
+    .pg-add {
+      display: grid; place-content: center; justify-items: center; gap: 4px;
+      border: 1.5px dashed var(--ink-soft); background: transparent; color: var(--ink-soft);
+      font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .pg-add:hover { color: var(--ink); border-color: var(--ink); }
+    .pg-add svg { width: 22px; height: 22px; }
+
+    /* ── Логотип-надпись Groupis (метка вместо «o») ── */
+    .menubar .brand .brand-wordmark { display: block; padding: 0 10px 0 12px; color: var(--ink); line-height: 0; }
+    .menubar .brand .brand-wordmark svg { display: block; height: 24px; width: auto; }
+    /* «тень» под меткой: на светлой теме лайм почти не виден — там она фиолетовая */
+    .brand-wordmark .wm-shadow { fill: #0FA383; opacity: .7; }
+    :root[data-theme="dark"] .brand-wordmark .wm-shadow { fill: var(--lime); opacity: 1; }
+    .auth-wordmark { display: block; height: 52px; width: auto; max-width: 100%; margin: 2px auto 16px; }
+    @media (max-width: 640px) {
+      .menubar .brand .brand-wordmark { padding: 0 8px 0 10px; }
+      .menubar .brand .brand-wordmark svg { height: 21px; }
+    }
+    @media (orientation: portrait) { .auth-wordmark { height: 42px; margin-bottom: 12px; } }
+
+    /* Низкий телефон стоя (SE и т. п.): карточке нужно больше места */
+    @media (orientation: portrait) and (max-height: 700px) {
+      .auth-card { max-height: 60dvh; padding: 16px 16px 14px; }
+      .auth-logo, .auth-logo-img { width: 44px; height: 44px; margin-bottom: 6px; }
+      .auth-sub { margin-bottom: 10px; }
+    }
+
+    /* ═══════════════════ ДИЗАЙН «СИГНАЛ» ═══════════════════
+       Группы находят друг друга на карте, как радар. Отсюда два фирменных мотива:
+       концентрические «сигнальные кольца» (маркеры групп и ваше место, активная вкладка, пустые экраны)
+       и «feat» — два пересекающихся круга (match и союз групп). Цвета минимальны: нейтральная база,
+       красно-оранжевый «сигнал» для действий и мятный «сонар» для статусов. */
+
+    :root.theme-switching *, :root.theme-switching *::before, :root.theme-switching *::after {
+      transition: background-color .4s ease, border-color .4s ease, color .3s ease, fill .4s ease !important;
+    }
+
+    /* ── Прокрутка внутри окна без полосы прокрутки: листается колесом, тачпадом и пальцем ── */
+    .window, .window * { scrollbar-width: none; }
+    .window ::-webkit-scrollbar, .window::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+    .scrim { background: rgba(6, 12, 10, .38); }
+    :root[data-theme="dark"] .scrim { background: rgba(0, 0, 0, .5); }
+
+    /* ── Таб-панель: тёмная «капсула», активная вкладка светлая с сигнальной точкой ── */
+    .dock, :root[data-theme="dark"] .dock { background: var(--dock); border-color: rgba(255, 255, 255, .06); }
+    .dock { box-shadow: 0 18px 44px rgba(6, 12, 10, .3), inset 0 1px 0 rgba(255, 255, 255, .05); }
+    .dock-btn { color: var(--dock-ink); position: relative; }
+    .dock-btn:hover { color: var(--dock-on); }
+    .dock-btn:focus-visible { outline-color: var(--you); }
+    .dock-item[data-open="true"] .dock-btn { background: var(--dock-on); color: var(--dock-on-ink); }
+    .dock-item[data-open="true"] .dock-btn::after {
+      content: ""; position: absolute; left: 33px; top: 11px; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--you); box-shadow: 0 0 0 2px var(--dock-on);
+      animation: dock-ping 2.6s ease-out infinite;
+    }
+    @keyframes dock-ping {
+      0%   { box-shadow: 0 0 0 2px var(--dock-on), 0 0 0 2px rgba(var(--you-rgb), .55); }
+      70%  { box-shadow: 0 0 0 2px var(--dock-on), 0 0 0 9px rgba(var(--you-rgb), 0); }
+      100% { box-shadow: 0 0 0 2px var(--dock-on), 0 0 0 9px rgba(var(--you-rgb), 0); }
+    }
+    @media (max-width: 640px) { .dock-item[data-open="true"] .dock-btn::after { left: 31px; top: 10px; } }
+
+    /* ── Круглые кнопки поверх карты: активная — «чернилами» ── */
+    #notif-btn.is-active, #settings-btn.is-active, #filter-btn.is-active, .geo-btn.is-active {
+      background: var(--ink); color: var(--win); box-shadow: 0 10px 26px var(--glass-shadow);
+    }
+    #notif-btn:hover, #settings-btn:hover, #filter-btn:hover, .geo-btn:hover { color: var(--you); }
+    #notif-btn .badge { background: var(--you); }
+    #filter-btn .filter-dot { background: var(--you); }
+    .geo-btn { color: var(--ink); }
+
+    /* ── Акцентные элементы ── */
+    .icon-btn { background: var(--you); color: #fff; box-shadow: 0 8px 18px rgba(var(--you-rgb), .32); }
+    .notif-unread::before { background: var(--you); }
+    .switch[aria-checked="true"] { background: var(--lime-deep, #0FA383); }
+    :root[data-theme="dark"] .switch[aria-checked="true"] { background: var(--lime); }
+    :root[data-theme="dark"] .switch[aria-checked="true"]::after { background: #0B0F0D; }
+    .seg-opt[aria-pressed="true"] { border-color: var(--ink); background: var(--field); }
+    .pg-badge { background: var(--you); color: #fff; }
+    .pg-item.is-main { box-shadow: inset 0 0 0 2px var(--you); }
+    .edit-input:focus, .edit-textarea:focus, .username-wrap:focus-within, .support-chat-input:focus { box-shadow: 0 0 0 4px rgba(var(--you-rgb), .16); }
+    .user-badge-status, .user-badge-status[aria-hidden] { background: var(--lime); }
+    .avatar-online, .online-dot { background: var(--lime) !important; }
+
+    /* ── Маркеры: друг из общей группы — мятная плашка, участник чужой группы — «чернильная» ── */
+    .user-badge-inner.is-friend-group { background: rgba(8, 104, 85, .95); border-color: rgba(var(--lime-rgb), .5); }
+    .user-badge-inner.is-friend-group .user-badge-group { color: #BFFBEA; }
+    .user-dot-marker.is-friend-group { background: #0A6E5A !important; }
+    .user-badge-inner.is-group { background: rgba(14, 20, 18, .94); border-color: rgba(var(--you-rgb), .5); }
+    .user-badge-inner.is-group .user-badge-group { color: var(--you-soft); }
+    .user-dot-marker.is-group { background: #0E1412 !important; }
+    .map-group-chip { background: rgba(14, 20, 18, .95); border-color: rgba(var(--lime-rgb), .45); }
+    .map-group-count { color: #BFFBEA; }
+    .user-badge.is-leader::after { background: #0E1412; border-color: rgba(var(--lime-rgb), .45); }
+    .user-dot-marker.is-leader { background: #0E1412 !important; box-shadow: 0 0 0 2px var(--lime), 0 2px 6px rgba(0,0,0,.35); }
+    .map-group-wish { background: linear-gradient(135deg, var(--you-2), var(--you-deep)); box-shadow: 0 8px 18px rgba(var(--you-rgb), .4); text-shadow: none; }
+    .map-group-wish::before, .map-group-wish::after { background: var(--you-deep); }
+    .group-wish-cloud { background: linear-gradient(135deg, var(--you-2), var(--you-deep)); }
+
+    /* «Сигнальные кольца» на земле под маркером (сплющены — как будто лежат на карте) */
+    .user-avatar-wrap { isolation: isolate; }
+    .signal-rings { position: absolute; left: 50%; bottom: 1px; width: 0; height: 0; z-index: -1; pointer-events: none; }
+    .signal-rings i {
+      position: absolute; left: -30px; top: -11px; width: 60px; height: 22px; border-radius: 50%;
+      border: 2px solid var(--ring, var(--you));
+      opacity: 0; transform: scale(.25);
+      animation: signal-ring 3s cubic-bezier(.15, .6, .3, 1) infinite;
+    }
+    .signal-rings i:nth-child(2) { animation-delay: 1.5s; }
+    .signal-rings.is-group { --ring: var(--lime); }
+    .signal-rings.is-me i { border-width: 1.5px; }
+    @keyframes signal-ring {
+      0%   { opacity: .95; transform: scale(.25); }
+      100% { opacity: 0;   transform: scale(1.5); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .signal-rings i { animation: none; opacity: .45; transform: scale(.9); }
+      .signal-rings i:nth-child(2) { display: none; }
+      .dock-item[data-open="true"] .dock-btn::after { animation: none; }
+    }
+
+    /* ── Знак «feat»: две группы, линза пересечения — их общий чат / союз ── */
+    .match-chat-avatar { background: var(--field) !important; padding: 0; overflow: hidden; }
+    .feat-mark { width: 100%; height: 100%; display: block; }
+    .feat-mark .fa { fill: var(--you); }
+    .feat-mark .fb { fill: var(--lime); }
+    .feat-mark .fx { fill: var(--ink); }
+    .feat-mark.is-open .fx { animation: feat-pulse 1.6s ease-in-out infinite; }
+    .feat-mark.is-approved .fx { fill: var(--win); }
+    @keyframes feat-pulse { 50% { opacity: .35; } }
+
+    /* ── Пустые экраны: маленький «радар» над текстом ── */
+    .empty-msg::before, .notif-empty::before {
+      content: ""; display: block; width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 50%;
+      background:
+        radial-gradient(circle, var(--you) 0 4px, transparent 4.5px),
+        repeating-radial-gradient(circle, transparent 0 9px, rgba(var(--you-rgb), .28) 9.5px 10.5px, transparent 11px 17px);
+      opacity: .9;
+    }
+
+    /* ── Выбор темы в настройках ── */
+    .theme-block { display: grid; gap: 10px; padding: 8px 20px 6px; }
+    .theme-head { display: grid; gap: 2px; }
+    .theme-head .row-name { font-weight: 700; }
+    .theme-head .row-sub { color: var(--ink-soft); font-size: 12.5px; }
+    .theme-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .theme-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; font-size: 13px; }
+    .theme-opt svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .theme-opt svg .fill { fill: currentColor; stroke: none; }
+    .theme-opt[aria-pressed="true"] { color: var(--ink); }
+    .theme-opt[aria-pressed="true"] svg { color: var(--you); }
+
+    /* ── Экран входа: хвойно-чёрный фон с мягким сигнальным свечением и кольцами ── */
+    .auth-screen {
+      background:
+        radial-gradient(900px 640px at 14% 22%, rgba(var(--you-rgb), .16), transparent 60%),
+        radial-gradient(760px 560px at 100% 100%, rgba(var(--lime-rgb), .08), transparent 62%),
+        #090C0B;
+    }
+    .auth-screen::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+      background: repeating-radial-gradient(circle at 14% 22%, transparent 0 58px, rgba(255, 255, 255, .035) 59px 60px);
+      -webkit-mask-image: radial-gradient(900px 700px at 14% 22%, #000, transparent 70%);
+      mask-image: radial-gradient(900px 700px at 14% 22%, #000, transparent 70%);
+    }
+    .auth-card { background: rgba(14, 19, 17, .78); border-color: rgba(255, 255, 255, .08); }
+    .auth-btn { background: var(--you); color: #fff; box-shadow: 0 12px 30px rgba(var(--you-rgb), .32); }
+    .auth-link { color: #9FF3DE; }
+    .auth-input:focus { border-color: var(--you); box-shadow: 0 0 0 4px rgba(var(--you-rgb), .2); }
+    .auth-step-dot.active { background: var(--you); }
+    .auth-step-dot.done { background: rgba(var(--you-rgb), .45); }
+    .gender-opt[aria-pressed="true"] { border-color: var(--you); background: rgba(var(--you-rgb), .1); }
+  </style>
+</head>
+<body class="auth-locked">
+
+  <section id="auth-screen" class="auth-screen" aria-label="Вход в приложение">
+    <canvas id="globe-canvas" class="globe-canvas" aria-hidden="true"></canvas>
+    <div class="auth-card" id="auth-card"></div>
+  </section>
+
+  <div id="map-app" class="map-app">
+    <div id="map" class="map-layer" aria-label="Карта"></div>
+  </div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="wishCloudGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#FFA07E"/>
+        <stop offset="1" stop-color="#FF5B2E"/>
+      </linearGradient>
+      <clipPath id="featClipA"><circle cx="17" cy="22" r="11"/></clipPath>
+      <linearGradient id="wishCloudGradDark" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#FF7A50"/>
+        <stop offset="1" stop-color="#E0401A"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- Затемнение карты под открытым окном; клик по нему закрывает окно -->
+  <div id="scrim" class="scrim" aria-hidden="true"></div>
+
+  <button id="geo-btn" class="geo-btn round-btn" type="button" aria-label="Показать моё местоположение" title="Моё местоположение">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 11 21 3l-8 18-2-8-8-2z"/>
+    </svg>
+  </button>
+
+  <button id="notif-btn" class="round-btn" type="button" aria-label="Уведомления" title="Уведомления">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 8.5a6 6 0 0 1 12 0c0 6.5 2.5 8.5 2.5 8.5h-17S6 15 6 8.5"/>
+      <path d="M10.2 20.5a2 2 0 0 0 3.6 0"/>
+    </svg>
+    <span class="badge" id="notif-badge" hidden>0</span>
+  </button>
+
+  <button id="filter-btn" class="round-btn" type="button" aria-label="Фильтры групп" title="Фильтры">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/>
+      <circle cx="15" cy="7" r="2.2"/>
+      <circle cx="9" cy="17" r="2.2"/>
+    </svg>
+    <span class="filter-dot" id="filter-dot" hidden></span>
+  </button>
+
+  <button id="settings-btn" class="round-btn" type="button" aria-label="Настройки" title="Настройки">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  </button>
+
+  <!-- Плавающая «таблетка» с логотипом -->
+  <header class="menubar">
+    <strong class="brand"><span class="brand-wordmark" role="img" aria-label="Groupis"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="-60 -885 5078 1185"><g transform="scale(1 -1)">
+    <defs><mask id="wmiCut" maskUnits="userSpaceOnUse" x="1261" y="-571" width="1279" height="1713"><rect x="1261" y="-571" width="1279" height="1713" fill="#fff"/><path d="M1901.0 -11.4 L1731.8 94.1 A319.8 319.8 0 1 0 2070.2 94.1 Z" fill="#000" stroke="#000" stroke-width="225.5" stroke-linejoin="round"/></mask>
+      <linearGradient id="wmiPin" gradientUnits="userSpaceOnUse" x1="0" y1="628" x2="0" y2="0">
+        <stop offset="0" stop-color="#FF8A5C"/><stop offset="1" stop-color="#E8401A"/>
+      </linearGradient>
+    </defs>
+    <g class="wm-text" fill="currentColor"><path transform="translate(0 0)" d="M838 325Q835 257 810.5 195.5Q786 134 739.5 86.0Q693 38 623.5 11.0Q554 -16 462 -16Q374 -16 297.0 9.5Q220 35 161.5 85.0Q103 135 70.5 208.0Q38 281 38 375Q38 469 71.0 542.0Q104 615 163.5 665.0Q223 715 301.5 740.5Q380 766 473 766Q597 766 687.0 728.0Q777 690 832.0 624.0Q887 558 903 471H694Q684 509 653.5 536.5Q623 564 577.5 578.5Q532 593 474 593Q404 593 353.0 568.5Q302 544 274.0 495.5Q246 447 246 375Q246 302 276.0 252.0Q306 202 361.5 177.0Q417 152 492 152Q565 152 621.0 172.5Q677 193 710.5 233.0Q744 273 749 329ZM512 242V388H910V0H763L734 297L773 242Z"/><path transform="translate(964 0)" d="M29 571H237L271 367V0H67V379ZM539 580V406Q509 412 482.5 414.5Q456 417 434 417Q390 417 353.0 399.5Q316 382 293.5 342.0Q271 302 271 235L232 283Q240 345 256.0 399.5Q272 454 299.5 496.5Q327 539 368.0 563.5Q409 588 468 588Q485 588 503.0 586.0Q521 584 539 580Z"/><path transform="translate(2297 0)" d="M302 -16Q222 -16 165.5 17.0Q109 50 79.0 110.5Q49 171 49 252V571H253V281Q253 218 284.0 184.0Q315 150 373 150Q416 150 445.0 167.5Q474 185 490.0 218.0Q506 251 506 297L569 264Q558 173 519.5 110.5Q481 48 425.0 16.0Q369 -16 302 -16ZM543 0 506 229V571H710V197L747 0Z"/><path transform="translate(3074 0)" d="M56 571H261V407L252 383V223L261 176V-165H56ZM196 285Q209 378 250.5 445.5Q292 513 356.0 550.5Q420 588 501 588Q585 588 648.5 550.0Q712 512 747.5 444.0Q783 376 783 285Q783 196 747.5 127.5Q712 59 648.5 21.5Q585 -16 501 -16Q420 -16 356.0 21.5Q292 59 251.0 127.0Q210 195 196 285ZM577 285Q577 328 559.5 361.0Q542 394 510.5 413.0Q479 432 439 432Q398 432 361.0 413.0Q324 394 296.0 361.0Q268 328 253 285Q268 243 296.0 210.0Q324 177 361.0 158.5Q398 140 439 140Q479 140 510.5 158.5Q542 177 559.5 210.0Q577 243 577 285Z"/><path transform="translate(3889 0)" d="M56 580 159 560 261 580V0H56ZM158 627Q105 627 72.0 653.5Q39 680 39 726Q39 771 72.0 798.0Q105 825 158 825Q213 825 245.5 798.0Q278 771 278 726Q278 680 245.5 653.5Q213 627 158 627Z"/><path transform="translate(4210 0)" d="M718 186Q718 120 678.0 75.0Q638 30 564.0 7.0Q490 -16 386 -16Q279 -16 198.5 10.0Q118 36 73.0 83.0Q28 130 25 192H232Q239 169 259.5 152.5Q280 136 314.0 127.5Q348 119 395 119Q456 119 487.5 131.0Q519 143 519 167Q519 186 495.0 195.5Q471 205 413 210L312 218Q211 225 151.5 248.5Q92 272 66.0 309.5Q40 347 40 395Q40 460 80.5 502.5Q121 545 193.5 566.5Q266 588 363 588Q459 588 534.0 563.0Q609 538 654.0 493.5Q699 449 706 389H499Q494 408 477.0 423.5Q460 439 430.0 449.0Q400 459 353 459Q298 459 269.5 447.0Q241 435 241 413Q241 396 258.5 386.0Q276 376 324 372L457 362Q556 356 613.0 333.5Q670 311 694.0 274.0Q718 237 718 186Z"/></g>
+    <ellipse class="wm-shadow" fill="#3EE6C1" fill-opacity="1" cx="1901.0" cy="-40.0" rx="313.4" ry="97.1" mask="url(#wmiCut)"/>
+    <path fill="url(#wmiPin)" fill-rule="evenodd" d="M1901.0 -11.4 L1731.8 94.1 A319.8 319.8 0 1 0 2070.2 94.1 Z M2011.7 365.4 A110.7 110.7 0 1 0 1790.3 365.4 A110.7 110.7 0 1 0 2011.7 365.4 Z"/>
+  </g></svg></span></strong>
+    <div class="menubar-right">
+      <span id="offline-badge" hidden>Офлайн</span>
+      <button id="install-btn" type="button" hidden>Установить</button>
+      <button id="fs-btn" type="button" aria-label="Полноэкранный режим" title="Полноэкранный режим">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <section id="window" class="window" role="dialog" aria-labelledby="win-title" tabindex="-1" hidden>
+    <div class="win-head">
+      <button id="win-back" class="win-back" type="button" aria-label="Назад">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M15.4 4.6 8 12l7.4 7.4 1.4-1.4L10.8 12l6-6z"/>
+        </svg>
+      </button>
+      <h2 id="win-title" class="win-title"></h2>
+      <span></span>
+    </div>
+    <div id="win-body" class="win-body"></div>
+  </section>
+
+  <!-- Таб-панель: линейные иконки, активная вкладка раскрывается в лаймовую «таблетку» с подписью -->
+  <nav class="dock-wrap" aria-label="Разделы">
+    <ul class="dock" id="dock">
+      <li class="dock-item">
+        <button class="dock-btn" type="button" data-app="map" aria-label="Карта">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 21.5s-7-6.1-7-11.7a7 7 0 0 1 14 0c0 5.6-7 11.7-7 11.7z"/>
+            <circle cx="12" cy="9.8" r="2.6"/>
+          </svg>
+          <span class="dock-label">Карта</span>
+        </button>
+      </li>
+      <li class="dock-item">
+        <button class="dock-btn" type="button" data-app="friends" aria-label="Друзья">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="8" r="3.6"/>
+            <path d="M2.5 20v-.6A5.4 5.4 0 0 1 7.9 14h2.2a5.4 5.4 0 0 1 5.4 5.4v.6"/>
+            <path d="M16 4.6a3.6 3.6 0 0 1 0 6.8M18.5 14.2a5.4 5.4 0 0 1 3 4.8v1"/>
+          </svg>
+          <span class="dock-label">Друзья</span>
+        </button>
+      </li>
+      <li class="dock-item">
+        <button class="dock-btn" type="button" data-app="messenger" aria-label="Сообщения">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.5 11.6c0 4.5-3.8 8-8.5 8a9.3 9.3 0 0 1-3.6-.7L3.5 20l1.3-3.7a7.6 7.6 0 0 1-1.3-4.7c0-4.4 3.8-8 8.5-8s8.5 3.6 8.5 8z"/>
+            <path d="M8.5 11.6h.01M12 11.6h.01M15.5 11.6h.01" stroke-width="2.6"/>
+          </svg>
+          <span class="dock-label">Чаты</span>
+        </button>
+      </li>
+      <li class="dock-item">
+        <button class="dock-btn" type="button" data-app="profile" aria-label="Профиль">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="8.2" r="4"/>
+            <path d="M4.5 21v-.4a6.6 6.6 0 0 1 6.6-6.6h1.8a6.6 6.6 0 0 1 6.6 6.6v.4"/>
+          </svg>
+          <span class="dock-label">Профиль</span>
+        </button>
+      </li>
+    </ul>
+  </nav>
+
+  <script src="./three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+  'use strict';
+
+  /* ═══════ SUPABASE ═══════ */
+  const SUPABASE_URL = 'https://zioxwmynfbrmmouduhbf.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_YBsh_W2dBbk1ZIZk1y3yBg_7X2iVE3P';
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    const card = document.getElementById('auth-card');
+    if (card) card.innerHTML = '<h1 class="auth-title">Нет соединения</h1><p class="auth-sub">Не удалось загрузить библиотеку Supabase. Проверьте интернет и обновите страницу.</p>';
+    throw new Error('supabase-js не загружен');
+  }
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function isThreeAvailable() {
+    return typeof window.THREE !== 'undefined' && window.THREE.WebGLRenderer;
   }
 
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+  /* ═══════ 3D-ГЛОБУС ═══════
+     Экран входа: на глобусе крестики-этапы, между ними пунктир по дуге большого круга.
+     Каждый шаг: пунктир дорисовывается к новой точке, глобус плавно доворачивается,
+     появляется крестик. В конце — «полёт» камеры к поверхности (flyIn). */
+  const Globe = (() => {
+    let renderer = null, scene = null, camera = null, earth = null, glow = null;
+    let rafId = null, running = false, initialized = false, flying = false;
+    const markers = [];        // { vec, sprite, line } — line ведёт из предыдущей точки
+    const tweens = [];         // { start, dur, update(t), res }
+    const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+    // Куда «смотрит» активный крестик (из центра глобуса); пересчитывается под ориентацию экрана
+    const camDir = new THREE.Vector3(0.35, 0, 1).normalize();
+    let camDist = 3.4;          // расстояние камеры — подбирается так, чтобы глобус влезал в экран
+    let lockedHeight = 0;       // высота холста, пока открыта экранная клавиатура
+    let currentDir = null;
+
+    const STEP_ANGLE = 0.62;
+    const MAX_TURN = Math.PI * 35 / 180;
+    const MARKER_RADIUS = 1.04;
+    const LINE_RADIUS = 1.004;   // почти на поверхности — у края глобуса пунктир с обратной стороны не выглядывает
+    const MIN_MARKER_DIST = 0.45;
+    const MARKER_SIZE = 0.22;
+    const ROT_DUR = 1600, LINE_DUR = 1150, POP_DUR = 560;
+
+    const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+    const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    function tween(dur, update) {
+      if (!initialized || !running) { update(1); return Promise.resolve(); }
+      // start берём из первого кадра — те же часы, что у requestAnimationFrame
+      return new Promise((res) => tweens.push({ start: null, dur: Math.max(1, dur), update, res }));
+    }
+
+    function latLonToVec3(lat, lon, r) {
+      const phi = (90 - lat) * Math.PI / 180;
+      const theta = (lon + 180) * Math.PI / 180;
+      return new THREE.Vector3(
+        -r * Math.sin(phi) * Math.cos(theta),
+         r * Math.cos(phi),
+         r * Math.sin(phi) * Math.sin(theta)
+      );
+    }
+
+    function slerpVec(a, b, t) {
+      const ang = a.angleTo(b);
+      if (ang < 1e-6) return a.clone();
+      const s = Math.sin(ang);
+      return a.clone().multiplyScalar(Math.sin((1 - t) * ang) / s).add(b.clone().multiplyScalar(Math.sin(t * ang) / s));
+    }
+
+    function makeMarkerTexture() {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.save();
+      ctx.translate(64, 64);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeStyle = '#E4EAFF';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = '#FF7A50';
+      ctx.shadowBlur = 14;
+      const arm = 22;
+      ctx.beginPath();
+      ctx.moveTo(-arm, 0); ctx.lineTo(arm, 0);
+      ctx.moveTo(0, -arm); ctx.lineTo(0, arm);
+      ctx.stroke();
+      ctx.restore();
+      const tex = new THREE.CanvasTexture(c);
+      if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    function addMarkerSprite(vec) {
+      const mat = new THREE.SpriteMaterial({ map: makeMarkerTexture(), transparent: true, depthTest: true, depthWrite: false });
+      const s = new THREE.Sprite(mat);
+      s.position.copy(vec.clone().multiplyScalar(MARKER_RADIUS));
+      s.scale.set(0, 0, 0);
+      s.userData.alpha = 1;   // «своя» прозрачность; итоговая ещё гасится, когда крестик уходит за край
+      earth.add(s);
+      return s;
+    }
+
+    /* Пунктир по дуге большого круга: каждый штрих — узкий четырёхугольник,
+       лежащий на сфере. Дорисовка — через drawRange по штрихам. */
+    function buildDashedArc(a, b) {
+      const len = a.angleTo(b) * LINE_RADIUS;
+      const DASH = 0.032, GAP = 0.022, W = 0.009;
+      const n = Math.max(1, Math.floor((len + GAP) / (DASH + GAP)));
+      const pos = [], idx = [];
+      const at = (s) => slerpVec(a, b, s / len).normalize().multiplyScalar(LINE_RADIUS);
+      for (let i = 0; i < n; i++) {
+        const s0 = i * (DASH + GAP), s1 = Math.min(len, s0 + DASH);
+        const p0 = at(s0), p1 = at(s1);
+        const mid = p0.clone().add(p1).normalize();
+        const side = new THREE.Vector3().subVectors(p1, p0).cross(mid).normalize().multiplyScalar(W / 2);
+        const base = pos.length / 3;
+        for (const p of [p0.clone().sub(side), p0.clone().add(side), p1.clone().add(side), p1.clone().sub(side)]) pos.push(p.x, p.y, p.z);
+        idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.setDrawRange(0, 0);
+      const mat = new THREE.MeshBasicMaterial({ color: 0xFFE3D8, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData.dashCount = n;
+      earth.add(mesh);
+      return mesh;
+    }
+    function setArcProgress(mesh, t) {
+      mesh.geometry.setDrawRange(0, Math.ceil(mesh.userData.dashCount * t) * 6);
+    }
+
+    function disposeObj(o) {
+      if (!o) return;
+      if (o.parent) o.parent.remove(o);
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    }
+
+    function perpendicular(v) {
+      const ref = Math.abs(v.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+      return new THREE.Vector3().crossVectors(v, ref).normalize();
+    }
+
+    // Лежит ли точка p (единичный вектор) на дуге a→b
+    function onArc(p, a, b) { return Math.abs(a.angleTo(p) + p.angleTo(b) - a.angleTo(b)) < 1e-4; }
+    function arcsIntersect(a1, a2, b1, b2) {
+      const n1 = new THREE.Vector3().crossVectors(a1, a2);
+      const n2 = new THREE.Vector3().crossVectors(b1, b2);
+      const l = new THREE.Vector3().crossVectors(n1, n2);
+      if (l.lengthSq() < 1e-12) return false;
+      l.normalize();
+      return [l, l.clone().negate()].some((p) => onArc(p, a1, a2) && onArc(p, b1, b2));
+    }
+
+    // Следующая точка маршрута: поворот не больше MAX_TURN, не близко к прошлым точкам
+    // и без пересечения с уже нарисованными отрезками — путь не замыкается и не перекрещивается
+    function pickNextVec(prevVec, prevDir) {
+      const dir0 = prevDir ? prevDir.clone() : perpendicular(prevVec);
+      dir0.sub(prevVec.clone().multiplyScalar(dir0.dot(prevVec))).normalize();
+      const build = (turn) => {
+        const dir = dir0.clone().applyQuaternion(new THREE.Quaternion().setFromAxisAngle(prevVec, turn)).normalize();
+        const axis = new THREE.Vector3().crossVectors(prevVec, dir).normalize();
+        const vec = prevVec.clone().applyQuaternion(new THREE.Quaternion().setFromAxisAngle(axis, STEP_ANGLE)).normalize();
+        const newDir = vec.clone().sub(prevVec.clone().multiplyScalar(vec.dot(prevVec))).normalize();
+        return { vec, dir: newDir };
+      };
+      for (let attempt = 0; attempt < 160; attempt++) {
+        const cand = build((Math.random() * 2 - 1) * MAX_TURN * (attempt < 80 ? 1 : 2.2));
+        if (markers.some((m) => cand.vec.distanceTo(m.vec) < MIN_MARKER_DIST)) continue;
+        let crosses = false;
+        for (let i = 0; i < markers.length - 2; i++) {
+          if (arcsIntersect(prevVec, cand.vec, markers[i].vec, markers[i + 1].vec)) { crosses = true; break; }
+        }
+        if (crosses) continue;
+        return cand;
+      }
+      return build(0);
+    }
+
+    // Повернуть глобус так, чтобы точка vec смотрела на камеру (минимальным поворотом от текущего положения)
+    function rotateTo(vec, dur) {
+      const worldDir = vec.clone().applyQuaternion(earth.quaternion).normalize();
+      const target = new THREE.Quaternion().setFromUnitVectors(worldDir, camDir).multiply(earth.quaternion);
+      const from = earth.quaternion.clone();
+      return tween(dur, (t) => { earth.quaternion.copy(from).slerp(target, easeInOut(t)); });
+    }
+
+    function popSprite(sprite) {
+      return tween(POP_DUR, (t) => { const s = MARKER_SIZE * Math.max(0, easeOutBack(t)); sprite.scale.set(s, s, s); });
+    }
+
+    async function placeFirst() {
+      if (!initialized) return;
+      const lat = (Math.random() * 90) - 45;
+      const lon = (Math.random() * 360) - 180;
+      const vec = latLonToVec3(lat, lon, 1).normalize();
+      currentDir = perpendicular(vec);
+      const m = { vec, sprite: addMarkerSprite(vec), line: null };
+      markers.push(m);
+      await rotateTo(vec, 1400);
+      await Promise.race([popSprite(m.sprite), wait(260)]);
+    }
+
+    /* Следующий этап: пунктир от текущего крестика к новому, глобус доворачивается, появляется крестик */
+    async function advance() {
+      if (!initialized) return;
+      const prev = markers[markers.length - 1];
+      if (!prev) { await placeFirst(); return; }
+      const next = pickNextVec(prev.vec, currentDir);
+      currentDir = next.dir;
+      const m = { vec: next.vec, sprite: null, line: buildDashedArc(prev.vec, next.vec) };
+      markers.push(m);
+      const rot = rotateTo(next.vec, ROT_DUR);
+      await tween(LINE_DUR, (t) => setArcProgress(m.line, easeInOut(t)));
+      m.sprite = addMarkerSprite(next.vec);
+      popSprite(m.sprite);
+      await Promise.all([rot, wait(260)]);
+    }
+
+    // Плавно погасить крестики и пунктиры (у крестика меняем userData.alpha, у пунктира — opacity)
+    function fadeTargets(list) {
+      const items = [];
+      for (const m of list) {
+        if (m.sprite) items.push({ get: () => m.sprite.userData.alpha, set: (v) => { m.sprite.userData.alpha = v; } });
+        if (m.line) items.push({ get: () => m.line.material.opacity, set: (v) => { m.line.material.opacity = v; } });
+      }
+      const from = items.map((it) => it.get());
+      return (k) => items.forEach((it, i) => it.set(from[i] * (1 - k)));
+    }
+
+    function fadeOutMarker(m, dur) {
+      const apply = fadeTargets([m]);
+      return tween(dur, apply).then(() => { disposeObj(m.sprite); disposeObj(m.line); });
+    }
+
+    function recomputeDir() {
+      if (markers.length >= 2) {
+        const a = markers[markers.length - 2].vec, b = markers[markers.length - 1].vec;
+        currentDir = b.clone().sub(a.clone().multiplyScalar(b.dot(a))).normalize();
+      } else if (markers.length) currentDir = perpendicular(markers[0].vec);
+      else currentDir = null;
+    }
+
+    /* Шаг назад: последний крестик и его пунктир гаснут, глобус возвращается к предыдущему */
+    async function back() {
+      if (!initialized || markers.length < 2) return;
+      const m = markers.pop();
+      recomputeDir();
+      await Promise.all([fadeOutMarker(m, 380), rotateTo(markers[markers.length - 1].vec, 1100)]);
+    }
+
+    /* Оставить только первый крестик (возврат ко входу) */
+    async function resetToFirst() {
+      if (!initialized) return;
+      if (!markers.length) { await placeFirst(); return; }
+      const extra = markers.splice(1);
+      recomputeDir();
+      await Promise.all([...extra.map((m) => fadeOutMarker(m, 420)), rotateTo(markers[0].vec, 1300)]);
+    }
+
+    function clearAll() {
+      while (markers.length) { const m = markers.pop(); disposeObj(m.sprite); disposeObj(m.line); }
+      currentDir = null;
+    }
+
+    // Экранные координаты последнего крестика — оттуда «вылетает» карточка
+    function markerScreenPos() {
+      if (!initialized) return null;
+      const m = markers[markers.length - 1];
+      if (!m || !m.sprite) return null;
+      earth.updateMatrixWorld();
+      const p = new THREE.Vector3();
+      m.sprite.getWorldPosition(p);
+      p.project(camera);
+      return { x: (p.x + 1) / 2 * window.innerWidth, y: (1 - p.y) / 2 * window.innerHeight };
+    }
+
+    /* «Полёт к Земле»: камера летит к последнему крестику и почти касается поверхности */
+    async function flyIn(dur, onProgress) {
+      if (!initialized) return;
+      flying = true;
+      earth.scale.setScalar(1); if (glow) glow.scale.setScalar(1);
+      earth.updateMatrixWorld();
+      const center = earth.position.clone();
+      const last = markers[markers.length - 1];
+      const target = last
+        ? last.vec.clone().applyQuaternion(earth.quaternion).add(center)
+        : center.clone().add(camDir);
+      const normal = target.clone().sub(center).normalize();
+      // Останавливаемся низко над поверхностью, но не вплотную — иначе текстура расплывается в пятно
+      const endPos = target.clone().add(normal.clone().multiplyScalar(0.22));
+      const startPos = camera.position.clone();
+      const startLook = new THREE.Vector3(0, 0, 0);
+      const look = new THREE.Vector3();
+      camera.near = 0.01; camera.updateProjectionMatrix();
+      // крестики и пунктир растворяются в начале полёта
+      const fade = fadeTargets(markers);
+      await tween(dur, (t) => {
+        // разгон и мягкое торможение у поверхности
+        const e = t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
+        camera.position.lerpVectors(startPos, endPos, e);
+        look.lerpVectors(startLook, target, Math.min(1, e * 1.25));
+        camera.lookAt(look);
+        fade(Math.min(1, t / 0.3));
+        if (onProgress) onProgress(t);
+      });
+    }
+
+    // Вернуть камеру и глобус в исходное состояние (после выхода из аккаунта)
+    function resetView() {
+      tweens.length = 0;
+      clearAll();
+      flying = false;
+      if (!initialized) return;
+      camera.near = 0.1;
+      updateGlobePosition();
+      earth.quaternion.identity();
+    }
+
+    /* Раскладка под экран.
+       Горизонтальный (компьютер, планшет и телефон лёжа): карточка слева, глобус в оставшейся части справа.
+       Вертикальный (телефон и планшет стоя): глобус сверху по центру, карточка снизу.
+       Размер глобуса задаём расстоянием камеры, чтобы он всегда целиком влезал в свою область. */
+    function updateGlobePosition() {
+      if (!earth || !camera) return;
+      const w = window.innerWidth, h = lockedHeight || window.innerHeight;
+      const t = Math.tan((camera.fov / 2) * Math.PI / 180);
+      const portrait = h > w;
+      let targetPx, cx, cy, offset;
+      if (portrait) {
+        // глобус в верхней половине, карточка занимает нижнюю
+        const short = h <= 700;   // низкие телефоны — карточке нужно больше высоты
+        targetPx = short ? Math.min(w * 0.8, h * 0.36) : Math.min(w * 0.86, h * (w >= 600 ? 0.4 : 0.44));
+        cx = w / 2;
+        cy = h * (short ? 0.21 : w >= 600 ? 0.25 : 0.24);
+        offset = new THREE.Vector3(0.1, 0.22, 0);   // крестик чуть выше центра диска
+      } else {
+        const card = document.getElementById('auth-card');
+        const cardW = (card && card.offsetWidth) || Math.min(400, w);
+        const left = Math.min(w * 0.55, cardW + 48);  // карточка с отступами
+        const aw = Math.max(200, w - left);
+        targetPx = Math.min(h * 0.76, aw * 0.78);   // с запасом на ореол вокруг глобуса
+        cx = left + aw / 2;
+        cy = h / 2;
+        offset = new THREE.Vector3(0.28, 0.04, 0);
+      }
+      // диаметр глобуса в пикселях ≈ h / (D·tg(fov/2)) — отсюда расстояние камеры
+      camDist = Math.min(10, Math.max(2.6, h / (targetPx * t)));
+      const H = 2 * camDist * t, W = H * (w / h);
+      const x = (cx / w - 0.5) * W, y = (0.5 - cy / h) * H;
+      earth.position.set(x, y, 0);
+      if (glow) glow.position.set(x, y, 0);
+      if (!flying) {
+        camera.position.set(0, 0, camDist);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+      }
+      // активный крестик — в видимой части глобуса, лицом к камере
+      camDir.set(-x, -y, camDist).normalize().add(offset).normalize();
+    }
+
+    function onResize() {
+      if (!renderer) return;
+      const w = window.innerWidth, h = window.innerHeight;
+      const canvas = renderer.domElement;
+      // На Android экранная клавиатура уменьшает высоту окна. Чтобы глобус не прыгал и не сжимался,
+      // пока человек печатает, оставляем холст прежнего размера — лишнее просто обрежется снизу.
+      const typing = document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+      const prevW = renderer.getSize(new THREE.Vector2()).x;
+      if (typing && w === prevW && h < (lockedHeight || camera.userData.h || h)) {
+        if (!lockedHeight) lockedHeight = camera.userData.h || h;
+        canvas.style.height = lockedHeight + 'px';
+        return;
+      }
+      lockedHeight = 0;
+      canvas.style.height = '';
+      camera.userData.h = h;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      if (!flying) updateGlobePosition();
+    }
+
+    function init() {
+      if (initialized || !isThreeAvailable()) return;
+      const canvas = document.getElementById('globe-canvas');
+      if (!canvas) return;
+      const THREE = window.THREE;
+
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(w, h, false);
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+      camera.position.set(0, 0, 3.4);
+      camera.lookAt(0, 0, 0);
+      camera.userData.h = h;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+      const key = new THREE.DirectionalLight(0xC9FFF1, 1.1);
+      key.position.set(5, 3, 5);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight(0xFF6A3D, 0.5);
+      rim.position.set(-5, -3, -3);
+      scene.add(rim);
+
+      const fallbackMat = new THREE.MeshPhongMaterial({ color: 0x10241F, emissive: 0x1B6B5C, emissiveIntensity: 0.35, shininess: 8 });
+      earth = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), fallbackMat);
+      scene.add(earth);
+
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      loader.load(
+        'https://unpkg.com/three-globe/example/img/earth-dark.jpg',
+        (tex) => {
+          if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+          earth.material = new THREE.MeshPhongMaterial({
+            map: tex, color: 0x9FE3D2, emissive: 0x0B2620, emissiveIntensity: 0.55, shininess: 6, specular: 0x1F4A42,
+          });
+        },
+        undefined,
+        () => {}
+      );
+
+      glow = new THREE.Mesh(
+        new THREE.SphereGeometry(1.08, 48, 48),
+        new THREE.MeshBasicMaterial({ color: 0x3EE6C1, transparent: true, opacity: 0.08, side: THREE.BackSide })
+      );
+      scene.add(glow);
+
+      initialized = true;
+      updateGlobePosition();
+      window.addEventListener('resize', onResize);
+    }
+
+    function tick(now) {
+      if (!running) return;
+      rafId = requestAnimationFrame(tick);
+
+      for (let i = tweens.length - 1; i >= 0; i--) {
+        const tw = tweens[i];
+        if (tw.start === null) tw.start = now;
+        const t = Math.min(1, Math.max(0, (now - tw.start) / tw.dur));
+        tw.update(t);
+        if (t >= 1) { tweens.splice(i, 1); tw.res(); }
+      }
+
+      if (earth && !flying) {
+        // лёгкое «дыхание» глобуса
+        const s = 1 + Math.sin(now * 0.0006) * 0.012;
+        earth.scale.setScalar(s);
+        if (glow) glow.scale.setScalar(s);
+      }
+      // Крестик, ушедший на обратную сторону, плавно гаснет, а не просвечивает у края глобуса
+      if (earth && markers.length) {
+        earth.updateMatrixWorld();
+        for (const m of markers) {
+          if (!m.sprite) continue;
+          m.sprite.getWorldPosition(tmpA);
+          tmpB.copy(tmpA).sub(earth.position).normalize();          // нормаль поверхности
+          tmpA.subVectors(camera.position, tmpA).normalize();      // направление на камеру
+          const vis = Math.min(1, Math.max(0, (tmpB.dot(tmpA) - 0.08) / 0.22));
+          m.sprite.material.opacity = m.sprite.userData.alpha * vis;
+        }
+      }
+      renderer.render(scene, camera);
+    }
+
+    function start() {
+      if (!initialized) init();
+      if (!renderer || running) return;
+      running = true;
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function stop() {
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      // незавершённые анимации доводим до конца, чтобы никто не ждал их вечно
+      while (tweens.length) { const tw = tweens.pop(); tw.update(1); tw.res(); }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      const scr = document.getElementById('auth-screen');
+      if (!scr) return;
+      if (document.hidden) stop();
+      else if (!scr.hidden && initialized) start();
+    });
+
+    return { init, start, stop, advance, back, resetToFirst, markerScreenPos, flyIn, resetView };
+  })();
+
+  /* ═══════ АВТОРИЗАЦИЯ ═══════ */
+  let currentUser = null;
+  let profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
+
+  /* Фото профиля: их может быть несколько (таблица profile_photos), свежее — главное.
+     Уменьшенная копия главного фото хранится в profiles.avatar — её видно на карте и в чатах. */
+  const PHOTO_MAX_SIDE = 1080, PHOTO_QUALITY = 0.82, PHOTOS_LIMIT = 10;
+  let myPhotos = null;               // [{ id, url }], свежие первыми; null — ещё не загружали
+  let profilePhotosMissing = false;  // таблицы нет (не выполнен supabase_profile_photos.sql) — одно фото, как раньше
+
+  function isMissingTableError(error) {
+    return !!error && (error.code === '42P01' || error.code === 'PGRST205');
+  }
+
+  async function loadProfilePhotos(userId) {
+    if (profilePhotosMissing || !userId) return null;
+    try {
+      const { data, error } = await supabaseClient.from('profile_photos')
+        .select('id, data, created_at').eq('user_id', userId)
+        .order('created_at', { ascending: false }).limit(PHOTOS_LIMIT);
+      if (error) {
+        if (isMissingTableError(error)) profilePhotosMissing = true;
+        console.warn('[profile_photos] load:', error.message);
+        return null;
+      }
+      return (data || []).map((r) => ({ id: r.id, url: r.data, at: r.created_at }));
+    } catch (err) { console.warn('[profile_photos] exception:', err); return null; }
+  }
+
+  // Что показывать: фото из таблицы, а если их нет — единственное старое фото из profiles.avatar
+  function photosOrAvatar(rows, avatar) {
+    if (rows && rows.length) return rows;
+    return avatar ? [{ id: null, url: avatar }] : [];
+  }
+
+  function downscaleDataUrl(url, maxSide = 256, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('image decode error'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = url;
+    });
+  }
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const USERNAME_RE_AUTH = /^[a-zA-Z][a-zA-Z0-9_.]{2,19}$/;
+
+  function isEmail(v) { return EMAIL_RE.test(String(v).trim()); }
+  function normalizeUsername(raw) { return String(raw).trim().replace(/^@+/, '').toLowerCase(); }
+  function isValidUsername(raw) { return USERNAME_RE_AUTH.test(normalizeUsername(raw)); }
+
+  function applyUserToProfileFromRow(row, fallbackEmail) {
+    if (!row) {
+      profile = { name: fallbackEmail ? fallbackEmail.split('@')[0] : 'Пользователь', handle: '@user', bio: '', avatar: '' };
+      return;
+    }
+    profile = {
+      name: row.name || (fallbackEmail ? fallbackEmail.split('@')[0] : 'Пользователь'),
+      handle: '@' + (row.username || 'user'),
+      bio: row.bio || '',
+      avatar: row.avatar || '',
+      gender: row.gender || '',
+      age: row.age || null,
+    };
+  }
+
+  /* Сохранить профиль. Если в таблице ещё нет колонок gender/age
+     (не выполнен supabase_group_filters.sql) — сохраняем без них, чтобы не ломать регистрацию. */
+  async function upsertProfileRow(row) {
+    const res = await supabaseClient.from('profiles').upsert(row);
+    if (res.error && /gender|age/i.test(res.error.message || '')) {
+      console.warn('[profiles] нет колонок gender/age — выполните supabase_group_filters.sql');
+      const { gender, age, ...rest } = row;
+      return supabaseClient.from('profiles').upsert(rest);
+    }
+    return res;
+  }
+
+  async function loadProfileRow(userId) {
+    if (!userId) return null;
+    const { data, error } = await supabaseClient.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (error) { console.warn('[profiles] load:', error.message); return null; }
+    return data;
+  }
+
+  async function isUsernameTakenRemote(uname) {
+    const u = normalizeUsername(uname).toLowerCase();
+    if (!u) return false;
+    const { data, error } = await supabaseClient.from('profiles').select('id').eq('username', u).maybeSingle();
+    if (error) { console.warn('[username check]', error.message); return false; }
+    return !!data;
+  }
+
+  /* Сброс состояния сессии: вызывается и при ручном выходе, и по событию SIGNED_OUT.
+     Повторный вызов безопасен. */
+  function handleSignedOut() {
+    if (!currentUser && !authScreen.hidden) return;
+    currentUser = null;
+    profile = { name: 'Ваше имя', handle: '@username', bio: '', avatar: '' };
+    myPhotos = null;
+
+    rtChannels.forEach((c) => { try { supabaseClient.removeChannel(c); } catch {} });
+    rtChannels = [];
+    for (const fm of friendMarkers.values()) { try { fm.marker.destroy(); } catch {} }
+    friendMarkers.clear(); friendMarkerCoords.clear();
+    userLocationsById.clear(); userAvatarCfgById.clear(); groupMemberProfiles.clear();
+    posts = []; wishes = []; groups = []; notifications = []; friends = [];
+    leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = [];
+    pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
+    groupMatches = []; groupMatchOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
+    groupStats = new Map();
+    syncPostMarkers(); syncWishMarkers(); updateBadge();
+
+    document.body.classList.add('auth-locked');
+    authScreen.classList.remove('is-diving', 'is-leaving');
+    authScreen.hidden = false;
+    closeApp();
+    Globe.init();
+    Globe.resetView();
+    Globe.start();
+    authBusy = false; authCardShown = false;
+    renderAuthLogin();
+  }
+
+  function logout() {
+    supabaseClient.auth.signOut().finally(handleSignedOut);
+  }
+
+  const authScreen = document.getElementById('auth-screen');
+  const authCard   = document.getElementById('auth-card');
+
+  function authHeader({ title, sub = '', icon = '🔐', logo = false }) {
+    return `
+      ${logo
+        ? `<img class="auth-wordmark" src="icons/wordmark.svg" alt="Groupis">`
+        : `<div class="auth-logo" aria-hidden="true">${icon}</div>`}
+      <h1 class="auth-title">${escapeHtml(title)}</h1>
+      <p class="auth-sub">${escapeHtml(sub)}</p>
+    `;
+  }
+  function showAuthError(el, msg) { el.textContent = msg; el.hidden = false; }
+
+  /* ── Карточка входа вылетает из крестика на глобусе и улетает обратно в него ── */
+  let authBusy = false;        // идёт переход между экранами — новые нажатия игнорируем
+  let authCardShown = false;
+  const authMotion = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // transform, который «сжимает» карточку в точку крестика
+  function authCardFlightTransform() {
+    const pos = Globe.markerScreenPos();
+    const prev = authCard.style.transform;
+    authCard.style.transform = 'none';          // меряем карточку без текущей анимации
+    const r = authCard.getBoundingClientRect();
+    authCard.style.transform = prev;
+    if (!pos || !r.width) return 'translateY(24px) scale(.85)';
+    const dx = pos.x - (r.left + r.width / 2), dy = pos.y - (r.top + r.height / 2);
+    return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(.03)`;
+  }
+
+  function runAuthCardAnim(frames, opts) {
+    return new Promise((resolve) => {
+      const last = frames[frames.length - 1];
+      let anim;
+      try { anim = authCard.animate(frames, { fill: 'forwards', ...opts }); }
+      catch { Object.assign(authCard.style, last); resolve(); return; }
+      anim.onfinish = () => {
+        Object.assign(authCard.style, last);
+        anim.cancel();
+        resolve();
+      };
+    });
+  }
+
+  async function authCardOut() {
+    if (!authCardShown) return;
+    authCardShown = false;
+    authCard.style.pointerEvents = 'none';
+    await runAuthCardAnim(
+      [{ transform: 'none', opacity: 1, filter: 'blur(0px)' }, { transform: authCardFlightTransform(), opacity: 0, filter: 'blur(4px)' }],
+      { duration: authMotion() ? 480 : 0, easing: 'cubic-bezier(.55,0,.75,.2)' });
+  }
+
+  async function authCardIn() {
+    await runAuthCardAnim(
+      [{ transform: authCardFlightTransform(), opacity: 0, filter: 'blur(4px)' }, { transform: 'none', opacity: 1, filter: 'blur(0px)' }],
+      { duration: authMotion() ? 680 : 0, easing: 'cubic-bezier(.16,.9,.3,1)' });
+    authCard.style.filter = '';                  // filter на карточке ломает её backdrop-filter
+    authCard.style.pointerEvents = '';
+    authCardShown = true;
+    // На компьютере сразу ставим курсор в поле; на телефоне не открываем клавиатуру сама по себе
+    if (!matchMedia('(pointer: coarse)').matches) {
+      const f = authCard.querySelector('input:not([type="range"]):not([type="file"]):not([type="hidden"]), textarea');
+      if (f) f.focus({ preventScroll: true });
+    }
+  }
+
+  /* Переход между экранами входа: карточка улетает в крестик → глобус делает шаг → новая карточка вылетает */
+  async function authTransition(globeStep, paint) {
+    if (authBusy) return;
+    authBusy = true;
+    try {
+      await authCardOut();
+      if (globeStep) await globeStep();
+      paint();
+      await authCardIn();
+    } catch (err) {
+      console.warn('[auth transition]', err);
+      paint();
+      Object.assign(authCard.style, { opacity: '1', transform: 'none', filter: '', pointerEvents: '' });
+      authCardShown = true;
+    } finally {
+      authBusy = false;
+    }
+  }
+
+  /* Вход выполнен: карточка улетает в крестик, камера летит к Земле, затемнение — и открывается карта */
+  async function playAuthExit() {
+    if (authScreen.hidden) return;
+    authBusy = true;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    try {
+      await authCardOut();
+      if (authMotion()) {
+        let dimmed = false;
+        await Globe.flyIn(2800, (t) => {
+          if (!dimmed && t > 0.64) { dimmed = true; authScreen.classList.add('is-diving'); }
+        });
+        authScreen.classList.add('is-diving');
+        await wait(450);
+      }
+      // Карта «приближается» из-под затемнения — продолжение полёта
+      if (map2gis) {
+        try {
+          const z = map2gis.getZoom();
+          map2gis.setZoom(Math.max(3, z - 3));
+          setTimeout(() => { try { map2gis.setZoom(z, { duration: 1800 }); } catch {} }, 60);
+        } catch {}
+      }
+      authScreen.classList.add('is-leaving');
+      await wait(authMotion() ? 820 : 0);
+    } catch (err) {
+      console.warn('[auth exit]', err);
+    } finally {
+      authScreen.hidden = true;
+      authScreen.classList.remove('is-diving', 'is-leaving');
+      Globe.stop();
+      Globe.resetView();
+      authCard.innerHTML = '';
+      Object.assign(authCard.style, { opacity: '', transform: '', filter: '', pointerEvents: '' });
+      authCardShown = false;
+      authBusy = false;
+    }
+  }
+
+  // Вход — первый крестик на глобусе; сюда же возвращаемся из регистрации и восстановления
+  function renderAuthLogin() { authTransition(() => Globe.resetToFirst(), paintAuthLogin); }
+
+  function paintAuthLogin() {
+    authCard.innerHTML = `
+      ${authHeader({ title: 'Добро пожаловать в Groupis', sub: 'Войдите, чтобы продолжить', logo: true })}
+      <form class="auth-form" id="auth-login-form" novalidate>
+        <label class="auth-field">
+          <span class="auth-label">Почта или @username</span>
+          <input class="auth-input" type="text" id="login-ident" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="you@example.com или @username">
+        </label>
+        <label class="auth-field">
+          <span class="auth-label">Пароль</span>
+          <input class="auth-input" type="password" id="login-pwd" autocomplete="current-password" placeholder="Ваш пароль">
+        </label>
+        <div id="login-error" class="auth-error" hidden></div>
+        <button class="auth-btn" type="submit" id="login-submit">Войти</button>
+        <div class="auth-links">
+          <button class="auth-link" type="button" id="go-register">Создать аккаунт</button>
+          <button class="auth-link" type="button" id="go-forgot">Забыли пароль?</button>
+        </div>
+      </form>
+    `;
+
+    const form = authCard.querySelector('#auth-login-form');
+    const ident = authCard.querySelector('#login-ident');
+    const pwd = authCard.querySelector('#login-pwd');
+    const err = authCard.querySelector('#login-error');
+    const submit = authCard.querySelector('#login-submit');
+
+    authCard.querySelector('#go-register').addEventListener('click', renderAuthRegister);
+    authCard.querySelector('#go-forgot').addEventListener('click', renderAuthForgot);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const idVal = ident.value.trim();
+      const pw = pwd.value;
+      if (!idVal) { showAuthError(err, 'Введите почту или username'); return; }
+      if (!pw) { showAuthError(err, 'Введите пароль'); return; }
+
+      let email = idVal;
+      if (!isEmail(idVal)) {
+        const uname = normalizeUsername(idVal);
+        const { data: foundEmail, error: rpcErr } = await supabaseClient.rpc('get_email_by_username', { uname });
+        if (rpcErr || !foundEmail) {
+          console.error('[rpc get_email_by_username]', rpcErr);
+          showAuthError(err, 'Пользователь с таким username не найден.');
+          return;
+        }
+        email = foundEmail;
+      }
+
+      submit.disabled = true;
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pw });
+      submit.disabled = false;
+      if (error) {
+        console.error('[signIn]', error);
+        showAuthError(err, 'Неверная почта/username или пароль.');
+        return;
+      }
+
+      currentUser = data.user;
+      const row = await loadProfileRow(currentUser.id);
+      applyUserToProfileFromRow(row, currentUser.email);
+      await enterAppAfterLogin();
+    });
+  }
+
+  // Восстановление пароля — следующий крестик от входа
+  function renderAuthForgot() { authTransition(() => Globe.advance(), paintAuthForgot); }
+
+  function paintAuthForgot() {
+    authCard.innerHTML = `
+      ${authHeader({ title: 'Восстановление', sub: 'Введите почту от аккаунта', icon: '🔑' })}
+      <form class="auth-form" id="auth-forgot-form" novalidate>
+        <label class="auth-field">
+          <span class="auth-label">Почта</span>
+          <input class="auth-input" type="email" id="forgot-email" placeholder="you@example.com">
+        </label>
+        <div id="forgot-error" class="auth-error" hidden></div>
+        <div id="forgot-ok" class="auth-error" hidden style="background:rgba(74,208,122,.14);color:#4AD07A"></div>
+        <button class="auth-btn" type="submit">Отправить письмо</button>
+        <div class="auth-links">
+          <button class="auth-link" type="button" id="back-login">← Назад ко входу</button>
+        </div>
+      </form>
+    `;
+    const form = authCard.querySelector('#auth-forgot-form');
+    const email = authCard.querySelector('#forgot-email');
+    const err = authCard.querySelector('#forgot-error');
+    const ok = authCard.querySelector('#forgot-ok');
+    authCard.querySelector('#back-login').addEventListener('click', renderAuthLogin);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true; ok.hidden = true;
+      const v = email.value.trim();
+      if (!isEmail(v)) { showAuthError(err, 'Введите корректную почту'); return; }
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(v, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) { console.error('[resetPassword]', error); showAuthError(err, error.message); return; }
+      ok.textContent = 'Если аккаунт существует, письмо отправлено.';
+      ok.hidden = false;
+    });
+  }
+
+  const REG_STEPS = ['name', 'username', 'gender', 'password', 'age', 'photo', 'bio'];
+
+  function renderAuthRegister() {
+    const draft = { name: '', username: '', gender: '', password: '', age: 18, avatar: '', photo: '', bio: '', email: '' };
+    let stepIdx = 0;
+
+    // Каждый шаг регистрации — новый крестик: вперёд пунктир к следующему, назад — возврат к прошлому
+    const go = (delta) => authTransition(
+      () => (delta > 0 ? Globe.advance() : Globe.back()),
+      () => { stepIdx += delta; renderStep(); });
+
+    function renderStep() {
+      const step = REG_STEPS[stepIdx];
+
+      const dots = REG_STEPS.map((_, i) => {
+        const cls = i === stepIdx ? 'active' : (i < stepIdx ? 'done' : '');
+        return `<span class="auth-step-dot ${cls}"></span>`;
+      }).join('');
+      const stepInfo = {
+        name:     { t: 'Как вас зовут?', s: 'Это имя увидят другие пользователи' },
+        username: { t: 'Придумайте username', s: 'Латиница, цифры, «_» и «.», от 3 до 20 символов' },
+        gender:   { t: 'Ваш пол', s: 'Поможет точнее подбирать компанию' },
+        password: { t: 'Придумайте пароль', s: 'Минимум 6 символов' },
+        age:      { t: 'Сколько вам лет?', s: 'Возраст можно будет изменить позже' },
+        photo:    { t: 'Добавьте фото', s: 'Необязательно' },
+        bio:      { t: 'Расскажите о себе', s: 'Пара слов — и профиль готов' },
+      }[step];
+
+      authCard.innerHTML = `
+        ${authHeader({ title: 'Создание аккаунта', sub: '', icon: '✨' })}
+        <div class="auth-steps">${dots}</div>
+        <h2 class="auth-step-title">${escapeHtml(stepInfo.t)}</h2>
+        <p class="auth-step-sub">${escapeHtml(stepInfo.s)}</p>
+        <form class="auth-form" id="reg-form" novalidate>
+          <div id="reg-step-body"></div>
+          <div id="reg-error" class="auth-error" hidden></div>
+          <div class="auth-links" style="justify-content:space-between">
+            <button class="auth-link" type="button" id="reg-back">← Назад</button>
+            <button class="auth-btn" type="submit" style="width:auto;min-width:140px" id="reg-next">
+              ${step === 'bio' ? 'Завершить' : 'Далее'}
+            </button>
+          </div>
+        </form>
+      `;
+
+      authCard.querySelector('#reg-back').addEventListener('click', () => {
+        if (stepIdx === 0) { renderAuthLogin(); return; }
+        go(-1);
+      });
+
+      const body = authCard.querySelector('#reg-step-body');
+      const err = authCard.querySelector('#reg-error');
+      const form = authCard.querySelector('#reg-form');
+
+      if (step === 'name') {
+        body.innerHTML = `<label class="auth-field"><span class="auth-label">Имя</span><input class="auth-input" type="text" id="reg-name" maxlength="60" value="${escapeHtml(draft.name)}" placeholder="Например, Алексей"></label>`;
+      } else if (step === 'username') {
+        body.innerHTML = `
+          <label class="auth-field">
+            <span class="auth-label">Username</span>
+            <div class="username-wrap"><span class="username-prefix" aria-hidden="true">@</span>
+              <input class="edit-input username-input" type="text" id="reg-username" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false" value="${escapeHtml(draft.username)}" placeholder="username">
+            </div>
+            <span class="username-status" id="uname-status"></span>
+          </label>`;
+        const unameEl = authCard.querySelector('#reg-username');
+        const status = authCard.querySelector('#uname-status');
+        let checkTimer = null;
+        const runCheck = () => {
+          const v = normalizeUsername(unameEl.value);
+          unameEl.value = v;
+          if (!v) { status.textContent = ''; status.className = 'username-status'; return; }
+          if (!isValidUsername(v)) { status.textContent = 'Неверный формат'; status.className = 'username-status busy'; return; }
+          status.innerHTML = `<span class="spinner"></span> Проверяем…`;
+          status.className = 'username-status checking';
+          clearTimeout(checkTimer);
+          checkTimer = setTimeout(async () => {
+            if (await isUsernameTakenRemote(v)) { status.textContent = 'Этот username уже занят'; status.className = 'username-status busy'; }
+            else { status.textContent = 'Свободно ✓'; status.className = 'username-status ok'; }
+          }, 350);
+        };
+        unameEl.addEventListener('input', runCheck);
+      } else if (step === 'gender') {
+        body.innerHTML = `
+          <div class="gender-row" id="gender-row">
+            <button class="gender-opt" type="button" data-gender="male" aria-pressed="${draft.gender === 'male'}"><span class="gender-emoji">👨</span><span class="gender-label">Мужской</span></button>
+            <button class="gender-opt" type="button" data-gender="female" aria-pressed="${draft.gender === 'female'}"><span class="gender-emoji">👩</span><span class="gender-label">Женский</span></button>
+          </div>`;
+        authCard.querySelectorAll('.gender-opt').forEach((b) => {
+          b.addEventListener('click', () => {
+            draft.gender = b.dataset.gender;
+            authCard.querySelectorAll('.gender-opt').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.gender === draft.gender)));
+          });
+        });
+      } else if (step === 'password') {
+        body.innerHTML = `
+          <label class="auth-field"><span class="auth-label">Пароль</span><input class="auth-input" type="password" id="reg-pwd" autocomplete="new-password" placeholder="Минимум 6 символов"></label>
+          <label class="auth-field"><span class="auth-label">Повторите пароль</span><input class="auth-input" type="password" id="reg-pwd2" autocomplete="new-password" placeholder="Ещё раз"></label>`;
+      } else if (step === 'age') {
+        body.innerHTML = `<div class="auth-age-row"><input type="range" id="reg-age" min="10" max="100" value="${draft.age}"><span class="auth-age-value" id="reg-age-value">${draft.age}</span></div>`;
+        const r = authCard.querySelector('#reg-age');
+        const v = authCard.querySelector('#reg-age-value');
+        r.addEventListener('input', () => { v.textContent = r.value; draft.age = Number(r.value); });
+      } else if (step === 'photo') {
+        body.innerHTML = `
+          <div class="auth-avatar-row">
+            <div class="auth-avatar-preview" id="reg-avatar">${draft.avatar ? '' : escapeHtml((draft.name || '?').charAt(0).toUpperCase() || '?')}</div>
+            <div class="auth-avatar-side">
+              <button type="button" class="btn" id="reg-avatar-pick">Выбрать фото</button>
+              <button type="button" class="btn-ghost" id="reg-avatar-remove" ${draft.avatar ? '' : 'hidden'}>Удалить</button>
+              <input type="file" id="reg-avatar-input" accept="image/*" hidden>
+            </div>
+          </div>`;
+        const prev = authCard.querySelector('#reg-avatar');
+        const inp = authCard.querySelector('#reg-avatar-input');
+        const rm = authCard.querySelector('#reg-avatar-remove');
+        if (draft.avatar) { prev.style.backgroundImage = `url('${draft.avatar}')`; prev.textContent = ''; }
+        authCard.querySelector('#reg-avatar-pick').addEventListener('click', () => inp.click());
+        inp.addEventListener('change', () => {
+          const file = inp.files && inp.files[0];
+          if (!file || !file.type.startsWith('image/')) return;
+          // крупная копия — первое фото в галерее профиля, маленькая (draft.avatar) — для карты
+          fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY).then((u) => { draft.photo = u; }).catch(() => { draft.photo = ''; });
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              const max = 256;
+              const s = Math.min(1, max / Math.max(img.width, img.height));
+              const w = Math.round(img.width * s), h = Math.round(img.height * s);
+              const c = document.createElement('canvas');
+              c.width = w; c.height = h;
+              c.getContext('2d').drawImage(img, 0, 0, w, h);
+              draft.avatar = c.toDataURL('image/jpeg', 0.85);
+              prev.style.backgroundImage = `url('${draft.avatar}')`;
+              prev.textContent = '';
+              rm.hidden = false;
+            };
+            img.src = reader.result;
+          };
+          reader.readAsDataURL(file);
+        });
+        rm.addEventListener('click', () => {
+          draft.avatar = ''; draft.photo = '';
+          prev.style.backgroundImage = '';
+          prev.textContent = (draft.name || '?').charAt(0).toUpperCase() || '?';
+          rm.hidden = true;
+        });
+      } else if (step === 'bio') {
+        body.innerHTML = `
+          <label class="auth-field"><span class="auth-label">О себе</span><textarea class="edit-textarea" id="reg-bio" maxlength="300">${escapeHtml(draft.bio)}</textarea></label>
+          <div class="auth-divider">Контакт для входа</div>
+          <label class="auth-field"><span class="auth-label">Почта</span><input class="auth-input" type="email" id="reg-email" value="${escapeHtml(draft.email)}" placeholder="you@example.com"></label>`;
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        err.hidden = true;
+
+        if (step === 'name') {
+          const v = authCard.querySelector('#reg-name').value.trim();
+          if (v.length < 2) { showAuthError(err, 'Введите имя'); return; }
+          draft.name = v; go(1); return;
+        }
+        if (step === 'username') {
+          const v = normalizeUsername(authCard.querySelector('#reg-username').value);
+          if (!isValidUsername(v)) { showAuthError(err, 'Username: латиница, цифры, «_» и «.», от 3 до 20 символов'); return; }
+          if (await isUsernameTakenRemote(v)) { showAuthError(err, 'Этот username уже занят'); return; }
+          draft.username = v; go(1); return;
+        }
+        if (step === 'gender') {
+          if (!draft.gender) { showAuthError(err, 'Выберите пол'); return; }
+          go(1); return;
+        }
+        if (step === 'password') {
+          const p1 = authCard.querySelector('#reg-pwd').value;
+          const p2 = authCard.querySelector('#reg-pwd2').value;
+          if (p1.length < 6) { showAuthError(err, 'Пароль минимум 6 символов'); return; }
+          if (p1 !== p2) { showAuthError(err, 'Пароли не совпадают'); return; }
+          draft.password = p1; go(1); return;
+        }
+        if (step === 'age') { draft.age = Number(authCard.querySelector('#reg-age').value) || 18; go(1); return; }
+        if (step === 'photo') { go(1); return; }
+
+        const emailVal = authCard.querySelector('#reg-email').value.trim();
+        if (!isEmail(emailVal)) { showAuthError(err, 'Введите корректную почту'); return; }
+        draft.email = emailVal.toLowerCase();
+
+        const submitBtn = authCard.querySelector('#reg-form [type="submit"]');
+        submitBtn.disabled = true;
+        const oldLabel = submitBtn.textContent;
+        submitBtn.textContent = 'Создаём…';
+
+        const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+          email: draft.email,
+          password: draft.password,
+          options: {
+            data: { name: draft.name, username: draft.username },
+            emailRedirectTo: window.location.origin + window.location.pathname,
+          },
+        });
+
+        if (signUpError) {
+          console.error('[signUp]', signUpError);
+          submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+          showAuthError(err, signUpError.message || 'Не удалось создать аккаунт');
+          return;
+        }
+
+        const uid = signUpData.user && signUpData.user.id;
+        if (uid) {
+          const { error: profErr } = await upsertProfileRow({
+            id: uid, name: draft.name, username: draft.username,
+            bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
+            avatar: draft.avatar || '',
+            gender: draft.gender || null, age: draft.age || null,
+          });
+          if (profErr) {
+            console.error('[profiles] upsert error:', profErr);
+            submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+            showAuthError(err, 'Профиль не сохранён: ' + profErr.message);
+            return;
           }
-          return response;
-        })
-        .catch(() => caches.match('./index.html'))
+        }
+
+        if (!signUpData.session) {
+          submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+          authTransition(null, () => {
+          authCard.innerHTML = `
+            ${authHeader({ title: 'Проверьте почту', sub: 'Мы отправили письмо для подтверждения аккаунта', icon: '✉️' })}
+            <div class="auth-links" style="justify-content:center"><button class="auth-link" type="button" id="back-login-2">← Ко входу</button></div>`;
+          authCard.querySelector('#back-login-2').addEventListener('click', renderAuthLogin);
+          });
+          return;
+        }
+
+        currentUser = signUpData.user;
+        if (draft.photo && draft.avatar) {
+          const { error: phErr } = await supabaseClient.from('profile_photos').insert({ user_id: currentUser.id, data: draft.photo });
+          if (phErr) console.warn('[profile_photos] first photo:', phErr.message);
+        }
+        applyUserToProfileFromRow({
+          name: draft.name, username: draft.username,
+          bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
+          avatar: draft.avatar || '',
+        }, draft.email);
+
+        await enterAppAfterLogin();
+      });
+    }
+    // Из входа — пунктир к первому шагу регистрации
+    authTransition(() => Globe.advance(), renderStep);
+  }
+
+  async function enterAppAfterLogin() {
+    document.body.classList.remove('auth-locked');
+    // Полёт к Земле идёт поверх карты, пока грузятся данные; экран входа сам скроется в конце
+    playAuthExit();
+
+    await Promise.all([
+      loadPostsFromDB(),
+      loadWishesFromDB(),
+      loadGroupsFromDB(),
+      loadNotificationsFromDB(),
+      loadFriendsFromDB(),
+      loadGroupStats(),
+    ]);
+    updateFilterDot();
+    subscribeRealtime();
+
+    if (lastUserLocation && settings.geolocation) {
+      placeUserMarker(lastUserLocation);
+      syncWishMarkers();
+    }
+    syncPostMarkers();
+    syncWishMarkers();
+    updateBadge();
+
+    await loadGroupMemberProfiles();
+    loadUserLocations();
+    refreshMyMarker(); // если я лидер группы — иконка группы над моим аватаром
+    openAppFromShortcut();
+  }
+
+  /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings */
+  function openAppFromShortcut() {
+    const params = new URLSearchParams(location.search);
+    const target = params.get('open');
+    if (!target) return;
+    params.delete('open');
+    const qs = params.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    if (target === 'messenger' || APPS[target]) showApp(target);
+  }
+
+  /* ═══════ ГЛОБАЛЬНЫЕ МАССИВЫ ═══════ */
+  let posts = [];
+  let wishes = [];
+  let groups = [];
+  let notifications = [];
+  let friends = [];
+
+  /* ═══════ ЗАГРУЗКИ ИЗ SUPABASE ═══════ */
+  async function loadPostsFromDB() {
+    const { data, error } = await supabaseClient.from('posts').select('*').order('ts', { ascending: false }).limit(500);
+    if (error) { console.warn('[posts] load:', error.message); return; }
+    posts = (data || []).map((r) => ({
+      id: r.id, authorId: r.author_id, author: r.author_name,
+      images: Array.isArray(r.images) ? r.images : [],
+      place: r.place, caption: r.caption,
+      coords: Array.isArray(r.coords) ? r.coords : null,
+      ts: r.ts, time: r.ts ? new Date(r.ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '',
+    }));
+  }
+
+  async function loadWishesFromDB() {
+    const { data, error } = await supabaseClient.from('wishes').select('*').order('ts', { ascending: false }).limit(500);
+    if (error) { console.warn('[wishes] load:', error.message); return; }
+    wishes = (data || []).map((r) => ({
+      id: r.id, authorId: r.author_id, authorName: r.author_name,
+      text: r.text, place: r.place,
+      coords: Array.isArray(r.coords) ? r.coords : null,
+      audience: r.audience, groupId: r.group_id, ts: r.ts,
+    }));
+  }
+
+  async function loadGroupsFromDB() {
+    const { data: gr, error: gErr } = await supabaseClient.from('groups').select('*').order('created_at', { ascending: false });
+    if (gErr) { console.warn('[groups] load:', gErr.message); return; }
+    const ids = (gr || []).map((g) => g.id);
+    let membersByGroup = {};
+    if (ids.length) {
+      const { data: mem, error: mErr } = await supabaseClient.from('group_members').select('*').in('group_id', ids);
+      if (mErr) { console.warn('[group_members] load:', mErr.message); }
+      else {
+        for (const m of (mem || [])) {
+          if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = [];
+          membersByGroup[m.group_id].push({ id: m.user_id, name: m.name, handle: '@' + m.username, avatar: m.avatar || '' });
+        }
+      }
+    }
+    groups = (gr || []).map((g) => ({
+      id: g.id, ownerId: g.owner_id, name: g.name, photo: g.photo,
+      visibility: g.visibility, members: membersByGroup[g.id] || [],
+      wish: (g.wish || '').trim(), wishAt: g.wish_at || null,
+      unionWith: g.union_with != null ? String(g.union_with) : null,
+    }));
+  }
+
+  /* ═══════ MATCH МЕЖДУ ГРУППАМИ ═══════
+     RLS отдаёт только match тех групп, где мы состоим. */
+  let groupMatches = [];
+  const groupMatchOutcome = new Map(); // id запроса → 'accepted' | 'declined' (ответ дан в этой сессии)
+
+  async function loadGroupMatchesFromDB() {
+    if (!currentUser) { groupMatches = []; return; }
+    const { data, error } = await supabaseClient.from('group_matches').select('*');
+    if (error) { console.warn('[group_matches] load:', error.message); return; }
+    groupMatches = (data || []).map((r) => ({
+      id: String(r.id), fromGroup: String(r.from_group), toGroup: String(r.to_group),
+      fromOwner: r.from_owner, toOwner: r.to_owner, status: r.status, createdAt: r.created_at,
+      voteState: r.vote_state || 'none', voteStartedBy: r.vote_started_by || null,
+    }));
+  }
+
+  /* ═══════ СОЮЗ ГРУПП И ГОЛОСОВАНИЕ ═══════
+     Закреплённый союз (≥ 50% «за»): участники двух групп видят на карте только друг друга,
+     а сами группы скрыты от остальных. Распавшийся союз (≥ 50% «против»): группы больше
+     не видят друг друга и не могут снова сделать match. */
+  function unionPartner(g) {
+    if (!g || !g.unionWith) return null;
+    return groupById(g.unionWith);   // партнёр мог удалить группу — тогда союза нет
+  }
+  // Мой закреплённый союз: { mine, partner } или null
+  function myUnion() {
+    for (const g of myGroups()) {
+      const partner = unionPartner(g);
+      if (partner) return { mine: g, partner };
+    }
+    return null;
+  }
+  // Союз с группой распался (статус dissolved) — она для нас скрыта навсегда
+  function dissolvedWithMyGroups(g) {
+    const gid = String(g.id);
+    const mine = new Set(myGroups().map((x) => String(x.id)));
+    return groupMatches.some((m) => m.status === 'dissolved' &&
+      ((m.fromGroup === gid && mine.has(m.toGroup)) || (m.toGroup === gid && mine.has(m.fromGroup))));
+  }
+  // Скрыта ли чужая группа от меня на карте и в списках
+  function groupHiddenForMe(g) {
+    const myId = currentUser && currentUser.id;
+    if (!g || isGroupParticipant(g, myId)) return false;
+    const u = myUnion();
+    if (u) return String(g.id) !== String(u.partner.id);   // в союзе видим только партнёра
+    if (unionPartner(g)) return true;                        // чужой закреплённый союз скрыт от всех
+    return dissolvedWithMyGroups(g);
+  }
+
+  // Все участники союза: лидеры и участники обеих групп
+  function matchParticipantIds(m) {
+    const ids = new Set();
+    for (const gid of [m.fromGroup, m.toGroup]) {
+      const g = groupById(gid);
+      if (!g) continue;
+      ids.add(g.ownerId);
+      for (const mem of (g.members || [])) ids.add(mem.id);
+    }
+    return [...ids];
+  }
+  function isMatchLeader(m, uid) {
+    return [m.fromGroup, m.toGroup].some((gid) => { const g = groupById(gid); return g && g.ownerId === uid; });
+  }
+
+  async function loadMatchVotes(matchId) {
+    const { data, error } = await supabaseClient.from('match_votes').select('user_id, vote').eq('match_id', Number(matchId));
+    if (error) { console.warn('[match votes] load:', error.message); return []; }
+    return data || [];
+  }
+
+  function groupById(id) { return groups.find((g) => String(g.id) === String(id)) || null; }
+  function isGroupParticipant(g, uid) { return !!g && !!uid && (g.ownerId === uid || (g.members || []).some((m) => m.id === uid)); }
+  function groupsOwnedBy(uid) { return groups.filter((g) => g.ownerId === uid); }
+
+  function matchTitle(m) {
+    const a = groupById(m.fromGroup), b = groupById(m.toGroup);
+    return `${a ? a.name : 'Группа'} feat ${b ? b.name : 'Группа'}`;
+  }
+
+  // Принятые match, где я состою в одной из групп
+  function myAcceptedMatches() {
+    const myId = currentUser && currentUser.id;
+    return groupMatches.filter((m) => m.status === 'accepted' &&
+      (isGroupParticipant(groupById(m.fromGroup), myId) || isGroupParticipant(groupById(m.toGroup), myId)));
+  }
+
+  // Запись match между двумя группами (в любом направлении)
+  function matchBetween(gidA, gidB) {
+    const a = String(gidA), b = String(gidB);
+    return groupMatches.find((m) => (m.fromGroup === a && m.toGroup === b) || (m.fromGroup === b && m.toGroup === a)) || null;
+  }
+
+  function pendingIncomingMatch(id) {
+    const m = groupMatches.find((x) => x.id === String(id));
+    return !!m && m.status === 'pending' && m.toOwner === (currentUser && currentUser.id);
+  }
+
+  async function respondGroupMatch(matchId, accept) {
+    const { error } = await supabaseClient.rpc(accept ? 'accept_group_match' : 'decline_group_match', { match_id: Number(matchId) });
+    if (error) {
+      console.error('[group match respond]', error);
+      alert('Не удалось ответить на запрос: ' + error.message);
+      return false;
+    }
+    groupMatchOutcome.set(String(matchId), accept ? 'accepted' : 'declined');
+    notifications = notifications.map((n) => n.requestId === String(matchId) && n.type === 'group_match' ? { ...n, read: true } : n);
+    await refreshGroupsWorld();
+    return true;
+  }
+
+  async function sendGroupMatch(fromGid, toGid) {
+    const { data: status, error } = await supabaseClient.rpc('send_group_match', { from_gid: String(fromGid), to_gid: String(toGid) });
+    if (error) {
+      console.error('[rpc send_group_match]', error);
+      alert('Не удалось отправить запрос: ' + error.message);
+      return null;
+    }
+    await loadGroupMatchesFromDB();
+    if (status === 'accepted') await refreshGroupsWorld();
+    return status;
+  }
+
+  /* ═══════ ФИЛЬТРЫ ГРУПП НА КАРТЕ ═══════
+     Скрывают только чужие группы. Свои группы, друзья и группы с match видны всегда. */
+  const FILTERS_KEY = 'map.filters.v1';
+  const DEFAULT_FILTERS = { ageOn: false, age: 20, spread: 2, comp: 'all' };
+  const COMP_LABELS = { all: 'Любой', male: 'Только парни', female: 'Только девушки', mixed: 'Смешанный' };
+  function loadFilters() {
+    try {
+      const raw = localStorage.getItem(FILTERS_KEY);
+      return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+    } catch { return { ...DEFAULT_FILTERS }; }
+  }
+  function saveFilters() { try { localStorage.setItem(FILTERS_KEY, JSON.stringify(mapFilters)); } catch {} }
+  let mapFilters = loadFilters();
+
+  // Сводка по группам: средний возраст и сколько парней/девушек (считает сервер)
+  let groupStats = new Map();
+  let groupStatsFailed = false;
+  async function loadGroupStats() {
+    if (!currentUser) { groupStats = new Map(); return; }
+    const { data, error } = await supabaseClient.rpc('get_group_stats');
+    if (error) { console.warn('[group stats]', error.message); groupStatsFailed = true; return; }
+    groupStatsFailed = false;
+    groupStats = new Map((data || []).map((r) => [String(r.group_id), {
+      avgAge: r.avg_age != null ? Number(r.avg_age) : null,
+      males: r.males || 0, females: r.females || 0, total: r.total || 0,
+    }]));
+  }
+
+  function groupComposition(st) {
+    if (!st) return null;
+    if (st.males && st.females) return 'mixed';
+    if (st.males) return 'male';
+    if (st.females) return 'female';
+    return null; // пол участников не указан
+  }
+
+  function groupStatsText(g) {
+    const st = groupStats.get(String(g.id));
+    if (!st) return '';
+    const bits = [];
+    if (st.avgAge != null) bits.push(`средний возраст ${Math.round(st.avgAge)}`);
+    const comp = groupComposition(st);
+    if (comp) bits.push({ male: 'парни', female: 'девушки', mixed: 'смешанный состав' }[comp]);
+    return bits.join(' · ');
+  }
+
+  function filtersActive() { return !!mapFilters.ageOn || mapFilters.comp !== 'all'; }
+
+  function groupPassesFilters(g) {
+    if (!filtersActive()) return true;
+    const st = groupStats.get(String(g.id));
+    if (mapFilters.ageOn) {
+      // «20 лет, ±0» — средний возраст, который округляется до 20
+      if (!st || st.avgAge == null || Math.abs(st.avgAge - mapFilters.age) > mapFilters.spread + 0.5) return false;
+    }
+    if (mapFilters.comp !== 'all' && groupComposition(st) !== mapFilters.comp) return false;
+    return true;
+  }
+
+  // Группы лидера, которые показываем иконкой на карте (с учётом фильтров)
+  function visibleGroupsOfLeader(userId) { return groupsOwnedBy(userId).filter((g) => !groupHiddenForMe(g) && groupPassesFilters(g)); }
+
+  function updateFilterDot() {
+    const dot = document.getElementById('filter-dot');
+    if (dot) dot.hidden = !filtersActive();
+  }
+
+  let filtersApplyTimer = null;
+  function applyMapFilters() {
+    saveFilters();
+    updateFilterDot();
+    clearTimeout(filtersApplyTimer);
+    // Профили нужны лидерам, которые только что прошли фильтр
+    filtersApplyTimer = setTimeout(async () => { await loadGroupMemberProfiles(); loadUserLocations(); }, 200);
+  }
+
+  /* Перечитать группы, match и связанные с ними маркеры на карте */
+  async function refreshGroupsWorld() {
+    await Promise.all([loadGroupsFromDB(), loadGroupMatchesFromDB(), loadGroupStats()]);
+    await loadGroupMemberProfiles();
+    await loadUserLocations();
+    refreshMyMarker();
+  }
+
+  let groupsWorldTimer = null;
+  function scheduleGroupsWorldRefresh() {
+    clearTimeout(groupsWorldTimer);
+    groupsWorldTimer = setTimeout(async () => {
+      await refreshGroupsWorld();
+      onMatchesChanged();   // открытый совместный чат: обновить голосование или закрыть, если союз распался
+      // Открытый список групп перерисовываем, чтобы он не показывал устаревшее
+      if (openApp === 'profile' && winTitle.textContent === 'Группы') showGroupsScreen();
+    }, 300);
+  }
+
+  async function loadNotificationsFromDB() {
+    if (!currentUser) { notifications = []; return; }
+    const { data, error } = await supabaseClient.from('notifications')
+      .select('*').eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false }).limit(100);
+    if (error) { console.warn('[notifications] load:', error.message); notifications = []; return; }
+    notifications = (data || []).map(mapNotificationRow);
+    await Promise.all([loadIncomingFriendRequests(), loadGroupMatchesFromDB()]);
+    updateBadge();
+  }
+
+  function mapNotificationRow(n) {
+    return {
+      id: String(n.id), type: n.type, title: n.title, text: n.text, read: !!n.read,
+      requestId: n.request_id != null ? String(n.request_id) : null,
+      time: new Date(n.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+    };
+  }
+
+  /* ═══════ ЗАПРОСЫ В ДРУЗЬЯ ═══════ */
+  let pendingIncomingRequests = new Set();   // id входящих запросов, ожидающих ответа
+  const friendRequestOutcome = new Map();    // id запроса → 'accepted' | 'declined' (ответ дан в этой сессии)
+
+  async function loadIncomingFriendRequests() {
+    if (!currentUser) { pendingIncomingRequests = new Set(); return; }
+    const { data, error } = await supabaseClient.from('friend_requests')
+      .select('id').eq('to_id', currentUser.id).eq('status', 'pending');
+    if (error) { console.warn('[friend_requests] load:', error.message); return; }
+    pendingIncomingRequests = new Set((data || []).map((r) => String(r.id)));
+  }
+
+  /* Состояние отношений с пользователем для кнопки в поиске */
+  async function friendRelationWith(userId) {
+    if (friends.some((f) => f.id === userId)) return 'friend';
+    const { data, error } = await supabaseClient.from('friend_requests')
+      .select('id, from_id, to_id')
+      .eq('status', 'pending')
+      .or(`and(from_id.eq.${currentUser.id},to_id.eq.${userId}),and(from_id.eq.${userId},to_id.eq.${currentUser.id})`);
+    if (error) { console.warn('[friend_requests] relation:', error.message); return 'none'; }
+    const rows = data || [];
+    if (rows.some((r) => r.from_id === currentUser.id)) return 'outgoing';
+    if (rows.some((r) => r.from_id === userId)) return 'incoming';
+    return 'none';
+  }
+
+  async function respondFriendRequest(requestId, accept) {
+    const { error } = await supabaseClient.rpc(accept ? 'accept_friend_request' : 'decline_friend_request', { req_id: Number(requestId) });
+    if (error) {
+      console.error('[friend request respond]', error);
+      alert('Не удалось ответить на запрос: ' + error.message);
+      return false;
+    }
+    pendingIncomingRequests.delete(String(requestId));
+    friendRequestOutcome.set(String(requestId), accept ? 'accepted' : 'declined');
+    notifications = notifications.map((n) => n.requestId === String(requestId) ? { ...n, read: true } : n);
+    if (accept) {
+      await loadFriendsFromDB();
+      await loadGroupMemberProfiles();
+      loadUserLocations();
+    }
+    return true;
+  }
+
+  async function loadFriendsFromDB() {
+    if (!currentUser) { friends = []; return; }
+    const { data, error } = await supabaseClient.from('friendships').select('friend_id').eq('user_id', currentUser.id);
+    if (error) { console.warn('[friends] load:', error.message); friends = []; return; }
+    const ids = (data || []).map((r) => r.friend_id);
+    if (!ids.length) { friends = []; return; }
+    const { data: profs, error: pErr } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', ids);
+    if (pErr) { console.warn('[friends profiles]:', pErr.message); friends = []; return; }
+    friends = (profs || []).map((p) => ({ id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }));
+  }
+
+  /* ═══════ REALTIME ═══════ */
+  let rtChannels = [];
+  function subscribeRealtime() {
+    rtChannels.forEach((c) => { try { supabaseClient.removeChannel(c); } catch {} });
+    rtChannels = [];
+
+    const ch1 = supabaseClient.channel('rt:posts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => {
+        await loadPostsFromDB();
+        syncPostMarkers();
+        if (openApp === 'profile' && winTitle.textContent === 'Воспоминания') showPlacesScreen();
+      }).subscribe();
+    rtChannels.push(ch1);
+
+    const ch2 = supabaseClient.channel('rt:wishes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes' }, async () => {
+        await loadWishesFromDB();
+        syncWishMarkers();
+        if (openApp === 'profile' && winTitle.textContent === 'Желания') showWishesScreen();
+      }).subscribe();
+    rtChannels.push(ch2);
+
+    const ch3 = supabaseClient.channel('rt:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'room_id=eq.general' }, (payload) => {
+        chatMessages.push(payload.new);
+        // Перерисовываем только если открыт именно общий чат, иначе затрём список чатов / личный диалог
+        if (openApp === 'messenger' && winBody.querySelector('#chat-body')) renderMessengerList();
+      }).subscribe();
+    rtChannels.push(ch3);
+
+    const ch4 = supabaseClient.channel('rt:notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: currentUser ? `user_id=eq.${currentUser.id}` : undefined }, (payload) => {
+        const n = mapNotificationRow(payload.new);
+        notifications.unshift(n);
+        if (n.type === 'friend_request' && n.requestId) pendingIncomingRequests.add(n.requestId);
+        if (n.type === 'friend_accept') {
+          // Наш запрос приняли — обновляем список друзей и их маркеры на карте
+          loadFriendsFromDB().then(() => {
+            loadUserLocations();
+            if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
+          });
+        }
+        if (['group_match', 'group_match_accept', 'match_vote', 'match_vote_result'].includes(n.type)) {
+          // Запрос на match, match состоялся, голосование о союзе — нужны свежие match, чаты и геопозиции
+          refreshGroupsWorld().then(() => {
+            if (openApp === 'notifications') refreshNotifications();
+            onMatchesChanged();
+          });
+        }
+        updateBadge();
+        if (openApp === 'notifications') refreshNotifications();
+      }).subscribe();
+    rtChannels.push(ch4);
+
+    const ch5 = supabaseClient.channel('rt:dm')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages' }, (payload) => {
+        if (!currentUser) return;
+        const r = payload.new;
+        if (r.from_id !== currentUser.id && r.to_id !== currentUser.id) return;
+        onIncomingChatRow(normDmRow(r));
+      }).subscribe();
+    rtChannels.push(ch5);
+
+    // Групповые чаты: RLS пропускает только сообщения групп, где мы участники
+    const chGroupMsg = supabaseClient.channel('rt:group_messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages' }, (payload) => {
+        if (!currentUser) return;
+        onIncomingChatRow(normGroupRow(payload.new));
+      }).subscribe();
+    rtChannels.push(chGroupMsg);
+
+    // Совместные чаты групп после match
+    const chMatchMsg = supabaseClient.channel('rt:match_messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_messages' }, (payload) => {
+        if (!currentUser) return;
+        onIncomingChatRow(normMatchRow(payload.new));
+      }).subscribe();
+    rtChannels.push(chMatchMsg);
+
+    // Голоса в совместном чате — счётчик обновляется у всех сразу
+    const chMatchVotes = supabaseClient.channel('rt:match_votes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_votes' }, (payload) => {
+        const row = payload.new && payload.new.match_id != null ? payload.new : payload.old;
+        if (chat && chat.type === 'match' && row && String(row.match_id) === String(chat.matchId)) refreshMatchVotePanel();
+      }).subscribe();
+    rtChannels.push(chMatchVotes);
+
+    // Новые группы, их желания, составы и match — сразу на карте у всех
+    const chGroupsWorld = supabaseClient.channel('rt:groups_world')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, scheduleGroupsWorldRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, scheduleGroupsWorldRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_matches' }, scheduleGroupsWorldRefresh)
+      .subscribe();
+    rtChannels.push(chGroupsWorld);
+
+    // Нас удалили из друзей (или добавили) — обновляем список и карту без перезагрузки
+    const chFriends = supabaseClient.channel('rt:friendships')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, async () => {
+        await refreshFriendsAndMap();
+        if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
+      }).subscribe();
+    rtChannels.push(chFriends);
+
+    const ch6 = supabaseClient.channel('rt:user_locations')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, (payload) => {
+        applyUserLocationChange(payload);
+      }).subscribe();
+    rtChannels.push(ch6);
+  }
+
+  /* ═══════ ГЕОПОЗИЦИИ ДРУЗЕЙ И УЧАСТНИКОВ ГРУПП ═══════ */
+  const friendMarkers = new Map();
+  const friendMarkerCoords = new Map(); // userId → { coords:[lon,lat], person }
+  let userLocationsById = new Map();
+  let userAvatarCfgById = new Map();
+  let groupMemberProfiles = new Map();
+
+  /* Кого показываем на карте:
+     — друзей;
+     — участников моих групп (где я лидер);
+     — лидеров всех групп: над ними иконка группы, видна всем;
+     — после match — всех участников групп, с которыми у моих групп match. */
+  function computeRelevantUserIds() {
+    const ids = new Set();
+    const myId = currentUser && currentUser.id;
+    if (!myId) return ids;
+    for (const f of friends) ids.add(f.id);
+    for (const g of groups) {
+      const mine = isGroupParticipant(g, myId);
+      // Лидер чужой группы виден, только если группа проходит фильтры
+      // Скрытые группы (закреплённый союз, распавшийся союз) не показываем вовсе
+      if (mine || (!groupHiddenForMe(g) && groupPassesFilters(g))) ids.add(g.ownerId);
+      // Участники всех групп, где я состою (лидером или участником), видят друг друга
+      if (!mine) continue;
+      for (const m of (g.members || [])) ids.add(m.id);
+    }
+    for (const m of myAcceptedMatches()) {
+      for (const gid of [m.fromGroup, m.toGroup]) {
+        const g = groupById(gid);
+        if (!g) continue;
+        ids.add(g.ownerId);
+        for (const mem of (g.members || [])) ids.add(mem.id);
+      }
+    }
+    ids.delete(myId);
+    return ids;
+  }
+
+  async function loadGroupMemberProfiles() {
+    const friendIds = new Set(friends.map((f) => f.id));
+    const ids = [...computeRelevantUserIds()].filter((id) => !friendIds.has(id));
+    if (!ids.length) { groupMemberProfiles = new Map(); return; }
+    // Запасной вариант — имя и аватар, сохранённые в составе группы
+    const next = new Map();
+    for (const g of groups) {
+      for (const m of (g.members || [])) {
+        if (ids.includes(m.id) && !next.has(m.id)) next.set(m.id, { id: m.id, name: m.name, handle: m.handle, avatar: m.avatar || '' });
+      }
+    }
+    const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', ids);
+    if (error) console.warn('[group profiles] load:', error.message);
+    for (const p of (data || [])) next.set(p.id, { id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' });
+    groupMemberProfiles = next;
+  }
+
+  /* Перечитать друзей и привести маркеры на карте в соответствие.
+     loadGroupMemberProfiles нужен, чтобы бывший друг, оставшийся участником группы,
+     перерисовался как участник группы, а не завис со старым маркером. */
+  async function refreshFriendsAndMap() {
+    await loadFriendsFromDB();
+    await loadGroupMemberProfiles();
+    await loadUserLocations();
+  }
+
+  function personById(userId) {
+    if (userId === (currentUser && currentUser.id)) return null;
+    const f = friends.find((x) => x.id === userId);
+    if (f) return f;
+    if (groupMemberProfiles.has(userId)) return groupMemberProfiles.get(userId);
+    return null;
+  }
+
+  /* Подпись на плашке участника-не-друга: название общей группы.
+     Общая — где состоим оба (как владелец или участник). Несколько — «Название +N». */
+  function sharedGroupsLabel(userId) {
+    const myId = currentUser && currentUser.id;
+    if (!myId) return '';
+    const inGroup = (g, id) => g.ownerId === id || (g.members || []).some((m) => m.id === id);
+    let names = groups.filter((g) => inGroup(g, myId) && inGroup(g, userId)).map((g) => (g.name || '').trim()).filter(Boolean);
+    if (!names.length) {
+      // Не в общей группе, но из группы, с которой у нас match — подписываем его группу
+      const matchedIds = new Set(myAcceptedMatches().flatMap((m) => [m.fromGroup, m.toGroup]));
+      names = groups.filter((g) => matchedIds.has(String(g.id)) && !inGroup(g, myId) && inGroup(g, userId))
+        .map((g) => (g.name || '').trim()).filter(Boolean);
+    }
+    if (!names.length) return 'группа';
+    let first = names[0];
+    if (first.length > 16) first = first.slice(0, 15) + '…';
+    return names.length > 1 ? `${first} +${names.length - 1}` : first;
+  }
+
+  /* Иконки групп лидера над его аватаром: облако с желанием группы и плашка с названием.
+     Клик по ним открывает карточку группы (data-map-group). */
+  function mapGroupBadgesHtml(ownedGroups) {
+    return ownedGroups.map((g) => {
+      let name = (g.name || 'Группа').trim();
+      if (name.length > 22) name = name.slice(0, 21) + '…';
+      const count = (g.members || []).length + 1; // участники + лидер
+      const ava = g.photo
+        ? `<span class="map-group-ava" style="background-image:url('${safeUrl(g.photo)}')"></span>`
+        : `<span class="map-group-ava">${escapeHtml((g.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+      const wish = g.wish
+        ? `<div class="map-group-wish" data-map-group="${escapeHtml(g.id)}"><span>${escapeHtml(g.wish)}</span></div>`
+        : '';
+      return `${wish}
+        <div class="map-group-chip" data-map-group="${escapeHtml(g.id)}">
+          ${ava}
+          <span class="map-group-name">${escapeHtml(name)}</span>
+          <span class="map-group-count">${count}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function mapGroupsKey(ownedGroups) {
+    return ownedGroups.map((g) => [g.id, g.name, g.photo, g.wish, (g.members || []).length].join('|')).join('¦');
+  }
+
+  function sharesGroupWithMe(userId) {
+    const myId = currentUser && currentUser.id;
+    return !!myId && groups.some((g) => isGroupParticipant(g, myId) && isGroupParticipant(g, userId));
+  }
+
+  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = []) {
+    const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
+    let label = (person.name || '').trim() || person.handle || 'Пользователь';
+    if (label.length > 18) label = label.slice(0, 17) + '…';
+
+    const avatarInner = person.avatar
+      ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(person.avatar)}')"></div>`
+      : `<div class="user-badge-avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml(nameInitial)}</div>`;
+
+    const cfg = (avatarCfg && typeof avatarCfg === 'object') ? avatarCfg : null;
+    const imgUrl = cfg ? getAvatarSnapshotDataURL(cfg) : null;
+    const isLeader = ownedGroups.length > 0;
+
+    // Цвет плашки: друг из общей группы — зелёная, не друг — коричневая, просто друг — обычная
+    const tone = isFriend ? (groupLabel ? 'is-friend-group' : '') : 'is-group';
+    const dotColor = { '': 'var(--you)', 'is-friend-group': '#0A6E5A', 'is-group': '#0E1412' }[tone];
+
+    const bottom = imgUrl
+      ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
+      : isLeader
+        ? `<div class="user-dot-marker is-leader"></div>`
+        : `<div class="user-dot-marker ${tone}" style="background:${dotColor}"></div>`;
+
+    // Лидер чужой группы: вместо плашки с именем — иконка группы (и облако с её желанием)
+    const badge = isLeader
+      ? `<div class="user-badge is-leader" data-clickable="true">${mapGroupBadgesHtml(ownedGroups)}</div>`
+      : `<div class="user-badge" data-clickable="true">
+          <div class="user-badge-inner ${tone}">
+            ${avatarInner}
+            <span class="user-badge-name">${escapeHtml(label)}</span>
+            ${groupLabel || !isFriend ? `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel || 'группа')}</span>` : ''}
+          </div>
+        </div>`;
+
+    return `
+      <div class="user-avatar-wrap" data-clickable="true" data-user-id="${escapeHtml(userId)}"
+           style="pointer-events:auto;cursor:pointer;">
+        ${badge}
+        ${isLeader ? signalRingsHtml('is-group') : ''}
+        ${bottom}
+      </div>`;
+  }
+
+  /* «Сигнальные кольца» на земле под маркером: группа (и вы сами) как будто пингует радар */
+  function signalRingsHtml(kind = '') {
+    return `<span class="signal-rings ${kind}" aria-hidden="true"><i></i><i></i></span>`;
+  }
+
+  /* Знак «feat» — две пересекающиеся группы; линза пересечения подсвечивается по состоянию союза */
+  function featMarkHtml(state = '') {
+    return `<svg class="feat-mark ${state ? 'is-' + escapeHtml(state) : ''}" viewBox="0 0 44 44" aria-hidden="true">
+      <circle class="fa" cx="17" cy="22" r="11"/><circle class="fb" cx="27" cy="22" r="11"/>
+      <circle class="fx" cx="27" cy="22" r="11" clip-path="url(#featClipA)"/></svg>`;
+  }
+
+  // Клик по иконке группы на карте: открыть её карточку
+  function openMapGroup(e) {
+    const chip = e.target.closest('[data-map-group]');
+    if (!chip) return false;
+    e.stopPropagation();
+    const gid = chip.dataset.mapGroup;
+    showApp('profile');
+    showGroupDetailsScreen(gid, () => closeApp());
+    return true;
+  }
+
+  /* Реальный DOM-элемент маркера друга с обработчиком клика —
+     так же, как у твоего собственного маркера и маркеров воспоминаний. */
+  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = []) {
+    const tpl = document.createElement('div');
+    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups).trim();
+    const el = tpl.firstElementChild;
+
+    const openProfile = (e) => {
+      if (openMapGroup(e)) return;
+      e.stopPropagation();
+      showApp('profile');                 // окно скрыто, пока ты на карте — сначала открываем его
+      showFriendProfile(userId, person);  // затем показываем профиль друга
+    };
+    el.addEventListener('click', openProfile);
+    return el;
+  }
+
+  async function loadUserLocations() {
+    if (!map2gis || !currentUser) return;
+    const relevant = computeRelevantUserIds();
+    if (!relevant.size) {
+      for (const [id, fm] of [...friendMarkers.entries()]) {
+        try { fm.marker.destroy(); } catch {}
+        friendMarkers.delete(id);
+        friendMarkerCoords.delete(id);
+      }
+      return;
+    }
+    const ids = [...relevant];
+    const { data, error } = await supabaseClient.from('user_locations')
+      .select('user_id, lat, lon, updated_at, avatar_config')
+      .in('user_id', ids);
+    if (error) { console.warn('[user_locations] load:', error.message); return; }
+
+    console.log('[user_locations] rows:', data);
+
+    const found = new Set();
+    for (const row of (data || [])) {
+      found.add(row.user_id);
+      userLocationsById.set(row.user_id, [row.lon, row.lat]);
+      if (row.avatar_config && typeof row.avatar_config === 'object') {
+        userAvatarCfgById.set(row.user_id, row.avatar_config);
+      } else {
+        userAvatarCfgById.delete(row.user_id);
+      }
+    }
+    const shown = new Set();
+    for (const [userId, coords] of userLocationsById.entries()) {
+      if (!relevant.has(userId)) continue;
+      const person = personById(userId);
+      if (!person) continue;
+      const isFriend = friends.some((f) => f.id === userId);
+      const cfg = userAvatarCfgById.get(userId) || null;
+      upsertFriendMarker(userId, person, coords, isFriend, cfg);
+      shown.add(userId);
+    }
+    // Убираем всех, кого не показали в этом проходе: больше не друг и не участник группы,
+    // нет геопозиции или нет профиля — иначе на карте остаётся устаревший маркер
+    for (const userId of [...friendMarkers.keys()]) {
+      if (!shown.has(userId) || !found.has(userId)) removeFriendMarker(userId);
+    }
+  }
+
+  function removeFriendMarker(userId) {
+    const fm = friendMarkers.get(userId);
+    if (fm) { try { fm.marker.destroy(); } catch {} }
+    friendMarkers.delete(userId);
+    friendMarkerCoords.delete(userId);
+  }
+
+  function upsertFriendMarker(userId, person, coords, isFriend, avatarCfg) {
+    if (!map2gis) return;
+    const existing = friendMarkers.get(userId);
+    const cfgKey = avatarCfgKey(avatarCfg);
+    // Со мной в одной группе — вижу его по имени с названием нашей группы;
+    // иконку группы вместо имени показываем только лидерам групп, где меня нет
+    const sharesGroup = sharesGroupWithMe(userId);
+    const groupLabel = sharesGroup || !isFriend ? sharedGroupsLabel(userId) : '';
+    const ownedGroups = sharesGroup ? [] : visibleGroupsOfLeader(userId);
+    const groupsKey = mapGroupsKey(ownedGroups);
+    if (existing) {
+      const same =
+        existing.avatarKey === cfgKey &&
+        existing.isFriend === isFriend &&
+        existing.groupLabel === groupLabel &&
+        existing.groupsKey === groupsKey &&
+        existing.personName === (person.name || '') &&
+        existing.personAvatar === (person.avatar || '');
+      if (same) {
+        try { existing.marker.setCoordinates(coords); } catch {}
+        existing.location = coords;
+        friendMarkerCoords.set(userId, { coords, person });
+        return;
+      }
+      try { existing.marker.destroy(); } catch {}
+      friendMarkers.delete(userId);
+    }
+    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups);
+    const marker = new mapgl.HtmlMarker(map2gis, {
+      coordinates: coords,
+      html,
+      anchor: [0.5, 0.85],
+      preventMapInteractions: true, // как у собственного маркера — клик не уходит в карту
+    });
+    friendMarkers.set(userId, {
+      marker,
+      location: coords,
+      avatarKey: cfgKey,
+      isFriend,
+      groupLabel,
+      groupsKey,
+      personName: person.name || '',
+      personAvatar: person.avatar || '',
+    });
+    friendMarkerCoords.set(userId, { coords, person });
+  }
+
+  async function applyUserLocationChange(payload) {
+    if (!currentUser) return;
+    const row = payload.new || payload.old;
+    if (!row) return;
+    const userId = row.user_id;
+    if (!userId || userId === currentUser.id) return;
+
+    const relevant = computeRelevantUserIds();
+    // Человек больше не друг и не участник группы — его маркера на карте быть не должно
+    if (!relevant.has(userId)) { removeFriendMarker(userId); return; }
+
+    if (payload.eventType === 'DELETE') {
+      userLocationsById.delete(userId);
+      userAvatarCfgById.delete(userId);
+      removeFriendMarker(userId);
+      return;
+    }
+
+    const coords = [row.lon, row.lat];
+    userLocationsById.set(userId, coords);
+    if (row.avatar_config && typeof row.avatar_config === 'object') {
+      userAvatarCfgById.set(userId, row.avatar_config);
+    } else {
+      userAvatarCfgById.delete(userId);
+    }
+
+    let person = personById(userId);
+    if (!person) {
+      const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').eq('id', userId).maybeSingle();
+      if (error || !data) return;
+      groupMemberProfiles.set(userId, { id: data.id, name: data.name, handle: '@' + data.username, avatar: data.avatar || '' });
+      person = groupMemberProfiles.get(userId);
+    }
+    if (!person) return;
+    const isFriend = friends.some((f) => f.id === userId);
+    const cfg = userAvatarCfgById.get(userId) || null;
+    upsertFriendMarker(userId, person, coords, isFriend, cfg);
+  }
+
+  async function upsertMyLocation(coords) {
+    if (!currentUser || !Array.isArray(coords) || coords.length !== 2) return;
+    const [lon, lat] = coords;
+    const { error } = await supabaseClient.from('user_locations').upsert({
+      user_id: currentUser.id,
+      lat, lon,
+      avatar_config: avatarConfig,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (error) console.warn('[user_locations] upsert:', error.message);
+  }
+
+  /* ═══════ 2ГИС ═══════ */
+  const MAPGL_API_KEY = '48802321-3481-4b6a-9ff4-58e05aa0fd8b';
+  const MAP_START_LOCATION = { center: [37.6156, 55.7558], zoom: 11 };
+  let map2gis = null;
+  const placeMarkers = new Map();
+  const wishMarkers = new Map();
+  let openPopupMarker = null;
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.async = true;
+      s.onload = resolve; s.onerror = () => reject(new Error('Не удалось загрузить ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function init2GisMap() {
+    try {
+      await loadScript('https://mapgl.2gis.com/api/js/v1');
+      // Без кнопок масштаба 2GIS: приближение колесом мыши, жестами и двойным нажатием
+      const mapStyleId = MAP_STYLE[resolvedTheme()];
+      map2gis = new mapgl.Map('map', {
+        center: MAP_START_LOCATION.center, zoom: MAP_START_LOCATION.zoom, key: MAPGL_API_KEY,
+        zoomControl: false,
+        ...(mapStyleId ? { style: mapStyleId } : {}),
+      });
+
+      // Клик по пустому месту карты: закрываем окно или попап.
+      // Клики по маркерам друзей обрабатываются самими маркерами.
+      map2gis.on('click', () => {
+        if (openApp !== null) closeApp(); else closePopup();
+      });
+
+      syncPostMarkers(); syncWishMarkers(); startGeolocation();
+    } catch (err) { console.error('[карта]', err); }
+  }
+
+  /* ═══════ НАСТРОЙКИ ═══════ */
+  const SETTINGS_KEY = 'app.settings.v1';
+  const DEFAULT_SETTINGS = { notifications: true, geolocation: true };
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return { ...DEFAULT_SETTINGS };
+      const parsed = JSON.parse(raw);
+      if (parsed && 'offline' in parsed) delete parsed.offline;
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    } catch { return { ...DEFAULT_SETTINGS }; }
+  }
+  function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {} }
+  let settings = loadSettings();
+
+  /* ═══════ ТЕМА ═══════ */
+  // Начальную тему ставит скрипт в <head> (до отрисовки), здесь — переключение из настроек и смена системной
+  const THEME_KEY = 'app.theme';
+  // Карта — в стандартном стиле 2GIS. Свои стили из редактора 2GIS (styles.2gis.com) можно вписать сюда.
+  const MAP_STYLE = { light: null, dark: null };
+  const themeMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  function getThemePref() { try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch { return 'auto'; } }
+  function resolvedTheme(pref = getThemePref()) {
+    return pref === 'dark' || (pref !== 'light' && themeMq && themeMq.matches) ? 'dark' : 'light';
+  }
+  let appliedTheme = null;
+  function applyTheme() {
+    const th = resolvedTheme();
+    const root = document.documentElement;
+    root.setAttribute('data-theme', th);
+    const meta = document.getElementById('meta-theme-color');
+    if (meta) meta.setAttribute('content', getComputedStyle(root).getPropertyValue('--land').trim() || (th === 'dark' ? '#090C0B' : '#E9EBE6'));
+    if (th !== appliedTheme) { appliedTheme = th; applyMapStyle(); }
+  }
+  function applyMapStyle() {
+    const id = MAP_STYLE[appliedTheme || resolvedTheme()];
+    const mapEl = document.getElementById('map');
+    if (mapEl) mapEl.dataset.mapStyle = id ? 'native' : 'filter';
+    if (!map2gis || !id || typeof map2gis.setStyleById !== 'function') return;
+    try { Promise.resolve(map2gis.setStyleById(id)).catch((err) => console.warn('[карта] стиль:', err)); }
+    catch (err) { console.warn('[карта] стиль:', err); }
+  }
+  function setThemePref(pref) {
+    try { localStorage.setItem(THEME_KEY, pref); } catch {}
+    // плавный переход цветов только на время смены темы
+    document.documentElement.classList.add('theme-switching');
+    applyTheme();
+    setTimeout(() => document.documentElement.classList.remove('theme-switching'), 450);
+    document.querySelectorAll('[data-theme-pref]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themePref === pref)));
+  }
+  if (themeMq) {
+    const onSystemTheme = () => { if (getThemePref() === 'auto') applyTheme(); };
+    if (themeMq.addEventListener) themeMq.addEventListener('change', onSystemTheme); else if (themeMq.addListener) themeMq.addListener(onSystemTheme);
+  }
+  applyTheme();
+
+  /* ═══════ 3D-АВАТАР ═══════ */
+  const AVATAR_KEY = 'avatar.3d.v1';
+  const AVATAR_SKINS = { light:{base:0xF1C9A5}, tan:{base:0xD9A276}, brown:{base:0xA66A44}, dark:{base:0x6B3E27} };
+  const AVATAR_CLOTHES = { rust:{body:0x8A4A2F,legs:0x3F2C24}, olive:{body:0x4A6B33,legs:0x2A1E16}, amber:{body:0xD9A84A,legs:0x3F2C24}, dark:{body:0x3F2C24,legs:0x1F1611} };
+  const AVATAR_HAIRS = { none:{color:null,style:'none'}, short:{color:0x3F2C24,style:'short'}, long:{color:0x5C3A24,style:'long'}, blond:{color:0xD9A84A,style:'short'}, ginger:{color:0xB85C2B,style:'long'} };
+  const DEFAULT_AVATAR = { skin:'tan', clothes:'rust', hair:'short' };
+
+  function loadAvatarConfig() {
+    try { const raw = localStorage.getItem(AVATAR_KEY); if (!raw) return { ...DEFAULT_AVATAR }; return { ...DEFAULT_AVATAR, ...JSON.parse(raw) }; }
+    catch { return { ...DEFAULT_AVATAR }; }
+  }
+  function saveAvatarConfig(a) { try { localStorage.setItem(AVATAR_KEY, JSON.stringify(a)); } catch {} }
+  let avatarConfig = loadAvatarConfig();
+
+  function buildAvatarGroup(THREE, cfg) {
+    const skin = AVATAR_SKINS[cfg.skin] || AVATAR_SKINS.tan;
+    const clothes = AVATAR_CLOTHES[cfg.clothes] || AVATAR_CLOTHES.rust;
+    const hair = AVATAR_HAIRS[cfg.hair] || AVATAR_HAIRS.short;
+    const group = new THREE.Group();
+    const skinMat = new THREE.MeshStandardMaterial({ color: skin.base, roughness: 0.55 });
+    const clothMat = new THREE.MeshStandardMaterial({ color: clothes.body, roughness: 0.85 });
+    const legsMat = new THREE.MeshStandardMaterial({ color: clothes.legs, roughness: 0.85 });
+    const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = true; group.add(mesh); return mesh; };
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 32, 24), skinMat), 0, 1.55, 0);
+    const earGeo = new THREE.SphereGeometry(0.07, 16, 12);
+    add(new THREE.Mesh(earGeo, skinMat), -0.32, 1.55, 0);
+    add(new THREE.Mesh(earGeo, skinMat),  0.32, 1.55, 0);
+    const eyeGeo = new THREE.SphereGeometry(0.045, 16, 12);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1F1611, roughness: 0.25 });
+    add(new THREE.Mesh(eyeGeo, eyeMat), -0.12, 1.58, 0.29);
+    add(new THREE.Mesh(eyeGeo, eyeMat),  0.12, 1.58, 0.29);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.12, 16), skinMat), 0, 1.28, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.75, 24), clothMat), 0, 0.85, 0);
+    const shoulderGeo = new THREE.SphereGeometry(0.17, 20, 16);
+    add(new THREE.Mesh(shoulderGeo, clothMat), -0.34, 1.13, 0);
+    add(new THREE.Mesh(shoulderGeo, clothMat),  0.34, 1.13, 0);
+    const armGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.7, 16);
+    add(new THREE.Mesh(armGeo, clothMat), -0.42, 0.75, 0).rotation.z = 0.12;
+    add(new THREE.Mesh(armGeo, clothMat),  0.42, 0.75, 0).rotation.z = -0.12;
+    const handGeo = new THREE.SphereGeometry(0.09, 16, 12);
+    add(new THREE.Mesh(handGeo, skinMat), -0.45, 0.4, 0);
+    add(new THREE.Mesh(handGeo, skinMat),  0.45, 0.4, 0);
+    const legGeo = new THREE.CylinderGeometry(0.12, 0.11, 0.45, 16);
+    add(new THREE.Mesh(legGeo, legsMat), -0.14, 0.23, 0);
+    add(new THREE.Mesh(legGeo, legsMat),  0.14, 0.23, 0);
+    const shoeGeo = new THREE.BoxGeometry(0.2, 0.1, 0.32);
+    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1F1611, roughness: 0.9 });
+    add(new THREE.Mesh(shoeGeo, shoeMat), -0.14, 0.05, 0.04);
+    add(new THREE.Mesh(shoeGeo, shoeMat),  0.14, 0.05, 0.04);
+    if (hair.color) {
+      const hairMat = new THREE.MeshStandardMaterial({ color: hair.color, roughness: 0.8 });
+      add(new THREE.Mesh(new THREE.SphereGeometry(0.335, 32, 24, 0, Math.PI * 2, 0, Math.PI / 1.8), hairMat), 0, 1.55, 0);
+      if (hair.style === 'long') {
+        add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.5, 20, 1, true), hairMat), 0, 1.32, -0.05);
+      }
+    }
+    return group;
+  }
+
+  function renderAvatarToCanvas(canvas, size, cfg) {
+    if (!isThreeAvailable()) return false;
+    const THREE = window.THREE;
+    try {
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(size, size, false);
+      renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 20);
+      camera.position.set(0, 1.5, 3.6); camera.lookAt(0, 1.0, 0);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const key = new THREE.DirectionalLight(0xffd9b3, 1.15); key.position.set(3, 5, 3); key.castShadow = true; scene.add(key);
+      const fill = new THREE.DirectionalLight(0x9FE3D2, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
+      const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
+      shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.001; scene.add(shadow);
+      const group = buildAvatarGroup(THREE, cfg); scene.add(group);
+      let angle = 0, raf = null;
+      function tick() { angle += 0.008; group.rotation.y = Math.sin(angle) * 0.35; renderer.render(scene, camera); raf = requestAnimationFrame(tick); }
+      tick();
+      canvas.__avatarStop = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
+      return true;
+    } catch (err) { console.warn('[аватар]', err); return false; }
+  }
+
+  const avatarSnapshotCache = new Map();
+
+  function avatarCfgKey(cfg) {
+    if (!cfg || typeof cfg !== 'object') return '';
+    return `${cfg.skin || ''}|${cfg.clothes || ''}|${cfg.hair || ''}`;
+  }
+
+  function getAvatarSnapshotDataURL(cfg) {
+    if (!isThreeAvailable() || !cfg || typeof cfg !== 'object') return null;
+    const key = avatarCfgKey(cfg);
+    if (avatarSnapshotCache.has(key)) return avatarSnapshotCache.get(key);
+    try {
+      const size = 96;
+      const off = document.createElement('canvas');
+      off.width = size; off.height = size;
+      const ok = renderAvatarToCanvas(off, size, cfg);
+      if (!ok) { avatarSnapshotCache.set(key, null); return null; }
+      const dataUrl = off.toDataURL('image/png');
+      if (off.__avatarStop) { off.__avatarStop(); off.__avatarStop = null; }
+      avatarSnapshotCache.set(key, dataUrl);
+      return dataUrl;
+    } catch (err) {
+      console.warn('[avatar snapshot]', err);
+      avatarSnapshotCache.set(key, null);
+      return null;
+    }
+  }
+
+  /* ═══════ МАРКЕР ПОЛЬЗОВАТЕЛЯ ═══════ */
+  let userLocationMarker = null;
+  let userLocationWatchId = null;
+  let lastUserLocation = null;
+  let userAvatarCanvas = null;
+
+  function placeUserMarker(coords) {
+    if (!map2gis) return;
+    if (userLocationMarker) {
+      try { if (userAvatarCanvas && userAvatarCanvas.__avatarStop) userAvatarCanvas.__avatarStop(); userLocationMarker.destroy(); } catch {}
+      userLocationMarker = null; userAvatarCanvas = null;
+    }
+    const use3D = isThreeAvailable();
+    const wrap = document.createElement('div');
+    wrap.className = 'user-avatar-wrap';
+    const nameInitial = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
+    const displayName = (profile.name || '').trim();
+    let label = displayName || 'Я';
+    if (label.length > 18) label = label.slice(0, 17) + '…';
+    const avatarInner = profile.avatar
+      ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></div>`
+      : `<div class="user-badge-avatar">${escapeHtml(nameInitial)}</div>`;
+    const badge = document.createElement('div');
+    badge.className = 'user-badge'; badge.dataset.clickable = 'true';
+    // Себя я всегда вижу просто по имени — иконку группы видят только те, кто не в ней
+    badge.innerHTML = `
+      <div class="user-badge-inner">
+        ${avatarInner}
+        <span class="user-badge-name">${escapeHtml(label)}</span>
+        <span class="user-badge-status" aria-hidden="true"></span>
+      </div>`;
+    badge.addEventListener('click', (e) => { e.stopPropagation(); showApp('profile'); showUserProfileScreen(); });
+    wrap.appendChild(badge);
+    wrap.insertAdjacentHTML('beforeend', signalRingsHtml('is-me'));
+    if (use3D) {
+      const inner = document.createElement('div'); inner.className = 'user-avatar-marker';
+      const canvas = document.createElement('canvas'); canvas.width = 26; canvas.height = 26;
+      inner.appendChild(canvas); wrap.appendChild(inner);
+      const ok = renderAvatarToCanvas(canvas, 26, avatarConfig);
+      if (ok) userAvatarCanvas = canvas; else inner.className = 'user-dot-marker';
+    } else {
+      const dot = document.createElement('div'); dot.className = 'user-dot-marker'; wrap.appendChild(dot);
+    }
+    userLocationMarker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html: wrap, anchor: use3D ? [0.5, 0.85] : [0.5, 0.5], preventMapInteractions: true });
+  }
+
+  // Перерисовать свой маркер (например, создали группу или поменяли её желание)
+  function refreshMyMarker() {
+    if (lastUserLocation && settings.geolocation && userLocationMarker) placeUserMarker(lastUserLocation);
+  }
+
+  function startGeolocation() {
+    if (!settings.geolocation) return;
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = [pos.coords.longitude, pos.coords.latitude];
+        lastUserLocation = coords;
+        if (map2gis) { map2gis.setCenter(coords); map2gis.setZoom(16); }
+        placeUserMarker(coords); syncWishMarkers();
+        upsertMyLocation(coords);
+        const btn = document.getElementById('geo-btn'); if (btn) btn.classList.add('is-active');
+      },
+      (err) => console.info('[гео]', err.message),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
-    return;
+    if (userLocationWatchId === null) {
+      userLocationWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const coords = [pos.coords.longitude, pos.coords.latitude];
+          lastUserLocation = coords;
+          placeUserMarker(coords);
+          syncWishMarkers();
+          upsertMyLocation(coords);
+        },
+        (err) => console.info('[гео watch]', err.message),
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
+      );
+    }
+  }
+  function stopGeolocation() {
+    if (userLocationWatchId !== null) { try { navigator.geolocation.clearWatch(userLocationWatchId); } catch {} userLocationWatchId = null; }
+    if (userLocationMarker) { try { if (userAvatarCanvas && userAvatarCanvas.__avatarStop) userAvatarCanvas.__avatarStop(); userLocationMarker.destroy(); } catch {} userLocationMarker = null; }
+    userAvatarCanvas = null; lastUserLocation = null;
+    const btn = document.getElementById('geo-btn'); if (btn) btn.classList.remove('is-active');
+  }
+  function goToUserLocation() {
+    if (!map2gis) return;
+    if (!settings.geolocation) { settings.geolocation = true; saveSettings(settings); syncSettingsUi(); startGeolocation(); return; }
+    if (lastUserLocation) { map2gis.setCenter(lastUserLocation); map2gis.setZoom(16); placeUserMarker(lastUserLocation); syncWishMarkers(); upsertMyLocation(lastUserLocation); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = [pos.coords.longitude, pos.coords.latitude];
+        lastUserLocation = coords;
+        map2gis.setCenter(coords); map2gis.setZoom(16);
+        placeUserMarker(coords); syncWishMarkers();
+        upsertMyLocation(coords);
+        const btn = document.getElementById('geo-btn'); if (btn) btn.classList.add('is-active');
+      },
+      (err) => console.warn('[гео]', err.message),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+  function syncSettingsUi() {
+    document.querySelectorAll('.switch[data-setting]').forEach((el) => {
+      el.setAttribute('aria-checked', String(!!settings[el.dataset.setting]));
+    });
+  }
+  document.getElementById('geo-btn').addEventListener('click', goToUserLocation);
+
+  /* ═══════ МАРКЕРЫ ВОСПОМИНАНИЙ ═══════ */
+  function buildMemoryMarkerElement(post) {
+    const imgs = postImages(post);
+    const el = document.createElement('div'); el.className = 'memory-marker';
+    if (!imgs.length) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img no-photo"></div></div></div>`; return el; }
+    if (imgs.length === 1) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img" style="background-image:url('${safeUrl(imgs[0])}')"></div></div></div>`; return el; }
+    const max = 4, total = Math.min(imgs.length, max);
+    const anglesByCount = { 2:[-12,6], 3:[-14,0,14], 4:[-18,-6,6,18] };
+    const shiftsByCount = { 2:[-11,11], 3:[-16,0,16], 4:[-20,-7,7,20] };
+    const angles = anglesByCount[total] || anglesByCount[4];
+    const shifts = shiftsByCount[total] || shiftsByCount[4];
+    const cards = [];
+    for (let i = 0; i < total; i++) { cards.push({ src: imgs[total - 1 - i] || imgs[0], angle: angles[i], shift: shifts[i], z: i + 1 }); }
+    const hiddenCount = Math.max(0, imgs.length - total);
+    el.innerHTML = `
+      <div class="memory-fan">
+        ${cards.map((c) => `<div class="memory-card" style="transform: translate(-50%, -50%) translateX(${c.shift}px) rotate(${c.angle}deg); z-index: ${c.z};"><div class="mc-img" style="background-image:url('${safeUrl(c.src)}')"></div></div>`).join('')}
+        ${hiddenCount > 0 ? `<span class="memory-more">+${hiddenCount}</span>` : ''}
+      </div>`;
+    return el;
   }
 
-  staleWhileRevalidate(event, request);
-});
+  function syncPostMarkers() {
+    if (!map2gis) return;
+    const aliveIds = new Set(posts.filter((p) => Array.isArray(p.coords)).map((p) => p.id));
+    for (const [id, marker] of [...placeMarkers.entries()]) {
+      if (!aliveIds.has(id)) { try { marker.destroy(); } catch {} placeMarkers.delete(id); }
+    }
+    for (const p of posts) {
+      if (!Array.isArray(p.coords)) continue;
+      if (placeMarkers.has(p.id)) { try { placeMarkers.get(p.id).destroy(); } catch {} placeMarkers.delete(p.id); }
+      const html = buildMemoryMarkerElement(p);
+      html.addEventListener('click', (e) => { e.stopPropagation(); openPostPopup(p); });
+      const marker = new mapgl.HtmlMarker(map2gis, { coordinates: p.coords, html, anchor: [0.5, 1], preventMapInteractions: false });
+      placeMarkers.set(p.id, marker);
+    }
+  }
+
+  function openPostPopup(post) {
+    closePopup(); if (!map2gis) return;
+    const cover = (Array.isArray(post.images) && post.images[0]) || '';
+    const wrap = document.createElement('div'); wrap.className = 'map-popup';
+    wrap.innerHTML = `
+      ${cover ? `<img class="pop-img" src="${safeUrl(cover)}" alt="">` : ''}
+      <div class="pop-place">📍 ${escapeHtml(post.place || '')}</div>
+      ${post.caption ? `<div class="pop-caption">${escapeHtml(post.caption)}</div>` : ''}
+      <button type="button" class="pop-open">Открыть воспоминание</button>`;
+    wrap.querySelector('.pop-open').addEventListener('click', (e) => { e.stopPropagation(); closePopup(); jumpToPostInFeed(post.id); });
+    openPopupMarker = new mapgl.HtmlMarker(map2gis, { coordinates: post.coords, html: wrap, anchor: [0.5, 1], preventMapInteractions: false });
+  }
+  function closePopup() { if (!openPopupMarker || !map2gis) { openPopupMarker = null; return; } try { openPopupMarker.destroy(); } catch {} openPopupMarker = null; }
+  function jumpToPostInFeed(postId) {
+    showApp('profile'); showPlacesScreen();
+    placesView = 'feed'; savePlacesView('feed'); showPlacesScreen();
+    requestAnimationFrame(() => {
+      const idx = posts.findIndex((x) => x.id === postId);
+      const el = winBody.querySelectorAll('.post')[idx];
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  }
+  function flyToPost(post) { if (!map2gis || !Array.isArray(post.coords)) return; map2gis.setCenter(post.coords); map2gis.setZoom(15); }
+
+  async function geocodePlace(placeText) {
+    if (!placeText) return null;
+    const url = new URL('https://catalog.api.2gis.com/3.0/items/geocode');
+    url.searchParams.set('q', placeText); url.searchParams.set('fields', 'items.point'); url.searchParams.set('key', MAPGL_API_KEY);
+    try {
+      const res = await fetch(url.toString());
+      if (!res.ok) return null;
+      const data = await res.json();
+      const items = (data && data.result && data.result.items) || [];
+      if (!items.length) return null;
+      const point = items[0].point;
+      if (!point || typeof point.lon !== 'number' || typeof point.lat !== 'number') return null;
+      return [point.lon, point.lat];
+    } catch { return null; }
+  }
+
+  /* ═══════ ЖЕЛАНИЯ ═══════ */
+  function visibleWishes() {
+    const myGroupIds = new Set(groups.filter((g) => g.ownerId === (currentUser && currentUser.id)).map((g) => g.id));
+    const friendIds = new Set(friends.map((f) => f.id));
+    return wishes.filter((w) => {
+      if (!currentUser) return w.audience === 'all';
+      if (w.authorId === currentUser.id) return true;
+      if (w.audience === 'all') return true;
+      if (w.audience === 'friends') return friendIds.has(w.authorId);
+      if (w.audience === 'group') return w.groupId && myGroupIds.has(w.groupId);
+      if (w.audience === 'me') return false;
+      return true;
+    });
+  }
+
+  function wishesToRenderAsMarkers() {
+    return visibleWishes().filter((w) => {
+      if (w.authorId === (currentUser && currentUser.id) && !Array.isArray(w.coords)) return true;
+      return Array.isArray(w.coords);
+    });
+  }
+
+  function wishCoordinates(w) {
+    if (w.authorId === (currentUser && currentUser.id) && !Array.isArray(w.coords)) return lastUserLocation;
+    return Array.isArray(w.coords) ? w.coords : null;
+  }
+
+  function buildWishMarkerElement(wish) {
+    const el = document.createElement('div'); el.className = 'wish-marker';
+    const text = escapeHtml(wish.text || '');
+    const author = wish.authorName ? escapeHtml(wish.authorName) : '';
+    el.innerHTML = `
+      <svg class="wish-cloud-shape" viewBox="0 0 220 140" preserveAspectRatio="none" aria-hidden="true">
+        <path class="cloud-body" d="M 44 118 C 20 118, 6 104, 6 86 C 6 68, 20 56, 38 56 C 40 36, 60 20, 82 20 C 98 20, 112 28, 120 42 C 128 26, 146 14, 166 14 C 190 14, 210 32, 212 56 C 216 58, 218 62, 218 70 C 218 88, 204 102, 184 104 C 180 114, 166 124, 150 124 C 140 124, 132 121, 124 114 C 116 122, 102 126, 90 126 C 72 126, 56 120, 48 110 Z"/>
+      </svg>
+      <div class="wish-cloud-content">${text}${author ? `<span class="wish-author">${author}</span>` : ''}</div>`;
+    return el;
+  }
+
+  function syncWishMarkers() {
+    if (!map2gis) return;
+    const list = wishesToRenderAsMarkers().filter((w) => Array.isArray(wishCoordinates(w)));
+    const alive = new Set(list.map((w) => w.id));
+    for (const [id, marker] of [...wishMarkers.entries()]) {
+      if (!alive.has(id)) { try { marker.destroy(); } catch {} wishMarkers.delete(id); }
+    }
+    for (const w of list) {
+      const coords = wishCoordinates(w); if (!coords) continue;
+      if (wishMarkers.has(w.id)) { try { wishMarkers.get(w.id).destroy(); } catch {} wishMarkers.delete(w.id); }
+      const html = buildWishMarkerElement(w);
+      html.addEventListener('click', (e) => { e.stopPropagation(); showApp('profile'); showWishesScreen(); });
+      const pinned = w.authorId === (currentUser && currentUser.id) && !Array.isArray(w.coords);
+      const marker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html, anchor: [0.5, 1], offset: pinned ? [0, -34] : [0, 0], preventMapInteractions: false });
+      wishMarkers.set(w.id, marker);
+    }
+  }
+
+  function showWishesScreen() {
+    setScreen(() => {
+      winTitle.textContent = 'Желания';
+      winBody.scrollTop = 0;
+      const list = wishes.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      const audienceLabel = (w) => {
+        if (w.audience === 'me') return '👤 Только мне';
+        if (w.audience === 'friends') return '👥 Друзьям';
+        if (w.audience === 'group') { const g = groups.find((x) => x.id === w.groupId); return '👥 ' + (g ? escapeHtml(g.name) : 'Группа'); }
+        return '🌍 Всем';
+      };
+      const rowsHtml = list.length
+        ? list.map((w) => {
+            const metaBits = [];
+            if (w.place) metaBits.push('📍 ' + escapeHtml(w.place));
+            metaBits.push(audienceLabel(w));
+            metaBits.push(new Date(w.ts || Date.now()).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
+            const isMine = w.authorId === (currentUser && currentUser.id);
+            return `
+              <li class="wish-card" data-wish-id="${escapeHtml(w.id)}">
+                <div class="wish-card-text">${escapeHtml(w.text)}</div>
+                <div class="wish-card-meta">${metaBits.join(' • ')}</div>
+                ${isMine ? `<div class="wish-card-actions">
+                  <button class="btn" type="button" data-wish-edit="${escapeHtml(w.id)}">Изменить</button>
+                  <button class="btn btn-danger" type="button" data-wish-remove="${escapeHtml(w.id)}">Удалить</button>
+                </div>` : ''}
+              </li>`;
+          }).join('')
+        : `<div class="wish-empty">Пока нет желаний.<br>Нажмите <b>+</b>, чтобы загадать первое.</div>`;
+      winBody.innerHTML = `
+        <div class="sub-toolbar">
+          <span class="sub-toolbar-title">Желания</span>
+          <span class="sub-toolbar-spacer"></span>
+          <button class="icon-btn" type="button" data-action="new-wish" aria-label="Новое желание" title="Новое желание">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+          </button>
+        </div>
+        ${rowsHtml}`;
+    }, () => showApp('profile'));
+  }
+
+  function showNewWishScreen(editingId = null) {
+    setScreen(() => {
+      const editing = editingId ? wishes.find((w) => w.id === editingId) : null;
+      winTitle.textContent = editing ? 'Изменить желание' : 'Новое желание';
+      winBody.scrollTop = 0;
+      const currentText = editing ? editing.text : '';
+      const currentPlace = editing ? (editing.place || '') : '';
+      const currentAudience = editing ? editing.audience : 'all';
+      const currentGroup = editing ? (editing.groupId || '') : '';
+      const myGroups = groups.filter((g) => g.ownerId === (currentUser && currentUser.id));
+      const groupOptions = myGroups.length
+        ? myGroups.map((g) => `<option value="${escapeHtml(g.id)}" ${currentGroup === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')
+        : `<option value="">— нет групп —</option>`;
+
+      winBody.innerHTML = `
+        <form class="edit-form" id="wish-form" novalidate>
+          <label class="edit-field"><span class="edit-label">Желание</span><textarea class="edit-textarea" id="wish-text" maxlength="200" required>${escapeHtml(currentText)}</textarea></label>
+          <label class="edit-field">
+            <span class="edit-label">Место (необязательно)</span>
+            <input class="edit-input" type="text" id="wish-place" maxlength="80" value="${escapeHtml(currentPlace)}">
+            <span class="edit-hint">Если пусто — облако над вашей иконкой.</span>
+          </label>
+          <div class="edit-field">
+            <span class="edit-label">Кому видно</span>
+            <div class="radio-row">
+              <label class="radio-opt"><input type="radio" name="wish-aud" value="all" ${currentAudience === 'all' ? 'checked' : ''}><span class="radio-label">Всем</span></label>
+              <label class="radio-opt"><input type="radio" name="wish-aud" value="friends" ${currentAudience === 'friends' ? 'checked' : ''}><span class="radio-label">Только друзьям</span></label>
+              <label class="radio-opt"><input type="radio" name="wish-aud" value="group" ${currentAudience === 'group' ? 'checked' : ''}><span class="radio-label">Участникам группы</span></label>
+              <label class="radio-opt"><input type="radio" name="wish-aud" value="me" ${currentAudience === 'me' ? 'checked' : ''}><span class="radio-label">Только мне</span></label>
+            </div>
+          </div>
+          <label class="edit-field" id="wish-group-field" style="${currentAudience === 'group' ? '' : 'display:none'}">
+            <span class="edit-label">Группа</span>
+            <select class="edit-input" id="wish-group">${groupOptions}</select>
+          </label>
+          <div class="edit-actions">
+            <button type="button" class="btn" id="wish-cancel">Отмена</button>
+            <button type="submit" class="btn btn-primary">${editing ? 'Сохранить' : 'Опубликовать'}</button>
+          </div>
+        </form>`;
+
+      const textEl = winBody.querySelector('#wish-text');
+      const placeEl = winBody.querySelector('#wish-place');
+      const groupField = winBody.querySelector('#wish-group-field');
+      const groupEl = winBody.querySelector('#wish-group');
+      const syncGroupVisibility = () => {
+        const val = winBody.querySelector('input[name="wish-aud"]:checked').value;
+        groupField.style.display = (val === 'group') ? '' : 'none';
+      };
+      winBody.querySelectorAll('input[name="wish-aud"]').forEach((r) => r.addEventListener('change', syncGroupVisibility));
+      syncGroupVisibility();
+      winBody.querySelector('#wish-cancel').addEventListener('click', goBack);
+
+      winBody.querySelector('#wish-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = textEl.value.trim(); if (!text) { textEl.focus(); return; }
+        const place = placeEl.value.trim();
+        const audience = winBody.querySelector('input[name="wish-aud"]:checked').value;
+        const groupId = audience === 'group' ? (groupEl.value || null) : null;
+        const submitBtn = winBody.querySelector('#wish-form [type="submit"]');
+        const oldLabel = submitBtn.textContent;
+        submitBtn.disabled = true; submitBtn.textContent = place ? 'Ищем место…' : 'Сохраняем…';
+
+        let coords = null;
+        if (place) {
+          if (editing && editing.place === place && Array.isArray(editing.coords)) coords = editing.coords;
+          else { try { coords = await geocodePlace(place); } catch {} }
+        }
+
+        submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+
+        if (editing) {
+          const { error } = await supabaseClient.from('wishes').update({
+            text, place, coords, audience, group_id: groupId,
+          }).eq('id', editingId);
+          if (error) { console.warn('[wishes] update:', error.message); return; }
+        } else {
+          const id = 'w' + Date.now() + Math.random().toString(36).slice(2, 8);
+          const { error } = await supabaseClient.from('wishes').insert({
+            id, author_id: currentUser.id, author_name: profile.name,
+            text, place, coords, audience, group_id: groupId, ts: Date.now(),
+          });
+          if (error) { console.warn('[wishes] insert:', error.message); return; }
+        }
+
+        await loadWishesFromDB();
+        syncWishMarkers();
+        showWishesScreen();
+        if (coords && map2gis) { map2gis.setCenter(coords); map2gis.setZoom(15); }
+      });
+    }, () => showWishesScreen());
+  }
+
+  /* ═══════ ДРУЗЬЯ ═══════ */
+  function showFriendsScreen() {
+    setScreen(() => {
+      winTitle.textContent = 'Друзья';
+      winBody.scrollTop = 0;
+      const rowsHtml = friends.length
+        ? `<ul class="rows">${friends.map((f) => `
+            <li class="person-card is-link" data-view-profile="${escapeHtml(f.id)}" data-profile-back="friends" role="button" tabindex="0">
+              ${avatarCircleHtml(f, 40)}
+              <div class="person-main">
+                <div class="person-name">${escapeHtml(f.name)}</div>
+                <div class="person-handle">${escapeHtml(f.handle)}</div>
+              </div>
+              <button class="btn" type="button" data-open-dm="${escapeHtml(f.id)}">Чат</button>
+              <button class="btn" type="button" data-remove-friend="${escapeHtml(f.id)}">Удалить</button>
+            </li>`).join('')}</ul>`
+        : `<div class="empty-msg">Пока нет друзей.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы найти человека по @username.</div>`;
+      winBody.innerHTML = `
+        <div class="sub-toolbar">
+          <span class="sub-toolbar-title">Список друзей</span>
+          <span class="sub-toolbar-spacer"></span>
+          <button class="icon-btn" type="button" data-action="add-friend" aria-label="Найти друга"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg></button>
+        </div>
+        ${rowsHtml}`;
+    }, () => closeApp());
+  }
+
+  function showAddFriendScreen() {
+    setScreen(() => {
+      winTitle.textContent = 'Найти друга';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = `
+        <div class="edit-form">
+          <label class="edit-field">
+            <span class="edit-label">Имя пользователя</span>
+            <div class="username-wrap"><span class="username-prefix">@</span>
+              <input class="edit-input username-input" type="text" id="search-username" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="username">
+            </div>
+            <span class="edit-hint" id="search-hint">Введите @username и нажмите «Найти»</span>
+          </label>
+          <div class="edit-actions">
+            <button type="button" class="btn" id="search-cancel">Отмена</button>
+            <button type="button" class="btn btn-primary" id="search-go">Найти</button>
+          </div>
+        </div>
+        <div id="search-result"></div>`;
+
+      const input = winBody.querySelector('#search-username');
+      const hint = winBody.querySelector('#search-hint');
+      const result = winBody.querySelector('#search-result');
+
+      async function trySearch() {
+        const v = normalizeUsername(input.value);
+        if (!isValidUsername(v)) { hint.classList.add('is-invalid'); hint.textContent = 'Латиница, цифры, «_» и «.», от 3 до 20 символов'; return; }
+        hint.classList.remove('is-invalid');
+        if (v === normalizeUsername(profile.handle)) { result.innerHTML = `<div class="empty-msg">Это ваш собственный username.</div>`; return; }
+
+        const { data: found, error: sErr } = await supabaseClient.from('profiles').select('*').eq('username', v).maybeSingle();
+        if (sErr) { console.error('[search profile]', sErr); }
+        if (!found) { result.innerHTML = `<div class="empty-msg">Пользователь <b>@${escapeHtml(v)}</b> не найден.</div>`; return; }
+        const relation = await friendRelationWith(found.id);
+        const btnLabel = { friend: 'Уже друг', outgoing: 'Запрос отправлен', incoming: 'Принять запрос', none: 'Добавить' }[relation];
+        const btnDisabled = relation === 'friend' || relation === 'outgoing';
+        result.innerHTML = `
+          <ul class="rows"><li class="person-card">
+            ${avatarCircleHtml({ name: found.name, avatar: found.avatar }, 40)}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(found.name)}</div>
+              <div class="person-handle">@${escapeHtml(found.username)}</div>
+            </div>
+            <button class="friend-add-btn" type="button" data-add-friend="${escapeHtml(found.id)}" ${btnDisabled ? 'disabled' : ''}>${btnLabel}</button>
+          </li></ul>`;
+      }
+
+      winBody.querySelector('#search-go').addEventListener('click', trySearch);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') trySearch(); });
+      winBody.querySelector('#search-cancel').addEventListener('click', goBack);
+    }, () => showFriendsScreen());
+  }
+
+  /* ═══════ ГРУППЫ ═══════ */
+  function showGroupsScreen() {
+    setScreen(() => {
+      winTitle.textContent = 'Группы';
+      winBody.scrollTop = 0;
+      // В groups теперь все группы (их видно на карте) — здесь только мои
+      const mine = myGroups();
+      const rowsHtml = mine.length
+        ? `<ul class="rows">${mine.map((g) => {
+            const membersCount = (g.members || []).length + 1; // + лидер
+            const av = g.photo
+              ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
+              : `<span class="group-avatar">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+            const isOwner = g.ownerId === (currentUser && currentUser.id);
+            return `
+              <li class="group-row" data-group-row="${escapeHtml(g.id)}">
+                <div class="group-actions">
+                  ${isOwner ? `<button class="group-action-btn settings" type="button" data-group-settings="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.4-2.6h-3.9l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.5 11a7.6 7.6 0 0 0-.1 1 7.6 7.6 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h3.9l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+                    <button class="group-action-btn danger" type="button" data-group-delete="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2zm2 6v9h2v-9h-2zm4 0v9h2v-9h-2z"/></svg></button>` : ''}
+                </div>
+                <div class="group-card" data-group-id="${escapeHtml(g.id)}" role="button" tabindex="0">
+                  ${av}
+                  <div class="group-main">
+                    <div class="group-name">${escapeHtml(g.name)}</div>
+                    <div class="group-sub">${escapeHtml(membersLabel(membersCount))}${isOwner ? ' · вы лидер' : ''}${g.wish ? ' · ☁ ' + escapeHtml(g.wish) : ''}</div>
+                  </div>
+                  <span class="chev">›</span>
+                </div>
+              </li>`;
+          }).join('')}</ul>`
+        : `<div class="empty-msg">Пока нет групп.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы создать первую.</div>`;
+      winBody.innerHTML = `
+        <div class="sub-toolbar">
+          <span class="sub-toolbar-title">Мои группы</span>
+          <span class="sub-toolbar-spacer"></span>
+          <button class="icon-btn" type="button" data-action="create-group" aria-label="Создать группу"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg></button>
+        </div>
+        ${rowsHtml}`;
+      bindGroupSwipe();
+    }, () => showApp('profile'));
+  }
+
+  function bindGroupSwipe() {
+    winBody.querySelectorAll('.group-row').forEach((row) => {
+      const card = row.querySelector('.group-card'); if (!card) return;
+      let startX = 0, startY = 0, dragging = false, decided = false, horizontal = false;
+      const THRESHOLD = 6;
+      card.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        dragging = true; decided = false; horizontal = false;
+        startX = e.clientX; startY = e.clientY;
+        try { card.setPointerCapture(e.pointerId); } catch {}
+      });
+      card.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX, dy = e.clientY - startY;
+        if (!decided) {
+          if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
+          decided = true; horizontal = Math.abs(dx) > Math.abs(dy);
+        }
+        if (!horizontal) return;
+        if (dx < -20) row.classList.add('revealed');
+        else if (dx > 20) row.classList.remove('revealed');
+      });
+      const endDrag = (e) => { if (!dragging) return; dragging = false; decided = false; try { card.releasePointerCapture(e.pointerId); } catch {} };
+      card.addEventListener('pointerup', endDrag);
+      card.addEventListener('pointercancel', endDrag);
+      card.addEventListener('contextmenu', (e) => { e.preventDefault(); row.classList.toggle('revealed'); });
+    });
+  }
+
+  function showCreateGroupScreen(editingId = null) {
+    setScreen(() => {
+      const editing = editingId ? groups.find((g) => g.id === editingId) : null;
+      winTitle.textContent = editing ? 'Настройки группы' : 'Новая группа';
+      winBody.scrollTop = 0;
+      let groupPhoto = editing && editing.photo ? editing.photo : '';
+      let selectedIds = new Set((editing && editing.members ? editing.members : []).map((m) => m.id));
+
+      // В списке — друзья плюс текущие участники группы, которые не в друзьях:
+      // иначе при сохранении они бы пропадали из группы
+      const existingMembers = editing && editing.members ? editing.members : [];
+      const friendIdSet = new Set(friends.map((f) => f.id));
+      const known = [
+        ...friends,
+        ...existingMembers.filter((m) => !friendIdSet.has(m.id) && m.id !== (currentUser && currentUser.id)),
+      ];
+      const peopleHtml = known.length
+        ? known.map((p) => `
+            <li class="person-card" data-person-id="${escapeHtml(p.id)}" role="checkbox" aria-checked="${selectedIds.has(p.id) ? 'true' : 'false'}" tabindex="0">
+              <span class="person-check"></span>
+              ${avatarCircleHtml(p, 36)}
+              <div class="person-main">
+                <div class="person-name">${escapeHtml(p.name)}</div>
+                <div class="person-handle">${escapeHtml(p.handle || '')}${friendIdSet.has(p.id) ? '' : ' · участник, не в друзьях'}</div>
+              </div>
+            </li>`).join('')
+        : `<div class="empty-msg">Сначала добавьте друзей.</div>`;
+
+      winBody.innerHTML = `
+        <form class="group-form" id="group-form" novalidate>
+          <div class="group-photo-row">
+            <div id="group-photo" class="group-photo" ${groupPhoto ? `style="background-image:url('${safeUrl(groupPhoto)}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? editing.name.charAt(0).toUpperCase() : 'Г'))}</div>
+            <div class="avatar-edit-side">
+              <button type="button" class="btn" id="group-photo-pick">Выбрать фото</button>
+              <button type="button" class="btn-ghost" id="group-photo-remove" ${groupPhoto ? '' : 'hidden'}>Удалить фото</button>
+              <input type="file" id="group-photo-input" accept="image/*" hidden>
+            </div>
+          </div>
+          <label class="edit-field"><span class="edit-label">Название группы</span><input class="edit-input" type="text" id="group-name" maxlength="60" value="${editing ? escapeHtml(editing.name) : ''}" placeholder="Например, «Прогулки по выходным»"></label>
+          <div class="edit-field"><span class="edit-label">Участники</span><ul class="people-picker" id="group-people">${peopleHtml}</ul></div>
+          <p class="edit-hint group-map-hint">Группу сразу видно на карте всем: над вашим аватаром вместо имени появится её иконка. Геопозиции участников откроются другой группе после match.</p>
+          <div class="edit-actions">
+            <button type="button" class="btn" id="group-cancel">Отмена</button>
+            ${editing ? `<button type="button" class="btn btn-danger" id="group-delete">Удалить группу</button>` : ''}
+            <button type="submit" class="btn btn-primary">${editing ? 'Сохранить' : 'Создать'}</button>
+          </div>
+        </form>`;
+
+      const photoEl = winBody.querySelector('#group-photo');
+      const photoInput = winBody.querySelector('#group-photo-input');
+      const photoRemove = winBody.querySelector('#group-photo-remove');
+      const peopleEl = winBody.querySelector('#group-people');
+
+      winBody.querySelector('#group-photo-pick').addEventListener('click', () => photoInput.click());
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files && photoInput.files[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        try {
+          groupPhoto = await fileToCompressedDataURL(file, 256, 0.85);
+          photoEl.style.backgroundImage = `url('${groupPhoto}')`; photoEl.textContent = ''; photoRemove.hidden = false;
+        } catch (e) { console.warn(e); }
+      });
+      photoRemove.addEventListener('click', () => { groupPhoto = ''; photoEl.style.backgroundImage = ''; photoEl.textContent = 'Г'; photoRemove.hidden = true; });
+
+      peopleEl.addEventListener('click', (e) => {
+        const card = e.target.closest('[data-person-id]'); if (!card) return;
+        const id = card.dataset.personId;
+        const isOn = card.getAttribute('aria-checked') === 'true';
+        if (isOn) { selectedIds.delete(id); card.setAttribute('aria-checked', 'false'); }
+        else { selectedIds.add(id); card.setAttribute('aria-checked', 'true'); }
+      });
+
+      winBody.querySelector('#group-cancel').addEventListener('click', goBack);
+
+      const delBtn = winBody.querySelector('#group-delete');
+      if (delBtn) {
+        delBtn.addEventListener('click', async () => {
+          const ok = await confirmModal({ title: 'Удалить группу?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
+          if (!ok) return;
+          const { error } = await supabaseClient.from('groups').delete().eq('id', editingId);
+          if (error) { console.warn('[groups] delete:', error.message); return; }
+          await refreshGroupsWorld();
+          showGroupsScreen();
+        });
+      }
+
+      winBody.querySelector('#group-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = winBody.querySelector('#group-name').value.trim();
+        if (!name) { winBody.querySelector('#group-name').focus(); return; }
+        const members = known.filter((p) => selectedIds.has(p.id));
+
+        const gid = editing ? editingId : 'g' + Date.now();
+
+        // Меняем состав только по разнице: удаляем тех, с кого сняли галочку,
+        // добавляем новых. Остальные участники не трогаются.
+        const existingIds = new Set(existingMembers.map((m) => m.id));
+        const removedIds = [...existingIds].filter((id) => !selectedIds.has(id));
+        const added = members.filter((m) => !existingIds.has(m.id));
+
+        if (editing) {
+          const { error } = await supabaseClient.from('groups').update({ name, photo: groupPhoto }).eq('id', editingId);
+          if (error) { console.warn('[groups] update:', error.message); return; }
+          if (removedIds.length) {
+            const { error: rmErr } = await supabaseClient.from('group_members').delete()
+              .eq('group_id', editingId).in('user_id', removedIds);
+            if (rmErr) console.warn('[group_members] delete:', rmErr.message);
+          }
+        } else {
+          const { error } = await supabaseClient.from('groups').insert({
+            id: gid, owner_id: currentUser.id, name, photo: groupPhoto, visibility: 'public',
+          });
+          if (error) { console.warn('[groups] insert:', error.message); return; }
+        }
+
+        if (added.length) {
+          const rows = added.map((m) => ({
+            group_id: gid, user_id: m.id, name: m.name,
+            username: (m.handle || '').replace(/^@/, ''), avatar: m.avatar || '',
+          }));
+          const { error } = await supabaseClient.from('group_members').insert(rows);
+          if (error) console.warn('[group_members] insert:', error.message);
+
+          // Уведомляем только новых участников, а не всех при каждом сохранении
+          const notifs = added
+            .filter((m) => m.id !== currentUser.id)
+            .map((m) => ({
+              user_id: m.id,
+              type: 'group',
+              title: 'Новая группа',
+              text: `Вас добавили в группу «${name}»`,
+            }));
+          if (notifs.length) {
+            const { error: nErr } = await supabaseClient.from('notifications').insert(notifs);
+            if (nErr) console.warn('[notifications] group insert:', nErr.message);
+          }
+        }
+
+        await refreshGroupsWorld();
+        showGroupsScreen();
+      });
+    }, () => showGroupsScreen());
+  }
+
+  function membersLabel(n) {
+    const m10 = n % 10, m100 = n % 100;
+    const word = m10 === 1 && m100 !== 11 ? 'участник'
+      : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'участника' : 'участников';
+    return `${n} ${word}`;
+  }
+
+  // Лидер первым, затем участники
+  function groupPeople(g) {
+    const myId = currentUser && currentUser.id;
+    const owner = g.ownerId === myId
+      ? { id: myId, name: profile.name, handle: profile.handle, avatar: profile.avatar }
+      : (friends.find((f) => f.id === g.ownerId) || groupMemberProfiles.get(g.ownerId) || { id: g.ownerId, name: 'Лидер группы', handle: '', avatar: '' });
+    return [{ ...owner, id: g.ownerId, leader: true }, ...(g.members || []).filter((m) => m.id !== g.ownerId)];
+  }
+
+  // Открытая карточка группы и куда из неё ведёт «назад» (список групп или карта)
+  let groupDetailsId = null;
+  let groupDetailsBack = null;
+  function reopenGroupDetails() { if (groupDetailsId) showGroupDetailsScreen(groupDetailsId, groupDetailsBack); }
+
+  // Кнопки ответа на входящий запрос match
+  function matchResponseButtonsHtml(m) {
+    const id = escapeHtml(m.id);
+    return `<div class="notif-actions">
+      <button class="btn btn-primary" type="button" data-gm-accept="${id}">Принять match</button>
+      <button class="btn" type="button" data-gm-decline="${id}">Отклонить</button>
+    </div>`;
+  }
+
+  /* Блок match в карточке чужой группы: предложить, ждать ответа, принять или открыть общий чат */
+  function groupMatchSectionHtml(g) {
+    const myId = currentUser && currentUser.id;
+    const u = myUnion();
+    if (u) {
+      const m = matchBetween(u.mine.id, u.partner.id);
+      if (String(g.id) === String(u.partner.id) && m) {
+        return `<div class="match-hint">💞 Союз закреплён — вы видите только друг друга.</div>
+          <ul class="rows match-rows"><li class="match-row"><div class="person-main"><div class="person-name">${escapeHtml(matchTitle(m))}</div></div>
+          <button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button></li></ul>`;
+      }
+      return `<div class="match-hint">Ваша группа в закреплённом союзе с «${escapeHtml(u.partner.name)}» — новые match недоступны.</div>`;
+    }
+    const led = groupsOwnedBy(myId);
+    if (!led.length) {
+      const inSomeGroup = myGroups().length > 0;
+      return `<div class="match-hint">${inSomeGroup
+        ? 'Предложить match может лидер вашей группы.'
+        : 'Match предлагают лидеры групп. Создайте свою группу, чтобы предложить match этой группе.'}</div>`;
+    }
+    return `<ul class="rows match-rows">${led.map((mine) => {
+      const m = matchBetween(mine.id, g.id);
+      let action;
+      if (m && m.status === 'accepted') {
+        action = `<button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>`;
+      } else if (m && m.status === 'pending' && m.fromGroup === String(mine.id)) {
+        action = `<span class="match-status">Запрос отправлен</span>`;
+      } else if (m && m.status === 'pending') {
+        action = matchResponseButtonsHtml(m);
+      } else {
+        action = `<button class="btn btn-primary" type="button" data-match-send="${escapeHtml(mine.id)}" data-match-to="${escapeHtml(g.id)}">Предложить match</button>`;
+      }
+      const title = m && m.status === 'accepted' ? matchTitle(m) : `${mine.name} → ${g.name}`;
+      return `<li class="match-row">
+        <div class="person-main"><div class="person-name">${escapeHtml(title)}</div>
+          <div class="person-handle">от вашей группы «${escapeHtml(mine.name)}»</div></div>
+        ${action}
+      </li>`;
+    }).join('')}</ul>`;
+  }
+
+  /* Блок match в карточке своей группы: совместные чаты и входящие запросы */
+  function ownGroupMatchesHtml(g) {
+    const myId = currentUser && currentUser.id;
+    const gid = String(g.id);
+    const list = groupMatches.filter((m) => (m.fromGroup === gid || m.toGroup === gid) && m.status !== 'declined' && m.status !== 'dissolved');
+    if (!list.length) return `<div class="match-hint">Пока нет match. Найдите на карте группу с похожим желанием и откройте её карточку.</div>`;
+    return `<ul class="rows match-rows">${list.map((m) => {
+      const otherId = m.fromGroup === gid ? m.toGroup : m.fromGroup;
+      const other = groupById(otherId);
+      let action, sub;
+      if (m.status === 'accepted') {
+        sub = m.voteState === 'approved' ? '💞 Союз закреплён — только вы друг у друга'
+          : m.voteState === 'open' ? '🗳 Идёт голосование о союзе' : 'Общий чат и геопозиции открыты';
+        action = `<button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>`;
+      } else if (m.toGroup === gid && m.toOwner === myId) {
+        sub = 'Хотят match с вашей группой';
+        action = matchResponseButtonsHtml(m);
+      } else {
+        sub = m.toGroup === gid ? 'Ждёт ответа лидера' : 'Запрос отправлен, ждём ответа';
+        action = '';
+      }
+      return `<li class="match-row">
+        <div class="person-main"><div class="person-name">${escapeHtml(m.status === 'accepted' ? matchTitle(m) : (other ? other.name : 'Группа'))}</div>
+          <div class="person-handle">${escapeHtml(sub)}</div></div>
+        ${action}
+      </li>`;
+    }).join('')}</ul>`;
+  }
+
+  function showGroupDetailsScreen(groupId, backFn) {
+    const back = backFn || (() => showGroupsScreen());
+    groupDetailsId = groupId;
+    groupDetailsBack = back;
+    setScreen(() => {
+      const g = groupById(groupId);
+      winBody.scrollTop = 0;
+      if (!g) {
+        winTitle.textContent = 'Группа';
+        winBody.innerHTML = `<div class="empty-msg">Группа не найдена — возможно, её удалили.</div>`;
+        return;
+      }
+      const myId = currentUser && currentUser.id;
+      const isMember = isGroupParticipant(g, myId);
+      winTitle.textContent = g.name;
+      const people = groupPeople(g);
+      const peopleHtml = people.map((p) => {
+        const isMe = p.id === myId;
+        return `
+          <li class="person-card ${isMe ? '' : 'is-link'}" ${isMe ? '' : `data-view-profile="${escapeHtml(p.id)}" role="button" tabindex="0"`}>
+            ${avatarCircleHtml(p, 40)}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(p.name || 'Пользователь')}${isMe ? ' (вы)' : ''}</div>
+              <div class="person-handle">${p.leader ? '👑 Лидер группы' : escapeHtml(p.handle || '')}</div>
+            </div>
+            ${isMe ? '' : '<span class="chev">›</span>'}
+          </li>`;
+      }).join('');
+
+      const wishHtml = isMember
+        ? `<form class="group-wish-form" id="group-wish-form">
+            <input class="edit-input" type="text" id="group-wish-input" maxlength="120" value="${escapeHtml(g.wish || '')}" placeholder="Например: сходить в кино сегодня вечером">
+            <div class="edit-actions">
+              ${g.wish ? `<button type="button" class="btn" data-group-wish-clear>Убрать</button>` : ''}
+              <button type="submit" class="btn btn-primary">${g.wish ? 'Обновить' : 'Опубликовать'}</button>
+            </div>
+            <span class="edit-hint">Желание появится облаком над иконкой группы на карте — его увидят все.</span>
+          </form>`
+        : g.wish
+          ? `<div class="group-wish-cloud">☁ ${escapeHtml(g.wish)}</div>`
+          : `<div class="match-hint">Группа пока не опубликовала желание.</div>`;
+
+      winBody.innerHTML = `
+        <div class="user-profile-view">
+          <div class="user-profile-hero">
+            <div class="user-profile-avatar ${g.photo ? 'no-3d' : ''}" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
+            <div class="user-profile-name">${escapeHtml(g.name)}</div>
+            <div class="user-profile-handle">${escapeHtml([membersLabel(people.length), groupStatsText(g)].filter(Boolean).join(' · '))}</div>
+          </div>
+          <div><div class="user-profile-section-title">Желание группы</div>${wishHtml}</div>
+          <div><div class="user-profile-section-title">Match</div>${isMember ? ownGroupMatchesHtml(g) : groupMatchSectionHtml(g)}</div>
+          <div><div class="user-profile-section-title">Участники</div><ul class="rows">${peopleHtml}</ul></div>
+          <div class="edit-actions">
+            <button type="button" class="btn" data-action="back-to-groups">Назад</button>
+            ${isMember ? `<button type="button" class="btn btn-primary" data-open-group-chat="${escapeHtml(g.id)}">Открыть чат группы</button>` : ''}
+          </div>
+        </div>`;
+
+      const wishForm = winBody.querySelector('#group-wish-form');
+      if (wishForm) {
+        wishForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          saveGroupWish(g.id, winBody.querySelector('#group-wish-input').value);
+        });
+      }
+    }, back);
+  }
+
+  async function saveGroupWish(groupId, text) {
+    const { error } = await supabaseClient.rpc('set_group_wish', { gid: String(groupId), wish_text: (text || '').trim() });
+    if (error) {
+      console.error('[rpc set_group_wish]', error);
+      alert('Не удалось сохранить желание: ' + error.message);
+      return;
+    }
+    await refreshGroupsWorld();
+    if (String(groupDetailsId) === String(groupId) && openApp === 'profile') reopenGroupDetails();
+  }
+
+  /* ═══════ ПРАВИЛА ═══════ */
+  function showRulesScreen() {
+    setScreen(() => {
+      winTitle.textContent = 'Правила';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = `
+        <div class="legal-page">
+          <h3>1. Общие положения</h3>
+          <p>Настоящие Правила регулируют использование приложения «Groupis» и определяют права и обязанности Пользователя и Разработчика.</p>
+          <p>Используя Приложение, вы подтверждаете, что ознакомились с Правилами и принимаете их.</p>
+          <h3>2. Что делает Пользователь</h3>
+          <p>• не размещать материалы, нарушающие закон, права третьих лиц, содержащие угрозы или оскорбления;</p>
+          <p>• не выдавать себя за другое лицо и не публиковать чужие персональные данные;</p>
+          <p>• не пытаться получить доступ к чужим аккаунтам и инфраструктуре;</p>
+          <p>• не использовать Приложение для спама и мошенничества.</p>
+          <h3>3. Ответственность Разработчика</h3>
+          <p>Разработчик предоставляет Приложение «как есть» и не гарантирует бесперебойную работу. Разработчик не несёт ответственности за содержание материалов Пользователей и возможный ущерб.</p>
+          <h3>4. Персональные данные</h3>
+          <p>Данные хранятся локально и в Supabase. Геопозиция используется только для отображения на карте.</p>
+          <div class="legal-note">Если вы не согласны — прекратите использование Приложения.</div>
+        </div>`;
+    }, () => showApp('settings'));
+  }
+
+  /* ═══════ ОБЩИЙ ЧАТ ═══════ */
+  let chatMessages = [];
+
+  async function loadChatMessages() {
+    const { data, error } = await supabaseClient.from('messages').select('*').eq('room_id', 'general').order('created_at', { ascending: true }).limit(300);
+    if (error) { console.warn('[messages] load:', error.message); chatMessages = []; return; }
+    chatMessages = data || [];
+  }
+
+  function fmtTime(iso) { const d = iso ? new Date(iso) : new Date(); return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+
+  function renderMessengerList() {
+    winBody.innerHTML = `
+      <div class="support-chat" style="height:100%">
+        <div class="support-chat-head">Общий чат</div>
+        <div class="support-chat-body" id="chat-body">
+          ${chatMessages.length ? chatMessages.map((m) => {
+            const mine = currentUser && m.user_id === currentUser.id;
+            return `<div class="chat-msg ${mine ? 'me' : 'them'}">
+              <b>${escapeHtml(m.author_name || 'Пользователь')}</b><br>${escapeHtml(m.content)}
+              <span class="chat-msg-time">${fmtTime(m.created_at)}</span>
+            </div>`;
+          }).join('') : `<div class="empty-msg">Пока нет сообщений.<br>Напишите первым.</div>`}
+        </div>
+        <form class="support-chat-form" id="chat-form">
+          <input class="support-chat-input" type="text" id="chat-input" placeholder="Ваше сообщение…" maxlength="500" autocomplete="off">
+          <button class="support-chat-send" type="submit">Отправить</button>
+        </form>
+      </div>`;
+
+    const bodyEl = winBody.querySelector('#chat-body');
+    if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
+
+    const form = winBody.querySelector('#chat-form');
+    const input = winBody.querySelector('#chat-input');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = input.value.trim(); if (!text || !currentUser) return;
+      input.value = '';
+      const { error } = await supabaseClient.from('messages').insert({
+        content: text, user_id: currentUser.id, author_name: profile.name, room_id: 'general',
+      });
+      if (error) console.warn('[messages] insert:', error.message);
+    });
+  }
+
+  async function showMessengerScreen() {
+    if (!currentUser) { showMapApp(); return; }
+    leaveChat();
+    clearTimeout(closeTimer);
+    closePostMenus();
+    if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+    if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+
+    winBody.style.display = 'flex';
+    winBody.style.flexDirection = 'column';
+    winBody.style.padding = '0';
+    winTitle.textContent = 'Сообщения';
+    winBody.scrollTop = 0;
+
+    winBody.innerHTML = `
+      <div class="sub-toolbar">
+        <span class="sub-toolbar-title">Мои чаты</span>
+        <span class="sub-toolbar-spacer"></span>
+      </div>
+      <div class="chats-list" id="chats-list">
+        <div class="empty-msg">Загружаем чаты…</div>
+      </div>`;
+
+    win.hidden = false;
+    const wr = win.getBoundingClientRect();
+    const ox = wr.width / 2;
+    win.style.transformOrigin = `${ox}px ${wr.height + 60}px`;
+    requestAnimationFrame(() => win.classList.add('is-open'));
+
+    resetScreenStack();
+    openApp = 'messenger';
+    document.body.classList.remove('app-map');
+    document.body.classList.add('app-window');
+    setDots();
+    win.focus({ preventScroll: true });
+    currentBackHandler = () => { closeApp(); };
+
+    try { await renderChatsList(); }
+    catch (err) {
+      console.warn('[messenger] renderChatsList error:', err);
+      const el = winBody.querySelector('#chats-list');
+      if (el) el.innerHTML = `<div class="empty-msg">Ошибка загрузки. Попробуйте ещё раз.</div>`;
+    }
+  }
+
+  async function renderChatsList() {
+    const listEl = winBody.querySelector('#chats-list');
+    if (!listEl) return;
+    const gs = myGroups();
+    const ms = myAcceptedMatches();
+    if (!currentUser || (!friends.length && !gs.length && !ms.length)) {
+      listEl.innerHTML = `<div class="empty-msg">Пока нет чатов.<br>Добавьте друзей или создайте группу.</div>`;
+      return;
+    }
+    const myId = currentUser.id;
+    const friendIds = friends.map((f) => f.id);
+    const lastByPeer = new Map();
+    const lastByGroup = new Map();
+    const lastByMatch = new Map();
+    if (ms.length) {
+      try {
+        const { data, error } = await supabaseClient.from('match_messages').select('*')
+          .in('match_id', ms.map((m) => Number(m.id)))
+          .order('created_at', { ascending: false }).limit(500);
+        if (error) console.warn('[match chat] list:', error.message);
+        else for (const r of (data || [])) {
+          const m = normMatchRow(r);
+          if (!lastByMatch.has(m.matchId)) lastByMatch.set(m.matchId, m);
+        }
+      } catch (err) { console.warn('[match chat] list exception:', err); }
+    }
+    try {
+      const { data, error } = await supabaseClient.from('dm_messages').select('*')
+        .or(`from_id.eq.${myId},to_id.eq.${myId}`)
+        .order('created_at', { ascending: false }).limit(500);
+      if (!error) {
+        for (const r of (data || [])) {
+          const m = normDmRow(r);
+          const peer = m.fromId === myId ? m.toId : m.fromId;
+          if (friendIds.includes(peer) && !lastByPeer.has(peer)) lastByPeer.set(peer, m);
+        }
+      }
+    } catch (err) { console.warn('[dm] list load exception:', err); }
+    if (gs.length) {
+      try {
+        const { data, error } = await supabaseClient.from('group_messages').select('*')
+          .in('group_id', gs.map((g) => g.id))
+          .order('created_at', { ascending: false }).limit(500);
+        if (error) console.warn('[group chat] list:', error.message);
+        else for (const r of (data || [])) {
+          const m = normGroupRow(r);
+          if (!lastByGroup.has(String(m.groupId))) lastByGroup.set(String(m.groupId), m);
+        }
+      } catch (err) { console.warn('[group chat] list exception:', err); }
+    }
+    if (!winBody.contains(listEl)) return; // пока грузили, открыли другой экран
+
+    const previewOf = (last, fallback, withAuthor) => {
+      if (!last) return fallback;
+      let text = chatPreviewText(last);
+      if (text.length > 34) text = text.slice(0, 34) + '…';
+      const who = last.fromId === myId ? 'Вы: ' : (withAuthor && last.authorName ? last.authorName + ': ' : '');
+      return who + text;
+    };
+    const rowHtml = ({ attr, avatar, name, preview, last }) => `
+      <div class="chat-row" ${attr} role="button" tabindex="0">
+        ${avatar}
+        <div class="chat-main">
+          <div class="chat-name">${escapeHtml(name)}</div>
+          <div class="chat-last">${escapeHtml(preview)}</div>
+        </div>
+        <div class="chat-side">
+          ${last ? `<span class="chat-time">${escapeHtml(fmtTime(last.createdAt))}</span>` : ''}
+        </div>
+      </div>`;
+
+    const items = [];
+    for (const g of gs) {
+      const last = lastByGroup.get(String(g.id));
+      const avatar = g.photo
+        ? `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background-image:url('${safeUrl(g.photo)}')"></span>`
+        : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, #34D6B2, #0E8C72)">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+      items.push({
+        ts: last ? Date.parse(last.createdAt) : 0,
+        html: rowHtml({ attr: `data-open-group-chat="${escapeHtml(g.id)}"`, avatar, name: g.name || 'Группа', preview: previewOf(last, 'Групповой чат', true), last }),
+      });
+    }
+    for (const m of ms) {
+      const last = lastByMatch.get(m.id);
+      items.push({
+        ts: last ? Date.parse(last.createdAt) : Date.parse(m.createdAt) || 0,
+        html: rowHtml({
+          attr: `data-open-match-chat="${escapeHtml(m.id)}"`,
+          avatar: `<span class="avatar group-chat-avatar match-chat-avatar" style="width:44px;height:44px">${featMarkHtml(m.voteState)}</span>`,
+          name: matchTitle(m), preview: previewOf(last, 'Match! Напишите первыми', true), last,
+        }),
+      });
+    }
+    for (const f of friends) {
+      const last = lastByPeer.get(f.id);
+      const name = f.name || f.handle || 'Пользователь';
+      items.push({
+        ts: last ? Date.parse(last.createdAt) : 0,
+        html: rowHtml({ attr: `data-open-dm="${escapeHtml(f.id)}"`, avatar: avatarCircleHtml({ name, avatar: f.avatar }, 44), name, preview: previewOf(last, 'Начните диалог', false), last }),
+      });
+    }
+    items.sort((a, b) => b.ts - a.ts); // свежие диалоги сверху
+    listEl.innerHTML = items.map((x) => x.html).join('');
+  }
+
+  /* ═══════ ТЕХПОДДЕРЖКА ═══════ */
+  let supportMessages = [];
+  async function loadSupportMessages() {
+    if (!currentUser) { supportMessages = []; return; }
+    const { data, error } = await supabaseClient.from('support_messages').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true });
+    if (error) { console.warn('[support] load:', error.message); supportMessages = []; return; }
+    supportMessages = data || [];
+  }
+  function renderSupportChat() {
+    winBody.innerHTML = `
+      <div class="support-chat" style="height:100%">
+        <div class="support-chat-head">Техподдержка</div>
+        <div class="support-chat-body" id="support-body">
+          ${supportMessages.length ? supportMessages.map((m) => `
+            <div class="chat-msg ${m.from_support ? 'them' : 'me'}">
+              ${escapeHtml(m.content)}
+              <span class="chat-msg-time">${fmtTime(m.created_at)}</span>
+            </div>`).join('')
+            : `<div class="chat-msg them">Здравствуйте! Это техподдержка приложения «Groupis». Опишите вашу проблему.<span class="chat-msg-time">${fmtTime()}</span></div>`}
+        </div>
+        <form class="support-chat-form" id="support-form">
+          <input class="support-chat-input" type="text" id="support-input" placeholder="Опишите проблему…" maxlength="500" autocomplete="off">
+          <button class="support-chat-send" type="submit">Отправить</button>
+        </form>
+      </div>`;
+    const bodyEl = winBody.querySelector('#support-body');
+    if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
+    const form = winBody.querySelector('#support-form');
+    const input = winBody.querySelector('#support-input');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = input.value.trim(); if (!text || !currentUser) return;
+      input.value = '';
+      const { data: sent, error } = await supabaseClient.from('support_messages').insert({
+        content: text, user_id: currentUser.id, from_support: false,
+      }).select().single();
+      if (error) { console.warn('[support] insert:', error.message); return; }
+      appendSupportMessage(sent);
+      const uid = currentUser.id;
+      setTimeout(async () => {
+        const { data: reply, error: rErr } = await supabaseClient.from('support_messages').insert({
+          content: 'Спасибо за обращение! Мы получили ваш запрос и ответим в ближайшее время.',
+          user_id: uid, from_support: true,
+        }).select().single();
+        if (rErr) { console.warn('[support] auto-reply:', rErr.message); return; }
+        appendSupportMessage(reply);
+      }, 1200);
+    });
+  }
+  function appendSupportMessage(m) {
+    if (!m) return;
+    supportMessages.push(m);
+    const bodyEl = winBody.querySelector('#support-body');
+    if (!bodyEl) return;
+    const div = document.createElement('div');
+    div.className = `chat-msg ${m.from_support ? 'them' : 'me'}`;
+    div.innerHTML = `${escapeHtml(m.content)}<span class="chat-msg-time">${fmtTime(m.created_at)}</span>`;
+    bodyEl.appendChild(div);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
+
+  async function showSupportChatScreen() {
+    await loadSupportMessages();
+    setScreen(() => {
+      winTitle.textContent = 'Техподдержка';
+      winBody.scrollTop = 0;
+      winBody.style.display = 'flex'; winBody.style.flexDirection = 'column'; winBody.style.padding = '0';
+      renderSupportChat();
+    }, () => {
+      winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+      showApp('settings');
+    });
+  }
+
+  /* ═══════ ЧАТЫ: ЛИЧНЫЕ И ГРУППОВЫЕ ═══════
+     Текст, фото, видео, голосовые и видеокружки. Файлы лежат в приватном бакете
+     Storage «chat-media» и показываются по временным подписанным ссылкам. */
+  const CHAT_BUCKET = 'chat-media';
+  const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+  const MAX_VOICE_SEC = 300;
+  const MAX_CIRCLE_SEC = 60;
+
+  const ICON_CLIP = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6.5H9v9a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v11.5a6 6 0 0 0 12 0v-10h-1.5z"/></svg>`;
+  const ICON_MIC = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>`;
+  const ICON_CIRCLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16z"/><path fill="currentColor" d="M8 9.5h5.5a1 1 0 0 1 1 1v.7l2-1.2v4l-2-1.2v.7a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/></svg>`;
+  const ICON_SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6V10l12.6 2-12.6 2z"/></svg>`;
+
+  // Открытый чат: { type: 'dm' | 'group', peerId, groupId, headTitle, winTitle, messages: [] }
+  let chat = null;
+
+  function normDmRow(r) {
+    return { id: r.id, fromId: r.from_id, toId: r.to_id, groupId: null, matchId: null, authorName: null,
+      content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
+  }
+  function normGroupRow(r) {
+    return { id: r.id, fromId: r.user_id, toId: null, groupId: r.group_id, matchId: null, authorName: r.author_name || '',
+      content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
+  }
+  // Совместный чат двух групп после match
+  function normMatchRow(r) {
+    return { id: r.id, fromId: r.user_id, toId: null, groupId: null, matchId: String(r.match_id), authorName: r.author_name || '',
+      content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
+  }
+
+  function chatPreviewText(m) {
+    const labels = { image: '📷 Фото', video: '🎬 Видео', voice: '🎤 Голосовое сообщение', circle: '⭕ Видеосообщение' };
+    if (m.kind === 'file') return '📎 ' + (m.fileName || 'Файл');
+    if (m.kind && m.kind !== 'text') return labels[m.kind] || 'Вложение';
+    return (m.content || '').trim();
+  }
+
+  // Группы, где я владелец или участник
+  function myGroups() {
+    const myId = currentUser && currentUser.id;
+    if (!myId) return [];
+    return groups.filter((g) => g.ownerId === myId || (g.members || []).some((m) => m.id === myId));
+  }
+
+  async function loadChatHistory(c) {
+    const q = c.type === 'dm'
+      ? supabaseClient.from('dm_messages').select('*')
+          .or(`and(from_id.eq.${currentUser.id},to_id.eq.${c.peerId}),and(from_id.eq.${c.peerId},to_id.eq.${currentUser.id})`)
+      : c.type === 'match'
+        ? supabaseClient.from('match_messages').select('*').eq('match_id', Number(c.matchId))
+        : supabaseClient.from('group_messages').select('*').eq('group_id', c.groupId);
+    const { data, error } = await q.order('created_at', { ascending: true }).limit(500);
+    if (error) { console.warn('[chat] load:', error.message); return []; }
+    return (data || []).map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow);
+  }
+
+  function fmtDuration(sec) {
+    const s = Math.max(0, Math.round(Number(sec) || 0));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function chatMediaHtml(m) {
+    // Пока сообщение отправляется — локальный файл, потом — подписанная ссылка из Storage
+    const src = m.localUrl ? `src="${escapeHtml(m.localUrl)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
+    if (m.kind === 'image') return `<img class="chat-photo" ${src} alt="Фото" data-open-photo>`;
+    if (m.kind === 'video') return `<video class="chat-video" ${src} controls playsinline preload="metadata"></video>`;
+    if (m.kind === 'voice') {
+      return `<div class="chat-voice"><audio ${src} controls preload="metadata"></audio>${m.duration ? `<span class="chat-voice-dur">${fmtDuration(m.duration)}</span>` : ''}</div>`;
+    }
+    if (m.kind === 'circle') {
+      return `<div class="chat-circle-wrap" data-circle>
+        <video class="chat-circle" ${src} playsinline muted loop autoplay preload="metadata"></video>
+        ${m.duration ? `<span class="chat-circle-dur">${fmtDuration(m.duration)}</span>` : ''}
+        <span class="chat-circle-sound" aria-hidden="true">🔇</span>
+      </div>`;
+    }
+    if (m.kind === 'file') {
+      // Карточка файла: значок по расширению, имя, размер. Ссылку подставит hydrateChatMedia
+      const name = m.fileName || 'Файл';
+      const ext = fileExt(name);
+      const href = m.localUrl ? `href="${escapeHtml(m.localUrl)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
+      return `<a class="chat-file" ${href} target="_blank" rel="noopener" data-chat-file data-file-name="${escapeHtml(name)}">
+        <span class="chat-file-ico" style="background:${fileIconColor(ext)}">${escapeHtml((ext || 'file').slice(0, 4).toUpperCase())}</span>
+        <span class="chat-file-main">
+          <span class="chat-file-name">${escapeHtml(name)}</span>
+          <span class="chat-file-size">${m.fileSize ? escapeHtml(fmtFileSize(m.fileSize)) + ' · ' : ''}${isInlineViewable(ext) ? 'открыть' : 'скачать'}</span>
+        </span>
+      </a>`;
+    }
+    return '';
+  }
+
+  /* ── Файлы (PDF, документы, архивы) ── */
+  // Исполняемые файлы и скрипты не принимаем — их могут подсунуть как «документ»
+  const BLOCKED_FILE_EXT = new Set(['exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'pif', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'ps1', 'jar', 'apk', 'app', 'dmg', 'sh', 'reg', 'lnk', 'hta', 'cpl']);
+  function fileExt(name) { const m = /\.([a-z0-9]{1,8})$/i.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
+  function fmtFileSize(b) {
+    if (b < 1024) return b + ' Б';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(b < 10240 ? 1 : 0) + ' КБ';
+    return (b / 1024 / 1024).toFixed(1) + ' МБ';
+  }
+  // Что браузер умеет показать сам — открываем во вкладке, остальное скачиваем с нормальным именем
+  function isInlineViewable(ext) { return ['pdf', 'txt', 'csv', 'json', 'md', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp3', 'mp4'].includes(ext); }
+  function fileIconColor(ext) {
+    if (ext === 'pdf') return 'linear-gradient(#FF6B5E,#C9302C)';
+    if (['doc', 'docx', 'rtf', 'odt', 'pages'].includes(ext)) return 'linear-gradient(#5B9BFF,#2B5FC9)';
+    if (['xls', 'xlsx', 'csv', 'ods', 'numbers'].includes(ext)) return 'linear-gradient(#4CD07A,#1E8A45)';
+    if (['ppt', 'pptx', 'odp', 'key'].includes(ext)) return 'linear-gradient(#FFA94D,#D9661F)';
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'linear-gradient(#B08BFF,#6A43C9)';
+    if (['txt', 'md', 'json', 'xml'].includes(ext)) return 'linear-gradient(#9AA6C8,#69706C)';
+    return 'linear-gradient(145deg, #34D6B2, #0E8C72)';
+  }
+
+  // Скачать файл под его настоящим именем (в хранилище он лежит под служебным)
+  async function downloadChatFile(url, name) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blobUrl = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = blobUrl; a.download = name || 'file';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      console.warn('[chat file] download:', err);
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
+  function chatBubbleHtml(m) {
+    const mine = currentUser && String(m.fromId) === String(currentUser.id);
+    const isMedia = m.kind && m.kind !== 'text';
+    const author = chat && chat.type !== 'dm' && !mine
+      ? `<span class="chat-msg-author">${escapeHtml(m.authorName || 'Участник')}</span>` : '';
+    const cls = ['chat-msg', mine ? 'me' : 'them', isMedia ? 'has-media' : '',
+      m.kind === 'circle' ? 'is-circle' : '', m.pending ? 'is-pending' : ''].join(' ');
+    const body = isMedia
+      ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
+      : escapeHtml(m.content);
+    const time = m.pending ? 'отправка…' : fmtTime(m.createdAt);
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}">${author}${body}<span class="chat-msg-time">${time}</span></div>`;
+  }
+
+  const mediaUrlCache = new Map(); // путь в Storage → { url, exp }
+
+  async function hydrateChatMedia(root) {
+    if (!root) return;
+    const els = [...root.querySelectorAll('[data-media-path]')]
+      .filter((el) => el.dataset.mediaPath && !el.getAttribute(el.tagName === 'A' ? 'href' : 'src'));
+    if (!els.length) return;
+    const now = Date.now();
+    const need = [...new Set(els.map((el) => el.dataset.mediaPath))].filter((p) => {
+      const cached = mediaUrlCache.get(p);
+      return !cached || cached.exp < now;
+    });
+    if (need.length) {
+      const { data, error } = await supabaseClient.storage.from(CHAT_BUCKET).createSignedUrls(need, 3600);
+      if (error) console.warn('[chat media] sign:', error.message);
+      for (const item of (data || [])) {
+        if (item.signedUrl) mediaUrlCache.set(item.path, { url: item.signedUrl, exp: now + 50 * 60 * 1000 });
+      }
+    }
+    for (const el of els) {
+      const cached = mediaUrlCache.get(el.dataset.mediaPath);
+      if (!cached) continue;
+      if (el.tagName === 'A') { el.href = cached.url; continue; }   // карточка файла
+      // когда медиа загрузится, высота сообщения вырастет — держим ленту внизу
+      el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); }, { once: true });
+      if (el.tagName !== 'IMG') el.addEventListener('error', () => showMediaFallback(el, cached.url), { once: true });
+      el.src = cached.url;
+    }
+  }
+
+  // Браузер не смог декодировать запись (например, формат другого устройства) —
+  // вместо пустого плеера даём открыть файл напрямую
+  function showMediaFallback(el, url) {
+    const box = el.closest('.chat-circle-wrap') || el.closest('.chat-voice') || el;
+    const a = document.createElement('a');
+    a.className = 'chat-media-fallback';
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    const kind = el.closest('.chat-circle-wrap') ? 'circle' : (el.tagName === 'AUDIO' ? 'voice' : 'video');
+    a.textContent = { circle: '⭕ Открыть видеосообщение', voice: '🎤 Открыть голосовое', video: '🎬 Открыть видео' }[kind];
+    const msg = box.closest('.chat-msg');
+    if (msg) msg.classList.remove('is-circle');
+    box.replaceWith(a);
+  }
+
+  function renderChatView() {
+    const rows = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : `<div class="empty-msg">Начните диалог.</div>`;
+    winBody.innerHTML = `
+      <div class="support-chat chat-view" style="height:100%">
+        <div class="support-chat-head">${escapeHtml(chat.headTitle)}</div>
+        ${chat.type === 'match' ? '<div class="match-vote" id="match-vote"></div>' : ''}
+        <div class="support-chat-body" id="chat-view-body">${rows}</div>
+        <div class="chat-rec-preview" id="chat-rec-preview" hidden><video playsinline muted></video><span class="chat-rec-ring"></span></div>
+        <form class="support-chat-form chat-composer" id="chat-composer">
+          <button type="button" class="chat-tool" data-chat-attach title="Фото, видео или файл" aria-label="Прикрепить фото, видео или файл">${ICON_CLIP}</button>
+          <input type="file" id="chat-file" multiple hidden>
+          <input class="support-chat-input" type="text" id="chat-text" placeholder="Сообщение…" maxlength="1000" autocomplete="off">
+          <button type="button" class="chat-tool" data-chat-rec="voice" title="Голосовое сообщение" aria-label="Записать голосовое сообщение">${ICON_MIC}</button>
+          <button type="button" class="chat-tool" data-chat-rec="circle" title="Видеосообщение" aria-label="Записать видеокружок">${ICON_CIRCLE}</button>
+          <button class="support-chat-send" type="submit" aria-label="Отправить">${ICON_SEND}</button>
+        </form>
+        <div class="chat-recbar" id="chat-recbar" hidden>
+          <span class="chat-rec-dot" aria-hidden="true"></span>
+          <span class="chat-rec-label" id="chat-rec-label">Запись</span>
+          <span class="chat-rec-time" id="chat-rec-time">0:00</span>
+          <span class="sub-toolbar-spacer"></span>
+          <button type="button" class="btn" data-chat-rec-cancel>Отмена</button>
+          <button type="button" class="btn btn-primary" data-chat-rec-send>Отправить</button>
+        </div>
+      </div>`;
+    const body = winBody.querySelector('#chat-view-body');
+    chat.stick = true;
+    body.addEventListener('scroll', () => {
+      if (chat) chat.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+    }, { passive: true });
+    hydrateChatMedia(body);
+    scrollChatToBottom();
+    winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
+    winBody.querySelector('#chat-file').addEventListener('change', onChatFilesPicked);
+    if (chat.type === 'match') refreshMatchVotePanel();
+  }
+
+  /* ── Голосование в совместном чате ── */
+  async function refreshMatchVotePanel() {
+    const c = chat;
+    if (!c || c.type !== 'match') return;
+    const m = groupMatches.find((x) => x.id === String(c.matchId));
+    if (!m) return;
+    const votes = m.voteState === 'open' ? await loadMatchVotes(m.id) : [];
+    if (chat !== c) return;
+    renderMatchVotePanel(m, votes);
+  }
+
+  function renderMatchVotePanel(m, votes) {
+    const el = winBody.querySelector('#match-vote');
+    if (!el) return;
+    const myId = currentUser && currentUser.id;
+    const total = Math.max(1, matchParticipantIds(m).length);
+    const yes = votes.filter((v) => v.vote).length;
+    const no = votes.filter((v) => !v.vote).length;
+    const mine = votes.find((v) => v.user_id === myId);
+    const need = Math.ceil(total / 2);
+    el.dataset.state = m.voteState;
+    if (m.voteState === 'approved') {
+      el.innerHTML = `<div class="mv-done">💞 Союз закреплён — на карте вы видите только друг друга</div>`;
+    } else if (m.voteState === 'open') {
+      el.innerHTML = `
+        <div class="mv-head"><span class="mv-title">Остаёмся только друг с другом?</span><span class="mv-count">${yes + no} из ${total}</span></div>
+        <div class="mv-bar"><span class="mv-yes" style="width:${(yes / total * 100).toFixed(1)}%"></span><span class="mv-no" style="width:${(no / total * 100).toFixed(1)}%"></span></div>
+        <div class="mv-actions">
+          <button type="button" class="mv-btn yes ${mine && mine.vote ? 'is-on' : ''}" data-vote-yes>❤ За · ${yes}</button>
+          <button type="button" class="mv-btn no ${mine && !mine.vote ? 'is-on' : ''}" data-vote-no>✕ Против · ${no}</button>
+        </div>
+        <div class="mv-hint">Решает ${need} из ${total}: «за» — группы видят только друг друга, «против» — союз распадётся и чат удалится</div>`;
+    } else if (isMatchLeader(m, myId)) {
+      el.innerHTML = `
+        <button type="button" class="mv-start" data-vote-start>🗳 Начать голосование</button>
+        <div class="mv-hint">Остаться только друг с другом или разойтись — решат участники обеих групп</div>`;
+    } else {
+      el.innerHTML = `<div class="mv-hint">🗳 Голосование о союзе может начать лидер одной из групп</div>`;
+    }
+  }
+
+  // match изменился (realtime или наш голос): распался — закрываем чат, иначе обновляем панель
+  function onMatchesChanged() {
+    const c = chat;
+    if (!c || c.type !== 'match') return;
+    const m = groupMatches.find((x) => x.id === String(c.matchId));
+    if (!m || m.status !== 'accepted') {
+      leaveChat();
+      winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+      showMessengerScreen();
+      setTimeout(() => alert('Союз распался — совместный чат удалён'), 50);
+      return;
+    }
+    refreshMatchVotePanel();
+  }
+
+  async function startMatchVote(matchId) {
+    const { error } = await supabaseClient.rpc('start_match_vote', { match_id: Number(matchId) });
+    if (error) { alert('Не удалось начать голосование: ' + error.message); return; }
+    await loadGroupMatchesFromDB();
+    refreshMatchVotePanel();
+  }
+
+  async function castMatchVote(matchId, vote) {
+    const { data: result, error } = await supabaseClient.rpc('cast_match_vote', { match_id: Number(matchId), vote });
+    if (error) { alert('Не удалось проголосовать: ' + error.message); return; }
+    if (result === 'open') { refreshMatchVotePanel(); return; }
+    // голосование решено — союз закреплён или распался: обновляем карту, чаты, группы
+    await refreshGroupsWorld();
+    onMatchesChanged();
+  }
+
+  function scrollChatToBottom() {
+    const body = winBody.querySelector('#chat-view-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }
+
+  function chatBubbleEl(id) {
+    return winBody.querySelector(`#chat-view-body [data-msg-id="${CSS.escape(String(id))}"]`);
+  }
+
+  function appendChatBubble(m) {
+    const body = winBody.querySelector('#chat-view-body');
+    if (!body) return;
+    const empty = body.querySelector('.empty-msg');
+    if (empty) empty.remove();
+    body.insertAdjacentHTML('beforeend', chatBubbleHtml(m));
+    hydrateChatMedia(body);
+    scrollChatToBottom();
+  }
+
+  function replaceChatBubble(oldId, m) {
+    const el = chatBubbleEl(oldId);
+    if (!el) return;
+    el.insertAdjacentHTML('afterend', chatBubbleHtml(m));
+    el.remove();
+    hydrateChatMedia(winBody.querySelector('#chat-view-body'));
+  }
+
+  function chatMediaFolder(c) {
+    if (c.type === 'dm') {
+      const [a, b] = [String(currentUser.id), String(c.peerId)].sort();
+      return `dm/${a}/${b}`;
+    }
+    if (c.type === 'match') return `match/${c.matchId}`;
+    return `group/${c.groupId}`;
+  }
+
+  function baseMime(type) { return String(type || '').split(';')[0].trim(); }
+
+  function extForMime(type) {
+    return ({
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+      'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+      'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/aac': 'aac',
+    })[baseMime(type)] || 'bin';
+  }
+
+  async function insertChatRow(c, { kind, content, mediaPath, duration, fileName, fileSize }) {
+    // имя и размер — только у файлов: так фото/голосовые работают и без миграции supabase_chat_files.sql
+    const fileCols = kind === 'file' ? { file_name: fileName || null, file_size: fileSize || null } : {};
+    if (c.type === 'dm') {
+      const row = { from_id: currentUser.id, to_id: c.peerId, content: content || '' };
+      // Для текста шлём только старые поля — так текст работает и до выполнения миграции
+      if (kind !== 'text') Object.assign(row, { kind, media_path: mediaPath, duration: duration || null }, fileCols);
+      const { data, error } = await supabaseClient.from('dm_messages').insert(row).select().single();
+      return { data: data ? normDmRow(data) : null, error };
+    }
+    const row = {
+      user_id: currentUser.id, author_name: profile.name,
+      content: content || '', kind, media_path: mediaPath || null, duration: duration || null, ...fileCols,
+    };
+    if (c.type === 'match') {
+      row.match_id = Number(c.matchId);
+      const { data, error } = await supabaseClient.from('match_messages').insert(row).select().single();
+      return { data: data ? normMatchRow(data) : null, error };
+    }
+    row.group_id = c.groupId;
+    const { data, error } = await supabaseClient.from('group_messages').insert(row).select().single();
+    return { data: data ? normGroupRow(data) : null, error };
+  }
+
+  async function sendChatMessage({ kind = 'text', content = '', blob = null, duration = null, fileName = null }) {
+    const c = chat;
+    if (!c || !currentUser) return;
+    let mediaPath = null, localUrl = null;
+    const fileSize = kind === 'file' && blob ? blob.size : null;
+    if (blob) {
+      // у документа берём его собственное расширение (в хранилище — служебное имя, настоящее — в file_name)
+      const ext = kind === 'file' ? (fileExt(fileName) || 'bin') : extForMime(blob.type);
+      mediaPath = `${chatMediaFolder(c)}/${currentUser.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      localUrl = URL.createObjectURL(blob);
+    }
+    const tmp = {
+      id: 'tmp-' + Date.now() + Math.random().toString(36).slice(2, 6),
+      fromId: currentUser.id, toId: c.peerId || null, groupId: c.groupId || null, matchId: c.matchId || null, authorName: profile.name,
+      content, kind, mediaPath, duration, fileName, fileSize, localUrl, pending: true, createdAt: new Date().toISOString(),
+    };
+    c.messages.push(tmp);
+    if (chat === c) appendChatBubble(tmp);
+    try {
+      if (blob) {
+        const { error: upErr } = await supabaseClient.storage.from(CHAT_BUCKET)
+          .upload(mediaPath, blob, { contentType: baseMime(blob.type) || 'application/octet-stream', upsert: false });
+        if (upErr) throw upErr;
+      }
+      const { data, error } = await insertChatRow(c, { kind, content, mediaPath, duration, fileName, fileSize });
+      if (error) throw error;
+      if (data) { data.localUrl = localUrl; finalizeChatMessage(c, tmp.id, data); }
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      console.warn('[chat] send:', msg);
+      c.messages = c.messages.filter((x) => x.id !== tmp.id);
+      if (chat === c) { const el = chatBubbleEl(tmp.id); if (el) el.remove(); }
+      // Документы требуют миграции: без неё хранилище не примет тип файла, а таблица — kind='file'
+      const needsSql = kind === 'file' && /mime|file_name|file_size|kind_check|check constraint/i.test(msg);
+      alert('Не удалось отправить: ' + msg + (needsSql ? '\n\nВыполните supabase_chat_files.sql в Supabase.' : ''));
+    }
+  }
+
+  function finalizeChatMessage(c, tmpId, real) {
+    const idx = c.messages.findIndex((x) => x.id === tmpId);
+    if (idx === -1) return; // уже заменили копией из realtime
+    if (c.messages.some((x) => x.id === real.id)) {
+      c.messages.splice(idx, 1);
+      if (chat === c) { const el = chatBubbleEl(tmpId); if (el) el.remove(); }
+      return;
+    }
+    c.messages[idx] = real;
+    if (chat === c) replaceChatBubble(tmpId, real);
+  }
+
+  // Новое сообщение из realtime (личное или групповое)
+  function onIncomingChatRow(m) {
+    const c = chat;
+    const belongs = c && (
+      c.type === 'dm'
+        ? m.groupId === null && m.matchId === null && (String(m.fromId) === String(c.peerId) || String(m.toId) === String(c.peerId))
+        : c.type === 'match'
+          ? m.matchId !== null && String(m.matchId) === String(c.matchId)
+          : m.groupId !== null && String(m.groupId) === String(c.groupId));
+    if (!belongs) {
+      if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
+      return;
+    }
+    if (c.messages.some((x) => x.id === m.id)) return;
+    if (String(m.fromId) === String(currentUser.id)) {
+      // Своё сообщение может прийти раньше ответа на insert — заменяем черновик, а не дублируем
+      const tmp = c.messages.find((x) => x.pending && x.kind === m.kind &&
+        (m.mediaPath ? x.mediaPath === m.mediaPath : x.content === m.content));
+      if (tmp) {
+        m.localUrl = tmp.localUrl;
+        c.messages[c.messages.indexOf(tmp)] = m;
+        replaceChatBubble(tmp.id, m);
+        return;
+      }
+    }
+    c.messages.push(m);
+    appendChatBubble(m);
+  }
+
+  function sendChatText() {
+    const input = winBody.querySelector('#chat-text');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    sendChatMessage({ kind: 'text', content: text });
+  }
+
+  function imageFileToBlob(file, maxSide = 1600, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image decode error')); };
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', quality);
+      };
+      img.src = url;
+    });
+  }
+
+  async function onChatFilesPicked(e) {
+    const input = e.target;
+    const files = [...(input.files || [])];
+    input.value = '';
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        // GIF отправляем как есть, чтобы не потерять анимацию; остальное — сжимаем
+        const blob = file.type === 'image/gif' ? file : await imageFileToBlob(file).catch(() => file);
+        sendChatMessage({ kind: 'image', blob });
+      } else if (file.type.startsWith('video/')) {
+        if (file.size > MAX_VIDEO_BYTES) { alert(`Видео «${file.name}» больше 50 МБ`); continue; }
+        sendChatMessage({ kind: 'video', blob: file });
+      } else {
+        // Любой другой файл — PDF, документ, таблица, архив — уходит карточкой с именем и размером
+        if (BLOCKED_FILE_EXT.has(fileExt(file.name))) { alert(`Файл «${file.name}» нельзя отправить: исполняемые файлы и скрипты запрещены`); continue; }
+        if (file.size > MAX_VIDEO_BYTES) { alert(`Файл «${file.name}» больше 50 МБ`); continue; }
+        if (!file.size) { alert(`Файл «${file.name}» пустой`); continue; }
+        sendChatMessage({ kind: 'file', blob: file, fileName: file.name });
+      }
+    }
+  }
+
+  /* ── Запись голосовых и видеокружков ── */
+  let chatRec = null; // { kind, recorder, stream, chunks, startedAt, timer, discard, chat }
+
+  function pickRecorderMime(kind) {
+    // Сначала MP4 (H.264/AAC): так пишет iPhone, и такой файл играет и в Safari, и в Chrome.
+    // WebM — запасной вариант для браузеров без записи в MP4.
+    const list = kind === 'voice'
+      ? ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+      : ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4',
+         'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
+    return list.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  async function startChatRecording(kind) {
+    if (chatRec || !chat) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+      alert('Запись не поддерживается в этом браузере (нужен HTTPS или localhost)');
+      return;
+    }
+    const c = chat;
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(kind === 'voice'
+        ? { audio: { echoCancellation: true, noiseSuppression: true } }
+        : { audio: true, video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } } });
+    } catch (err) {
+      console.warn('[chat rec] getUserMedia:', err);
+      alert(kind === 'voice' ? 'Нет доступа к микрофону' : 'Нет доступа к камере или микрофону');
+      return;
+    }
+    if (chat !== c || chatRec) { stream.getTracks().forEach((t) => t.stop()); return; }
+
+    const mimeType = pickRecorderMime(kind);
+    const opts = {};
+    if (mimeType) opts.mimeType = mimeType;
+    if (kind === 'circle') opts.videoBitsPerSecond = 1000000;
+    const recorder = new MediaRecorder(stream, opts);
+    const rec = { kind, recorder, stream, chunks: [], startedAt: Date.now(), timer: null, discard: false, chat: c };
+    chatRec = rec;
+
+    recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size) rec.chunks.push(ev.data); };
+    recorder.onstop = () => {
+      finishRecordingUi(rec);
+      if (rec.discard || !rec.chunks.length || chat !== rec.chat) return;
+      const duration = (Date.now() - rec.startedAt) / 1000;
+      if (duration < 0.7) return; // случайное нажатие
+      const type = recorder.mimeType || (rec.chunks[0] && rec.chunks[0].type) || mimeType
+        || (kind === 'voice' ? 'audio/mp4' : 'video/mp4');
+      sendChatMessage({ kind, blob: new Blob(rec.chunks, { type }), duration: Math.round(duration * 10) / 10 });
+    };
+    // Без timeslice: Safari на iPhone при записи кусками склеивает битый файл,
+    // который потом не воспроизводится. Весь файл придёт одним куском при stop().
+    recorder.start();
+    setRecordingUi(true, kind, stream);
+
+    const maxSec = kind === 'voice' ? MAX_VOICE_SEC : MAX_CIRCLE_SEC;
+    rec.timer = setInterval(() => {
+      const sec = (Date.now() - rec.startedAt) / 1000;
+      const t = winBody.querySelector('#chat-rec-time');
+      if (t) t.textContent = fmtDuration(sec);
+      if (sec >= maxSec) stopChatRecording(false);
+    }, 250);
+  }
+
+  function finishRecordingUi(rec) {
+    clearInterval(rec.timer);
+    rec.stream.getTracks().forEach((t) => t.stop());
+    if (chatRec === rec) chatRec = null;
+    setRecordingUi(false);
+  }
+
+  function stopChatRecording(discard) {
+    const rec = chatRec;
+    if (!rec) return;
+    rec.discard = discard;
+    if (rec.recorder.state !== 'inactive') rec.recorder.stop();
+    else finishRecordingUi(rec);
+  }
+
+  function setRecordingUi(on, kind, stream) {
+    const composer = winBody.querySelector('#chat-composer');
+    const bar = winBody.querySelector('#chat-recbar');
+    const prev = winBody.querySelector('#chat-rec-preview');
+    if (composer) composer.hidden = on;
+    if (bar) bar.hidden = !on;
+    if (on) {
+      const label = winBody.querySelector('#chat-rec-label');
+      if (label) label.textContent = kind === 'voice' ? 'Голосовое' : 'Видеокружок';
+      const t = winBody.querySelector('#chat-rec-time');
+      if (t) t.textContent = '0:00';
+    }
+    if (prev) {
+      const v = prev.querySelector('video');
+      if (on && kind === 'circle') { v.srcObject = stream; v.play().catch(() => {}); prev.hidden = false; }
+      else { if (v) v.srcObject = null; prev.hidden = true; }
+    }
+  }
+
+  /* ── Просмотр ── */
+  function openPhotoViewer(src) {
+    const back = document.createElement('div');
+    back.className = 'photo-viewer';
+    back.innerHTML = `<img src="${escapeHtml(src)}" alt="">`;
+    back.addEventListener('click', () => back.remove());
+    document.body.appendChild(back);
+  }
+
+  // Кружок: по умолчанию крутится без звука; тап — проиграть со звуком, повторный тап — пауза
+  function toggleCircle(wrap) {
+    const video = wrap.querySelector('video');
+    if (!video || !video.src) return;
+    if (video.muted) {
+      video.muted = false; video.loop = false; video.currentTime = 0;
+      video.play().catch(() => {});
+      wrap.classList.add('is-playing');
+      video.onended = () => {
+        video.muted = true; video.loop = true; video.onended = null;
+        wrap.classList.remove('is-playing');
+        video.play().catch(() => {});
+      };
+    } else if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  }
+
+  /* ── Открытие / закрытие чата ── */
+  function leaveChat() {
+    if (chatRec) stopChatRecording(true);
+    chat = null;
+  }
+
+  async function openChat(spec, backFn) {
+    leaveChat();
+    const c = { ...spec, messages: [] };
+    if (c.type === 'dm') {
+      const peer = friends.find((f) => f.id === c.peerId) || groupMemberProfiles.get(c.peerId);
+      c.headTitle = 'Чат с ' + (peer ? peer.name : 'пользователем');
+      c.winTitle = 'Личный чат';
+    } else if (c.type === 'match') {
+      const m = groupMatches.find((x) => x.id === String(c.matchId));
+      c.headTitle = m ? matchTitle(m) : 'Совместный чат';
+      c.winTitle = 'Совместный чат';
+    } else {
+      const g = groups.find((x) => String(x.id) === String(c.groupId));
+      c.headTitle = g ? `Группа «${g.name}»` : 'Групповой чат';
+      c.winTitle = g ? g.name : 'Групповой чат';
+    }
+    chat = c;
+    c.messages = await loadChatHistory(c);
+    if (chat !== c) return; // пока грузили, пользователь ушёл
+    setScreen(() => {
+      winTitle.textContent = c.winTitle;
+      winBody.scrollTop = 0;
+      winBody.style.display = 'flex'; winBody.style.flexDirection = 'column'; winBody.style.padding = '0';
+      renderChatView();
+    }, () => {
+      leaveChat();
+      winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+      (backFn || showMessengerScreen)();
+    });
+  }
+
+  function showDmScreen(peerId) { return openChat({ type: 'dm', peerId }); }
+  function showGroupChatScreen(groupId, backFn) { return openChat({ type: 'group', groupId }, backFn); }
+  function showMatchChatScreen(matchId, backFn) { return openChat({ type: 'match', matchId: String(matchId) }, backFn); }
+
+  /* ═══════ APPS ═══════ */
+  const APPS = {
+    messenger: { title: 'Сообщения', render: () => `<div class="empty-msg">Загружаем чат…</div>` },
+    friends: {
+      title: 'Друзья',
+      render: () => {
+        const rowsHtml = friends.length
+          ? `<ul class="rows">${friends.map((f) => `
+              <li class="person-card is-link" data-view-profile="${escapeHtml(f.id)}" data-profile-back="friends" role="button" tabindex="0">
+                ${avatarCircleHtml(f, 40)}
+                <div class="person-main">
+                  <div class="person-name">${escapeHtml(f.name)}</div>
+                  <div class="person-handle">${escapeHtml(f.handle)}</div>
+                </div>
+                <button class="btn" type="button" data-open-dm="${escapeHtml(f.id)}">Чат</button>
+                <button class="btn btn-danger" type="button" data-remove-friend="${escapeHtml(f.id)}">×</button>
+              </li>`).join('')}</ul>`
+          : `<div class="empty-msg">Пока нет друзей.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы найти человека по @username.</div>`;
+        return `
+          <div class="sub-toolbar">
+            <span class="sub-toolbar-title">Список друзей</span>
+            <span class="sub-toolbar-spacer"></span>
+            <button class="icon-btn" type="button" data-action="add-friend" aria-label="Найти друга"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg></button>
+          </div>
+          ${rowsHtml}`;
+      }
+    },
+    profile: {
+      title: 'Профиль',
+      render: () => {
+        const photos = photosOrAvatar(myPhotos, profile.avatar).filter((ph) => safeUrl(ph.url));
+        const head = photos.length
+          ? `${photoHeroHtml(photos, profile.name, profile.handle)}
+             ${profile.bio ? `<div class="profile-bio ph-bio ph-bio-own">${escapeHtml(profile.bio)}</div>` : ''}`
+          : `<div class="profile-head">
+              ${profileAvatarHtml(84)}
+              <div class="profile-name">${escapeHtml(profile.name)}</div>
+              <div class="profile-handle">${escapeHtml(profile.handle)}</div>
+              ${profile.bio ? `<div class="profile-bio">${escapeHtml(profile.bio)}</div>` : ''}
+            </div>`;
+        return `
+        ${head}
+        <ul class="rows">
+          <li class="row" data-action="open-avatar" role="button" tabindex="0"><div class="row-main row-name">Мой аватар</div><span class="chev">›</span></li>
+          <li class="row" data-action="open-places" role="button" tabindex="0"><div class="row-main row-name">Воспоминания</div><span class="chev">›</span></li>
+          <li class="row" data-action="open-wishes" role="button" tabindex="0"><div class="row-main row-name">Желания</div><span class="chev">›</span></li>
+          <li class="row" data-action="open-groups" role="button" tabindex="0"><div class="row-main row-name">Группы</div><span class="chev">›</span></li>
+          <li class="row" data-action="edit-profile" role="button" tabindex="0"><div class="row-main row-name">Редактировать профиль</div><span class="chev">›</span></li>
+          <li class="row danger" data-action="logout" role="button" tabindex="0"><div class="row-main row-name">Выйти из аккаунта</div><span class="chev">›</span></li>
+        </ul>`;
+      }
+    },
+    notifications: {
+      title: 'Уведомления',
+      render: () => {
+        if (!notifications.length) return `<div class="notif-empty">Пока нет уведомлений</div>`;
+        return `
+          <ul class="rows">
+            ${notifications.map((n) => `
+              <li class="row ${n.read ? '' : 'notif-unread'}" data-notif-id="${escapeHtml(n.id)}" role="button" tabindex="0">
+                ${notifIconHtml(n.type)}
+                <div class="row-main">
+                  <div class="row-name">${escapeHtml(n.title || '')}</div>
+                  <div class="row-sub">${escapeHtml(n.text || '')}</div>
+                  ${friendRequestActionsHtml(n)}${groupMatchActionsHtml(n)}
+                </div>
+                <span class="row-time">${escapeHtml(n.time || '')}</span>
+              </li>`).join('')}
+          </ul>`;
+      }
+    },
+    filters: {
+      title: 'Фильтры',
+      render: () => {
+        const f = mapFilters;
+        const compOpt = (key, emoji) =>
+          `<button type="button" class="seg-opt" data-flt-comp="${key}" aria-pressed="${f.comp === key}"><span class="seg-emoji">${emoji}</span>${COMP_LABELS[key]}</button>`;
+        return `
+          <div class="filters">
+            <div class="filter-note">Фильтры скрывают на карте чужие группы, которые не подходят. Ваши группы, друзья и группы с match видны всегда.</div>
+            ${groupStatsFailed ? `<div class="filter-note" style="color:#C0392B">Сводка по группам недоступна — выполните supabase_group_filters.sql в Supabase.</div>` : ''}
+            <div class="filter-block ${f.ageOn ? '' : 'is-off'}" id="flt-age-block">
+              <div class="filter-head">
+                <span class="filter-title">Средний возраст группы</span>
+                <button class="switch" type="button" role="switch" data-flt-age-toggle aria-checked="${!!f.ageOn}" aria-label="Фильтр по возрасту"></button>
+              </div>
+              <div class="filter-range">
+                <input type="range" id="flt-age" min="14" max="70" value="${f.age}" aria-label="Средний возраст">
+                <span class="filter-val" id="flt-age-val"></span>
+              </div>
+              <div class="filter-range">
+                <input type="range" id="flt-spread" min="0" max="10" value="${f.spread}" aria-label="Допустимое отклонение">
+                <span class="filter-val" id="flt-spread-val"></span>
+              </div>
+              <div class="filter-sub" id="flt-age-sub"></div>
+            </div>
+            <div class="filter-block">
+              <div class="filter-head"><span class="filter-title">Состав группы</span></div>
+              <div class="seg" id="flt-comp">
+                ${compOpt('all', '🌍')}${compOpt('mixed', '👫')}${compOpt('male', '👨')}${compOpt('female', '👩')}
+              </div>
+            </div>
+            <div class="filter-sub" id="flt-count"></div>
+            <div class="filter-actions">
+              <button type="button" class="btn" data-flt-reset>Сбросить</button>
+              <button type="button" class="btn btn-primary" data-flt-done>Показать на карте</button>
+            </div>
+          </div>`;
+      }
+    },
+    settings: {
+      title: 'Настройки',
+      render: () => {
+        const pref = getThemePref();
+        const themeOpt = (key, label, icon) =>
+          `<button type="button" class="seg-opt theme-opt" data-theme-pref="${key}" aria-pressed="${pref === key}">${icon}<span>${label}</span></button>`;
+        const sun = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>';
+        const moon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
+        const auto = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" class="fill"/></svg>';
+        return `
+        <div class="theme-block">
+          <div class="theme-head"><span class="row-name">Тема</span><span class="row-sub">Оформление приложения и карты</span></div>
+          <div class="seg theme-seg">${themeOpt('auto', 'Авто', auto)}${themeOpt('light', 'Светлая', sun)}${themeOpt('dark', 'Тёмная', moon)}</div>
+        </div>
+        <ul class="rows">
+          <li class="row">
+            <div class="row-main"><div class="row-name">Уведомления</div><div class="row-sub">Сообщения и приглашения</div></div>
+            <button class="switch" type="button" role="switch" data-setting="notifications" aria-checked="${!!settings.notifications}"></button>
+          </li>
+          <li class="row">
+            <div class="row-main"><div class="row-name">Геопозиция</div><div class="row-sub">Показывать меня на карте</div></div>
+            <button class="switch" type="button" role="switch" data-setting="geolocation" aria-checked="${!!settings.geolocation}"></button>
+          </li>
+          <li class="row" data-action="open-rules" role="button" tabindex="0">
+            <div class="row-main"><div class="row-name">Правила</div><div class="row-sub">Правила пользования и ответственность</div></div>
+            <span class="chev">›</span>
+          </li>
+          <li class="row" data-action="open-support" role="button" tabindex="0">
+            <div class="row-main"><div class="row-name">Техподдержка</div><div class="row-sub">Связаться с техподдержкой</div></div>
+            <span class="chev">›</span>
+          </li>
+        </ul>`;
+      }
+    }
+  };
+
+  /* ═══════ ОБЩИЕ ФУНКЦИИ ═══════ */
+  function postImages(p) {
+    if (Array.isArray(p.images) && p.images.length) return p.images;
+    if (p.image) return [p.image];
+    return [];
+  }
+
+  function avatarCircleHtml(person, size = 40) {
+    const letter = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
+    if (person.avatar) return `<span class="avatar" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(person.avatar)}')"></span>`;
+    return `<span class="avatar" style="width:${size}px;height:${size}px;background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml(letter)}</span>`;
+  }
+
+  /* Шапка профиля с фото во всю ширину. Несколько фото листаются свайпом
+     или нажатием на левую/правую половину, полоски сверху показывают, какое открыто. */
+  function photoHeroHtml(photos, name, handle) {
+    const many = photos.length > 1;
+    return `
+      <div class="photo-hero ${many ? 'is-many' : ''}" data-photo-hero>
+        <div class="ph-track">${photos.map((ph, i) => `
+          <div class="ph-slide"><img src="${safeUrl(ph.url)}" alt="" draggable="false" ${i ? 'loading="lazy"' : ''}></div>`).join('')}
+        </div>
+        ${many ? `<div class="ph-bars" aria-hidden="true">${photos.map((_, i) => `<span class="${i ? '' : 'is-on'}"></span>`).join('')}</div>` : ''}
+        <div class="ph-caption">
+          <div class="ph-name">${escapeHtml(name)}</div>
+          <div class="ph-handle">${escapeHtml(handle)}</div>
+        </div>
+      </div>`;
+  }
+
+  function photoHeroStep(hero, delta) {
+    const track = hero.querySelector('.ph-track');
+    const n = track.children.length;
+    const cur = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    const next = Math.max(0, Math.min(n - 1, cur + delta));
+    if (next !== cur) track.scrollTo({ left: next * track.clientWidth, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
+  function profileAvatarHtml(size = 84) {
+    if (profile.avatar) return `<span class="avatar-preview" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(profile.avatar)}')"></span>`;
+    const letter = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
+    return `<span class="avatar-preview" style="width:${size}px;height:${size}px">${letter}</span>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  /* URL картинки для вставки в HTML-шаблон (src="…" или url('…')).
+     Пропускает только data:image/…;base64 и https-ссылки, остальное — пустая строка. */
+  function safeUrl(u) {
+    const s = String(u || '').trim();
+    if (/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(s)) return s;
+    if (/^https:\/\/[^\s"'()<>\\]+$/i.test(s)) return s;
+    return '';
+  }
+  function normalizeUsernameInput(raw) { return String(raw).trim().replace(/^@+/, '').toLowerCase(); }
+  function isValidUsernameInput(u) { return /^[a-zA-Z][a-zA-Z0-9_.]{2,19}$/.test(u); }
+
+  const NOTIF_ICON = {
+    message: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3C6.9 3 3 6.5 3 10.8c0 2.2 1.1 4.2 3 5.6-.2 1-.7 2-1.5 2.9 1.6-.2 3-.8 4.1-1.6.8.2 1.6.3 2.4.3 5.1 0 9-3.5 9-7.8S17.1 3 12 3z"/></svg>`,
+    geo:     `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>`,
+    system:  `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2 1 21h22L12 2zm0 6 6.5 11h-13L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z"/></svg>`,
+    friend_request: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M15 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`,
+    friend_accept:  `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`,
+    group_match:    `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
+    group_match_accept: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
+    match_vote:        `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#15131F" d="M5 3h14v12H5zM8 7h8v2H8zm0 3h5v2H8zM3 17h18v4H3z"/></svg>`,
+    match_vote_result: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
+    group:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
+  };
+  const NOTIF_COLOR = {
+    message: 'linear-gradient(145deg, var(--you-2), var(--you-deep))',
+    geo:     'linear-gradient(145deg, #34D6B2, #0E8C72)',
+    system:  'linear-gradient(#D9A84A, #A0761F)',
+    group:   'linear-gradient(145deg, #34D6B2, #0E8C72)',
+    friend_request: 'linear-gradient(#7ED8FF, #2C7BC4)',
+    friend_accept:  'linear-gradient(#6df27c, #0bbf3f)',
+    group_match:        'linear-gradient(135deg, var(--you) 0 50%, var(--lime) 50% 100%)',
+    group_match_accept: 'linear-gradient(#FF8FB1, #C4285E)',
+    match_vote:         'linear-gradient(145deg, #34D6B2, #0E8C72)',
+    match_vote_result:  'linear-gradient(145deg, var(--you-2), var(--you-deep))',
+  };
+  function friendRequestActionsHtml(n) {
+    if (n.type !== 'friend_request' || !n.requestId) return '';
+    const outcome = friendRequestOutcome.get(n.requestId);
+    if (outcome === 'accepted') return `<div class="notif-status">Вы приняли запрос</div>`;
+    if (outcome === 'declined') return `<div class="notif-status">Запрос отклонён</div>`;
+    if (!pendingIncomingRequests.has(n.requestId)) return `<div class="notif-status">Запрос уже обработан</div>`;
+    const id = escapeHtml(n.requestId);
+    return `<div class="notif-actions">
+      <button class="btn btn-primary" type="button" data-fr-accept="${id}">Принять</button>
+      <button class="btn" type="button" data-fr-decline="${id}">Отклонить</button>
+    </div>`;
+  }
+  function groupMatchActionsHtml(n) {
+    if (!n.requestId) return '';
+    const live = groupMatches.find((x) => x.id === n.requestId && x.status === 'accepted');
+    const openBtn = `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(n.requestId)}">Открыть чат</button></div>`;
+    // Голосование и match: кнопка чата — только пока союз жив (распавшийся чат удалён)
+    if (n.type === 'match_vote' || n.type === 'match_vote_result' || n.type === 'group_match_accept') return live ? openBtn : '';
+    if (n.type !== 'group_match') return '';
+    const outcome = groupMatchOutcome.get(n.requestId);
+    if (outcome === 'accepted') return `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(n.requestId)}">Открыть чат</button></div>`;
+    if (outcome === 'declined') return `<div class="notif-status">Запрос отклонён</div>`;
+    const m = groupMatches.find((x) => x.id === n.requestId);
+    if (m && m.status === 'accepted') return `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button></div>`;
+    if (!pendingIncomingMatch(n.requestId)) return `<div class="notif-status">Запрос уже обработан</div>`;
+    return matchResponseButtonsHtml(m);
+  }
+  function notifIconHtml(type) {
+    const svg = NOTIF_ICON[type] || NOTIF_ICON.system;
+    const bg = NOTIF_COLOR[type] || NOTIF_COLOR.system;
+    return `<span class="notif-icon" style="background:${bg}">${svg}</span>`;
+  }
+  function unreadCount() { return notifications.filter((n) => !n.read).length; }
+  function updateBadge() {
+    const badge = document.getElementById('notif-badge'); if (!badge) return;
+    const n = unreadCount();
+    if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.hidden = false; } else { badge.hidden = true; }
+  }
+
+  /* ═══════ НАВИГАЦИЯ ═══════ */
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dock = document.getElementById('dock');
+  const items = [...dock.querySelectorAll('.dock-item')];
+  const win = document.getElementById('window');
+  const winTitle = document.getElementById('win-title');
+  const winBody = document.getElementById('win-body');
+  let openApp = null, closeTimer = null;
+  let currentBackHandler = null;
+  let placesView = (() => { try { return localStorage.getItem('places.view.v1') === 'grid' ? 'grid' : 'feed'; } catch { return 'feed'; } })();
+  let avatarStageCleanup = null;
+  let userProfileAvatarCleanup = null;
+
+  function savePlacesView(v) { try { localStorage.setItem('places.view.v1', v); } catch {} }
+  function setScreen(renderFn, backFn) { currentBackHandler = (typeof backFn === 'function') ? backFn : null; renderFn(); }
+  function goBack() { if (typeof currentBackHandler === 'function') { const b = currentBackHandler; currentBackHandler = null; b(); } else closeApp(); }
+  function resetScreenStack() { currentBackHandler = null; }
+  function setDots() {
+    items.forEach((li) => { li.dataset.open = String(li.querySelector('.dock-btn').dataset.app === openApp); });
+    const nBtn = document.getElementById('notif-btn'); if (nBtn) nBtn.classList.toggle('is-active', openApp === 'notifications');
+    const sBtn = document.getElementById('settings-btn'); if (sBtn) sBtn.classList.toggle('is-active', openApp === 'settings');
+    const fBtn = document.getElementById('filter-btn'); if (fBtn) fBtn.classList.toggle('is-active', openApp === 'filters');
+  }
+
+  function showMapApp() {
+    leaveChat();
+    clearTimeout(closeTimer); closePostMenus();
+    if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+    if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+    winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+    win.classList.remove('is-open');
+    closeTimer = setTimeout(() => { win.hidden = true; }, reduceMotion ? 0 : 230);
+    resetScreenStack();
+    openApp = 'map';
+    document.body.classList.remove('app-window');
+    document.body.classList.add('app-map');
+    setDots();
+    if (map2gis && typeof map2gis.invalidateSize === 'function') requestAnimationFrame(() => { try { map2gis.invalidateSize(); } catch {} });
+  }
+
+  function showApp(id, fromBtn) {
+    if (id === 'map') { showMapApp(); return; }
+    if (id === 'messenger') { showMessengerScreen(); return; }
+    const app = APPS[id]; if (!app) return;
+    leaveChat();
+    clearTimeout(closeTimer); closePostMenus();
+    if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+    if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+    winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+    winTitle.textContent = app.title;
+    winBody.innerHTML = app.render();
+    winBody.scrollTop = 0;
+    win.hidden = false;
+    const wr = win.getBoundingClientRect();
+    const br = fromBtn ? fromBtn.getBoundingClientRect() : null;
+    const ox = br ? br.left + br.width / 2 - wr.left : wr.width / 2;
+    win.style.transformOrigin = `${ox}px ${wr.height + 60}px`;
+    requestAnimationFrame(() => win.classList.add('is-open'));
+    resetScreenStack();
+    openApp = id;
+    document.body.classList.remove('app-map');
+    document.body.classList.add('app-window');
+    setDots();
+    win.focus({ preventScroll: true });
+    if (id === 'settings') syncSettingsUi();
+    if (id === 'filters') syncFiltersUi();
+    if (id === 'profile') ensureMyPhotos();
+    if (id === 'notifications' && currentUser) {
+      supabaseClient.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
+        .then(() => { notifications = notifications.map((n) => ({ ...n, read: true })); updateBadge(); });
+    }
+  }
+
+  function closeApp() { showMapApp(); }
+
+  // Подписи и счётчик на экране фильтров
+  function syncFiltersUi() {
+    if (openApp !== 'filters') return;
+    const f = mapFilters;
+    const q = (s) => winBody.querySelector(s);
+    if (!q('#flt-age')) return;
+    q('#flt-age-block').classList.toggle('is-off', !f.ageOn);
+    q('#flt-age-val').textContent = `${f.age} лет`;
+    q('#flt-spread-val').textContent = `± ${f.spread}`;
+    q('#flt-age-sub').textContent = f.spread
+      ? `Группы со средним возрастом от ${f.age - f.spread} до ${f.age + f.spread} лет`
+      : `Группы со средним возрастом ${f.age} лет`;
+    winBody.querySelectorAll('[data-flt-comp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fltComp === f.comp)));
+    const myId = currentUser && currentUser.id;
+    const others = groups.filter((g) => !isGroupParticipant(g, myId) && !groupHiddenForMe(g));
+    const passed = others.filter(groupPassesFilters).length;
+    q('#flt-count').textContent = others.length
+      ? `Подходит групп: ${passed} из ${others.length}`
+      : 'Других групп пока нет';
+  }
+
+  function refreshNotifications() {
+    if (openApp === 'notifications') { winBody.innerHTML = APPS.notifications.render(); winBody.scrollTop = 0; }
+    updateBadge();
+  }
+
+  function showPlacesScreen() {
+    showApp('profile');
+    setScreen(() => {
+      closePostMenus();
+      if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+      if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+      winTitle.textContent = 'Воспоминания';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = renderPlaces();
+      bindCarousels();
+    }, () => showApp('profile'));
+  }
+
+  function renderPlaces() {
+    const isGrid = placesView === 'grid';
+    return `
+      <div class="places-toolbar">
+        <div class="view-toggle" role="group">
+          <button class="view-btn" type="button" data-view="grid" aria-pressed="${isGrid}"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg></button>
+          <button class="view-btn" type="button" data-view="feed" aria-pressed="${!isGrid}"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v2H4V5zm0 6h16v2H4v-2zm0 6h16v2H4v-2z"/></svg></button>
+        </div>
+        <span class="places-spacer"></span>
+        <button class="view-btn" type="button" data-action="new-post"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg></button>
+      </div>
+      ${isGrid ? renderGrid() : renderFeed()}`;
+  }
+
+  function renderFeed() {
+    if (!posts.length) return placesEmptyHtml();
+    return `<div class="feed">${posts.map((p) => {
+      const imgs = postImages(p);
+      const multi = imgs.length > 1;
+      const mediaHtml = multi
+        ? `<div class="post-carousel" data-carousel><div class="slides">${imgs.map((src) => `<div class="slide"><img src="${safeUrl(src)}" loading="lazy"></div>`).join('')}</div>
+            <span class="counter"><span data-idx>1</span>/${imgs.length}</span>
+            <div class="dots">${imgs.map((_, i) => `<button class="dot ${i === 0 ? 'active' : ''}" type="button"></button>`).join('')}</div></div>`
+        : `<img class="post-media" src="${safeUrl(imgs[0])}" loading="lazy">`;
+      const isMine = p.authorId === (currentUser && currentUser.id);
+      return `<article class="post" data-post-id="${escapeHtml(p.id)}">
+        <header class="post-head">
+          <span class="avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml((p.author || '?').trim().charAt(0).toUpperCase() || '?')}</span>
+          <div class="row-main">
+            <div class="post-author">${escapeHtml(p.author || '')}</div>
+            <div class="post-place">📍 ${escapeHtml(p.place || '')}</div>
+          </div>
+          <span class="row-time">${escapeHtml(p.time || '')}</span>
+          ${isMine ? `<button type="button" class="post-menu-btn" data-post-menu="${escapeHtml(p.id)}"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></button>` : ''}
+        </header>
+        ${mediaHtml}
+        ${p.caption ? `<div class="post-body"><div class="post-caption">${escapeHtml(p.caption)}</div></div>` : ''}
+      </article>`;
+    }).join('')}</div>`;
+  }
+
+  function renderGrid() {
+    if (!posts.length) return placesEmptyHtml();
+    return `<div class="grid">${posts.map((p) => {
+      const imgs = postImages(p);
+      const badge = imgs.length > 1 ? `<span class="cell-multi">${imgs.length}</span>` : '';
+      return `<div class="grid-cell" data-post-id="${escapeHtml(p.id)}" role="button" tabindex="0">
+        <img src="${safeUrl(imgs[0])}" loading="lazy">${badge}
+        ${p.caption ? `<span class="cell-caption">${escapeHtml(p.caption)}</span>` : ''}
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  function placesEmptyHtml() {
+    return `<div class="places-empty">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5 11 16.5 14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      Пока нет воспоминаний.<br>Нажмите кнопку ниже, чтобы добавить первое.
+      <div><button class="btn btn-primary" type="button" data-action="new-post">Новое воспоминание</button></div>
+    </div>`;
+  }
+
+  function bindCarousels() {
+    winBody.querySelectorAll('[data-carousel]').forEach((el) => {
+      const slides = el.querySelector('.slides'); if (!slides) return;
+      const dots = [...el.querySelectorAll('.dot')];
+      const counter = el.querySelector('[data-idx]');
+      const currentIndex = () => Math.max(0, Math.round(slides.scrollLeft / (slides.clientWidth || 1)));
+      const goTo = (i) => slides.scrollTo({ left: i * slides.clientWidth, behavior: 'smooth' });
+      const update = () => {
+        const i = currentIndex();
+        dots.forEach((d, k) => d.classList.toggle('active', k === i));
+        if (counter) counter.textContent = String(i + 1);
+      };
+      slides.addEventListener('scroll', update, { passive: true });
+      dots.forEach((d, i) => d.addEventListener('click', () => goTo(i)));
+      update();
+    });
+  }
+
+  function closePostMenus() { winBody.querySelectorAll('.popover').forEach((el) => el.remove()); }
+
+  function openPostMenu(postId, anchorEl) {
+    closePostMenus();
+    const pop = document.createElement('div'); pop.className = 'popover';
+    pop.innerHTML = `
+      <button class="pop-item" type="button" data-show-on-map="${escapeHtml(postId)}">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+        Показать на карте
+      </button>
+      <button class="pop-item danger" type="button" data-remove-post="${escapeHtml(postId)}">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2z"/></svg>
+        Удалить
+      </button>`;
+    winBody.appendChild(pop);
+    const bodyRect = winBody.getBoundingClientRect();
+    const aRect = anchorEl.getBoundingClientRect();
+    const scrollTop = winBody.scrollTop;
+    let left = aRect.right - bodyRect.left - pop.offsetWidth;
+    let top = aRect.bottom - bodyRect.top + scrollTop + 6;
+    if (left < 8) left = 8;
+    if (left > bodyRect.width - pop.offsetWidth - 8) left = bodyRect.width - pop.offsetWidth - 8;
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    const onDocClick = (ev) => { if (!pop.contains(ev.target) && !anchorEl.contains(ev.target)) { closePostMenus(); document.removeEventListener('pointerdown', onDocClick, true); } };
+    setTimeout(() => document.addEventListener('pointerdown', onDocClick, true), 0);
+  }
+
+  function confirmModal({ title, text, confirmLabel = 'Удалить', cancelLabel = 'Отмена' }) {
+    return new Promise((resolve) => {
+      const back = document.createElement('div'); back.className = 'modal-backdrop';
+      back.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+          <h3 class="modal-title">${escapeHtml(title)}</h3>
+          <p class="modal-text">${escapeHtml(text)}</p>
+          <div class="modal-actions">
+            <button type="button" class="btn" data-cancel>${escapeHtml(cancelLabel)}</button>
+            <button type="button" class="btn btn-danger" data-confirm>${escapeHtml(confirmLabel)}</button>
+          </div>
+        </div>`;
+      winBody.appendChild(back);
+      const cleanup = () => back.remove();
+      back.querySelector('[data-cancel]').addEventListener('click', () => { cleanup(); resolve(false); });
+      back.querySelector('[data-confirm]').addEventListener('click', () => { cleanup(); resolve(true); });
+      back.addEventListener('click', (e) => { if (e.target === back) { cleanup(); resolve(false); } });
+      back.querySelector('[data-confirm]').focus();
+    });
+  }
+
+  async function deletePost(postId) {
+    const ok = await confirmModal({ title: 'Удалить воспоминание?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
+    if (!ok) return;
+    const { error } = await supabaseClient.from('posts').delete().eq('id', postId);
+    if (error) { console.warn('[posts] delete:', error.message); return; }
+    await loadPostsFromDB();
+    syncPostMarkers(); closePopup(); showPlacesScreen();
+  }
+
+  /* ═══════ НОВЫЙ ПОСТ ═══════ */
+  function showNewPost() {
+    setScreen(() => {
+      winTitle.textContent = 'Новое воспоминание';
+      winBody.scrollTop = 0;
+      const MAX_PHOTOS = 10;
+      let pendingImages = [];
+      winBody.innerHTML = `
+        <form class="edit-form" id="post-form" novalidate>
+          <div class="edit-field">
+            <span class="edit-label">Фото <span class="post-hint" id="photo-count">0 / ${MAX_PHOTOS}</span></span>
+            <div id="post-drop" class="post-drop">
+              <div id="post-grid" class="post-grid"></div>
+              <button type="button" class="btn" id="post-pick">Добавить фото</button>
+              <span class="post-hint">Первое фото — обложка.</span>
+              <input type="file" id="post-input" accept="image/*" multiple hidden>
+            </div>
+          </div>
+          <label class="edit-field"><span class="edit-label">Место</span><input class="edit-input" type="text" id="post-place" maxlength="80" placeholder="Например, Россия, Москва, Патриаршие пруды"></label>
+          <label class="edit-field"><span class="edit-label">Подпись</span><textarea class="edit-textarea" id="post-caption" maxlength="300"></textarea></label>
+          <div class="edit-actions">
+            <button type="button" class="btn" id="post-cancel">Отмена</button>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+          </div>
+        </form>`;
+      const drop = winBody.querySelector('#post-drop');
+      const grid = winBody.querySelector('#post-grid');
+      const fileInput = winBody.querySelector('#post-input');
+      const countEl = winBody.querySelector('#photo-count');
+      const placeInput = winBody.querySelector('#post-place');
+
+      function refreshGrid() {
+        grid.innerHTML = pendingImages.map((src, i) => `
+          <div class="post-thumb ${i === 0 ? 'cover-badge' : ''}" style="background-image:url('${src}')">
+            <button type="button" class="remove" data-remove="${i}">×</button>
+          </div>`).join('');
+        countEl.textContent = `${pendingImages.length} / ${MAX_PHOTOS}`;
+        drop.classList.toggle('is-invalid', pendingImages.length === 0 && drop.dataset.touched === '1');
+      }
+      refreshGrid();
+      winBody.querySelector('#post-pick').addEventListener('click', () => fileInput.click());
+      grid.addEventListener('click', (e) => { const b = e.target.closest('[data-remove]'); if (!b) return; pendingImages.splice(Number(b.dataset.remove), 1); refreshGrid(); });
+      fileInput.addEventListener('change', async () => {
+        const files = [...(fileInput.files || [])]; fileInput.value = '';
+        for (const file of files) {
+          if (pendingImages.length >= MAX_PHOTOS) break;
+          if (!file.type.startsWith('image/')) continue;
+          try { pendingImages.push(await fileToCompressedDataURL(file, 1280, 0.8)); } catch {}
+        }
+        drop.dataset.touched = '1'; refreshGrid();
+      });
+      winBody.querySelector('#post-cancel').addEventListener('click', goBack);
+      winBody.querySelector('#post-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        drop.dataset.touched = '1';
+        if (!pendingImages.length) { drop.classList.add('is-invalid'); return; }
+        const place = placeInput.value.trim();
+        const caption = winBody.querySelector('#post-caption').value.trim();
+        const submitBtn = winBody.querySelector('#post-form [type="submit"]');
+        const oldLabel = submitBtn.textContent;
+        submitBtn.disabled = true; submitBtn.textContent = 'Ищем место…';
+        let coords = null;
+        if (place) { try { coords = await geocodePlace(place); } catch {} }
+        submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+        const id = 'p' + Date.now();
+        const { error } = await supabaseClient.from('posts').insert({
+          id, author_id: currentUser.id, author_name: profile.name,
+          images: pendingImages, place: place || 'Без места', caption, coords, ts: Date.now(),
+        });
+        if (error) { console.warn('[posts] insert:', error.message); return; }
+        await loadPostsFromDB();
+        syncPostMarkers();
+        showPlacesScreen();
+        if (coords && map2gis) { map2gis.setCenter(coords); map2gis.setZoom(15); setTimeout(() => openPostPopup(posts.find((x) => x.id === id)), 400); }
+      });
+    }, () => showPlacesScreen());
+  }
+
+  function fileToCompressedDataURL(file, maxSide = 1280, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('image decode error'));
+        img.onload = () => {
+          const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ═══════ РЕДАКТОР АВАТАРА ═══════ */
+  function showAvatarEditor() {
+    setScreen(() => {
+      winTitle.textContent = 'Мой аватар';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = `
+        <div class="avatar-editor">
+          <div class="avatar-stage"><canvas id="avatar-stage-canvas" width="480" height="240"></canvas></div>
+          <div><div class="avatar-group-title">Цвет кожи</div><div class="avatar-row" id="av-skin-row"></div></div>
+          <div><div class="avatar-group-title">Одежда</div><div class="avatar-row" id="av-clothes-row"></div></div>
+          <div><div class="avatar-group-title">Причёска</div><div class="avatar-row" id="av-hair-row"></div></div>
+          <div class="edit-actions"><button type="button" class="btn" id="av-cancel">Готово</button></div>
+        </div>`;
+      setupAvatarStage(winBody.querySelector('#avatar-stage-canvas'));
+      renderAvatarControls();
+      winBody.querySelector('#av-cancel').addEventListener('click', goBack);
+    }, () => showProfileScreen());
+  }
+  function setupAvatarStage(canvas) {
+    if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+    if (!isThreeAvailable()) { canvas.style.display = 'none'; return; }
+    const THREE = window.THREE;
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(canvas.clientWidth || 480, canvas.clientHeight || 240, false);
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, (canvas.clientWidth || 480) / (canvas.clientHeight || 240), 0.1, 100);
+    camera.position.set(0, 1.5, 4); camera.lookAt(0, 1.0, 0);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const key = new THREE.DirectionalLight(0xffd9b3, 1.2); key.position.set(3, 5, 3); key.castShadow = true; scene.add(key);
+    const fill = new THREE.DirectionalLight(0x9FE3D2, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.001; scene.add(shadow);
+    let group = buildAvatarGroup(THREE, avatarConfig); scene.add(group);
+    let t = 0, raf = null;
+    function tick() { t += 0.012; group.rotation.y = Math.sin(t) * 0.6; renderer.render(scene, camera); raf = requestAnimationFrame(tick); }
+    tick();
+    function onResize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+    window.addEventListener('resize', onResize);
+    canvas.__avatarRefresh = () => {
+      scene.remove(group);
+      group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose()); else o.material.dispose(); } });
+      group = buildAvatarGroup(THREE, avatarConfig); scene.add(group);
+    };
+    avatarStageCleanup = () => { if (raf) cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); renderer.dispose(); };
+  }
+  function renderAvatarControls() {
+    const skinRow = winBody.querySelector('#av-skin-row'); if (!skinRow) return;
+    const clothesRow = winBody.querySelector('#av-clothes-row');
+    const hairRow = winBody.querySelector('#av-hair-row');
+    skinRow.innerHTML = Object.entries(AVATAR_SKINS).map(([k, s]) => `<button class="avatar-swatch" type="button" data-av-group="skin" data-av-key="${k}" aria-pressed="${avatarConfig.skin === k}" style="background:#${s.base.toString(16).padStart(6,'0')}"></button>`).join('');
+    clothesRow.innerHTML = Object.entries(AVATAR_CLOTHES).map(([k, c]) => `<button class="avatar-swatch" type="button" data-av-group="clothes" data-av-key="${k}" aria-pressed="${avatarConfig.clothes === k}" style="background:#${c.body.toString(16).padStart(6,'0')}"></button>`).join('');
+    hairRow.innerHTML = Object.entries(AVATAR_HAIRS).map(([k]) => `<button class="avatar-pill" type="button" data-av-group="hair" data-av-key="${k}" aria-pressed="${avatarConfig.hair === k}">${{none:'Нет',short:'Короткая',long:'Длинная',blond:'Блонд',ginger:'Рыжая'}[k] || k}</button>`).join('');
+  }
+
+  /* ═══════ ПРОФИЛЬ ═══════ */
+  function showProfileScreen() {
+    setScreen(() => {
+      if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+      if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+      winTitle.textContent = 'Профиль';
+      winBody.innerHTML = APPS.profile.render();
+      winBody.scrollTop = 0;
+      ensureMyPhotos();
+    }, null);
+  }
+
+  // Свои фото грузим при первом открытии профиля и перерисовываем экран, если он ещё открыт
+  async function ensureMyPhotos() {
+    if (myPhotos !== null || profilePhotosMissing || !currentUser) return;
+    const rows = await loadProfilePhotos(currentUser.id);
+    if (!rows || myPhotos !== null) return;
+    myPhotos = rows;
+    if (openApp === 'profile' && !win.hidden && winBody.querySelector('[data-action="edit-profile"]')) {
+      winBody.innerHTML = APPS.profile.render();
+    }
+  }
+
+  function photoGridHtml() {
+    const photos = photosOrAvatar(myPhotos, profile.avatar);
+    const tiles = photos.map((ph, i) => `
+      <div class="pg-item ${i ? '' : 'is-main'}" ${i && ph.id ? `data-pg-main="${escapeHtml(ph.id)}" role="button" tabindex="0" title="Сделать главным"` : ''} style="background-image:url('${safeUrl(ph.url)}')">
+        ${i ? '' : '<span class="pg-badge">Главное</span>'}
+        <button type="button" class="pg-del" data-pg-del="${escapeHtml(ph.id || '')}" aria-label="Удалить фото">×</button>
+      </div>`).join('');
+    const add = photos.length < PHOTOS_LIMIT
+      ? `<button type="button" class="pg-add" id="avatar-pick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Добавить</span></button>`
+      : '';
+    return tiles + add;
+  }
+
+  async function reloadMyPhotos() {
+    const rows = await loadProfilePhotos(currentUser.id);
+    if (rows) myPhotos = rows;
+  }
+
+  // Уменьшенная копия главного фото → profiles.avatar (карта, чаты, списки)
+  async function saveMyAvatar(thumb) {
+    const { error } = await supabaseClient.from('profiles').update({ avatar: thumb }).eq('id', currentUser.id);
+    if (error) throw error;
+    profile.avatar = thumb;
+    if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
+    loadUserLocations();
+  }
+  async function syncMyAvatar() {
+    const main = myPhotos && myPhotos[0];
+    await saveMyAvatar(main ? await downscaleDataUrl(main.url, 256, 0.85) : '');
+  }
+
+  async function addMyPhotos(files) {
+    if (myPhotos === null && !profilePhotosMissing) await reloadMyPhotos();
+    const room = PHOTOS_LIMIT - photosOrAvatar(myPhotos, profile.avatar).length;
+    if (room <= 0) return;
+    const urls = [];
+    for (const file of files.slice(0, room)) urls.push(await fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY));
+    if (profilePhotosMissing) {
+      // таблицы фото нет — как раньше, одно фото в profiles.avatar
+      await saveMyAvatar(await downscaleDataUrl(urls[urls.length - 1], 256, 0.85));
+      alert('Сохранено одно фото. Чтобы добавлять несколько, выполните supabase_profile_photos.sql в Supabase.');
+      return;
+    }
+    // старое единственное фото (из profiles.avatar) сначала переносим в галерею, чтобы оно не пропало
+    if ((!myPhotos || !myPhotos.length) && profile.avatar) urls.unshift(profile.avatar);
+    // по одному — created_at идут по порядку, последнее выбранное фото станет главным
+    for (const data of urls) {
+      const { error } = await supabaseClient.from('profile_photos').insert({ user_id: currentUser.id, data });
+      if (error) {
+        if (isMissingTableError(error)) { profilePhotosMissing = true; return addMyPhotos(files); }
+        throw error;
+      }
+    }
+    await reloadMyPhotos();
+    await syncMyAvatar();
+  }
+
+  async function deleteMyPhoto(id) {
+    if (!id) { await saveMyAvatar(''); return; }   // старое единственное фото из profiles.avatar
+    const { error } = await supabaseClient.from('profile_photos').delete().eq('id', id);
+    if (error) throw error;
+    if (myPhotos) myPhotos = myPhotos.filter((ph) => ph.id !== id);
+    await reloadMyPhotos();
+    await syncMyAvatar();
+  }
+
+  async function makeMyPhotoMain(id) {
+    // «главное» = самое свежее; берём время позже текущего главного, даже если часы устройства отстают
+    const newest = myPhotos && myPhotos[0] && Date.parse(myPhotos[0].at);
+    const at = new Date(Math.max(Date.now(), (newest || 0) + 1000)).toISOString();
+    const { error } = await supabaseClient.from('profile_photos').update({ created_at: at }).eq('id', id);
+    if (error) throw error;
+    await reloadMyPhotos();
+    await syncMyAvatar();
+  }
+  function showUserProfileScreen() { showProfileScreen(); }
+
+  function showFriendProfile(userId, personHint = null, backFn = null) {
+    setScreen(() => {
+      if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+      if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+      winTitle.textContent = 'Профиль';
+      winBody.innerHTML = `<div class="empty-msg">Загружаем профиль…</div>`;
+      winBody.scrollTop = 0;
+      const loadingEl = winBody.firstElementChild;
+
+      (async () => {
+        let p = null;
+        const photosReq = loadProfilePhotos(userId);
+        try {
+          const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('id, name, username, bio, avatar')
+            .eq('id', userId)
+            .maybeSingle();
+          if (error) console.warn('[friend profile] load:', error.message);
+          p = data;
+        } catch (err) { console.warn('[friend profile] exception:', err); }
+        const photoRows = await photosReq;
+
+        // Пока грузили, пользователь мог уйти на другой экран — не затираем его
+        if (!loadingEl.isConnected || win.hidden) return;
+
+        if (!p && personHint) {
+          p = {
+            id: personHint.id || userId,
+            name: personHint.name || 'Пользователь',
+            username: (personHint.handle || '@user').replace(/^@/, ''),
+            bio: '',
+            avatar: personHint.avatar || '',
+          };
+        }
+        if (!p) {
+          winBody.innerHTML = `<div class="empty-msg">Профиль не найден</div>`;
+          return;
+        }
+
+        const cfg = userAvatarCfgById.get(userId) || null;
+        const use3D = isThreeAvailable() && cfg && typeof cfg === 'object';
+        const name = p.name || 'Пользователь';
+        const handle = '@' + (p.username || 'user');
+        const initial = (name.charAt(0) || '?').toUpperCase();
+
+        // Есть фото — они во всю ширину шапки и листаются, а 3D-аватар показываем ниже, под «Написать».
+        // Фото нет — в шапке 3D-аватар (или буква, если и аватара нет).
+        const photos = photosOrAvatar(photoRows, p.avatar).filter((ph) => safeUrl(ph.url));
+        const photo = photos.length > 0;
+        const avatarCanvas = `<canvas id="friend-avatar-canvas" width="256" height="256"></canvas>`;
+        let headHtml;
+        if (photo) {
+          headHtml = `${photoHeroHtml(photos, name, handle)}
+            <div class="user-profile-view">
+              ${p.bio ? `<div class="profile-bio ph-bio">${escapeHtml(p.bio)}</div>` : ''}`;
+        } else {
+          const avatarHtml = use3D
+            ? `<div class="user-profile-avatar">${avatarCanvas}</div>`
+            : `<div class="user-profile-avatar no-3d">${escapeHtml(initial)}</div>`;
+          headHtml = `
+            <div class="user-profile-view">
+              <div class="user-profile-hero">
+                ${avatarHtml}
+                <div class="user-profile-name">${escapeHtml(name)}</div>
+                <div class="user-profile-handle">${escapeHtml(handle)}</div>
+                ${p.bio ? `<div class="profile-bio">${escapeHtml(p.bio)}</div>` : ''}
+              </div>`;
+        }
+        const avatarBelow = photo && use3D
+          ? `<div class="friend-avatar-card">
+              <div class="user-profile-section-title">Аватар</div>
+              <div class="friend-avatar-stage">${avatarCanvas}</div>
+            </div>`
+          : '';
+
+        // Фото + 3D-аватар: ужимаем фото по высоте окна, чтобы аватар был виден без прокрутки
+        winBody.innerHTML = `
+          <div class="${avatarBelow ? 'friend-fit' : ''}">
+          ${headHtml}
+            <div class="friend-actions">
+              <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
+            </div>
+            ${avatarBelow}
+          </div>
+          </div>`;
+
+        if (use3D) {
+          const canvas = winBody.querySelector('#friend-avatar-canvas');
+          if (canvas) {
+            const ok = renderAvatarToCanvas(canvas, 256, cfg);
+            if (!ok && photo) {
+              // аватар под кнопкой не отрисовался — просто убираем этот блок, фото уже в шапке
+              const card = winBody.querySelector('.friend-avatar-card');
+              if (card) card.remove();
+            } else if (!ok) {
+              canvas.parentElement.classList.add('no-3d');
+              canvas.parentElement.style.background = 'linear-gradient(145deg, var(--you-2), var(--you-deep))';
+              canvas.parentElement.textContent = initial;
+            } else {
+              userProfileAvatarCleanup = () => {
+                if (canvas && canvas.__avatarStop) canvas.__avatarStop();
+                userProfileAvatarCleanup = null;
+              };
+            }
+          }
+        }
+
+        const chatBtn = winBody.querySelector('#friend-open-chat');
+        if (chatBtn) chatBtn.addEventListener('click', () => showDmScreen(userId));
+      })();
+    }, () => {
+      if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+      (backFn || closeApp)();
+    });
+  }
+
+  function showEditProfile() {
+    setScreen(() => {
+      winTitle.textContent = 'Редактировать профиль';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = `
+        <form class="edit-form" id="edit-form" novalidate>
+          <div class="edit-field">
+            <span class="edit-label">Фото профиля</span>
+            <div class="photo-grid" id="photo-grid"></div>
+            <input type="file" id="avatar-input" accept="image/*" multiple hidden>
+            <span class="edit-hint">Первое фото — главное: его видно на карте и в чатах. Нажмите на другое фото, чтобы сделать его главным. До ${PHOTOS_LIMIT} фото.</span>
+          </div>
+          <label class="edit-field"><span class="edit-label">Имя</span><input class="edit-input" type="text" id="edit-name" maxlength="60" value="${escapeHtml(profile.name)}"></label>
+          <label class="edit-field"><span class="edit-label">Имя пользователя</span><div class="username-wrap"><span class="username-prefix">@</span><input class="edit-input username-input" type="text" id="edit-username" maxlength="20" value="${escapeHtml(profile.handle.replace(/^@/, ''))}"></div></label>
+          <div class="edit-field">
+            <span class="edit-label">Пол</span>
+            <div class="seg" id="edit-gender">
+              <button type="button" class="seg-opt" data-gender="male" aria-pressed="${profile.gender === 'male'}"><span class="seg-emoji">👨</span>Мужской</button>
+              <button type="button" class="seg-opt" data-gender="female" aria-pressed="${profile.gender === 'female'}"><span class="seg-emoji">👩</span>Женский</button>
+            </div>
+          </div>
+          <div class="edit-field">
+            <span class="edit-label">Возраст</span>
+            <div class="filter-range">
+              <input type="range" id="edit-age" min="10" max="100" value="${Number(profile.age) || 18}">
+              <span class="filter-val" id="edit-age-val">${profile.age ? escapeHtml(String(profile.age)) : '—'}</span>
+            </div>
+            <span class="edit-hint">По полу и возрасту считаются состав и средний возраст ваших групп в фильтрах.</span>
+          </div>
+          <label class="edit-field"><span class="edit-label">О себе</span><textarea class="edit-textarea" id="edit-bio" maxlength="300">${escapeHtml(profile.bio)}</textarea></label>
+          <div class="edit-actions">
+            <button type="button" class="btn" id="edit-cancel">Отмена</button>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+          </div>
+        </form>`;
+      const fileInput = winBody.querySelector('#avatar-input');
+      const gridEl = winBody.querySelector('#photo-grid');
+      const nameEl = winBody.querySelector('#edit-name');
+      const usernameEl = winBody.querySelector('#edit-username');
+      // Фото сохраняются сразу (как в Telegram), не дожидаясь кнопки «Сохранить»
+      const renderPhotoGrid = () => { gridEl.innerHTML = photoGridHtml(); };
+      renderPhotoGrid();
+      ensureMyPhotos().then(() => { if (gridEl.isConnected && !gridEl.classList.contains('is-busy')) renderPhotoGrid(); });
+      const photoOp = async (fn) => {
+        gridEl.classList.add('is-busy');
+        try { await fn(); }
+        catch (err) { console.error('[profile photos]', err); alert('Не удалось обновить фото: ' + (err.message || err)); }
+        finally { if (gridEl.isConnected) { gridEl.classList.remove('is-busy'); renderPhotoGrid(); } }
+      };
+      gridEl.addEventListener('click', (e) => {
+        if (e.target.closest('#avatar-pick')) { fileInput.click(); return; }
+        const del = e.target.closest('[data-pg-del]');
+        if (del) { if (confirm('Удалить это фото?')) photoOp(() => deleteMyPhoto(del.dataset.pgDel)); return; }
+        const main = e.target.closest('[data-pg-main]');
+        if (main) photoOp(() => makeMyPhotoMain(main.dataset.pgMain));
+      });
+      fileInput.addEventListener('change', () => {
+        const files = [...(fileInput.files || [])].filter((file) => file.type.startsWith('image/'));
+        fileInput.value = '';
+        if (files.length) photoOp(() => addMyPhotos(files));
+      });
+      let editGender = profile.gender || '';
+      let editAge = Number(profile.age) || null;
+      winBody.querySelector('#edit-gender').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-gender]'); if (!b) return;
+        editGender = b.dataset.gender;
+        winBody.querySelectorAll('#edit-gender [data-gender]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.gender === editGender)));
+      });
+      const ageEl = winBody.querySelector('#edit-age');
+      ageEl.addEventListener('input', () => { editAge = Number(ageEl.value); winBody.querySelector('#edit-age-val').textContent = ageEl.value; });
+      winBody.querySelector('#edit-cancel').addEventListener('click', goBack);
+      winBody.querySelector('#edit-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newName = nameEl.value.trim() || 'Пользователь';
+        const newBio = winBody.querySelector('#edit-bio').value.trim();
+        const uname = normalizeUsernameInput(usernameEl.value);
+        if (!isValidUsernameInput(uname)) { usernameEl.focus(); return; }
+        const newAvatar = profile.avatar;
+        if (uname !== normalizeUsername(profile.handle) && await isUsernameTakenRemote(uname)) {
+          alert('Этот username уже занят');
+          usernameEl.focus();
+          return;
+        }
+        const { error: saveErr } = await upsertProfileRow({
+          id: currentUser.id, name: newName, username: uname, bio: newBio, avatar: newAvatar,
+          gender: editGender || null, age: editAge || null,
+        });
+        if (saveErr) {
+          console.error('[profiles] save:', saveErr);
+          alert('Не удалось сохранить профиль: ' + saveErr.message);
+          return;
+        }
+        // Локальный профиль меняем только после успешного сохранения
+        profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar, gender: editGender, age: editAge };
+        loadGroupStats(); // мой пол и возраст влияют на сводку моих групп
+        if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
+        loadUserLocations();
+        showProfileScreen();
+      });
+    }, () => showProfileScreen());
+  }
+
+  /* ═══════ ГЛАВНЫЙ ОБРАБОТЧИК ═══════ */
+  // Тап мимо строки группы прячет открытые свайпом кнопки
+  winBody.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.group-row')) return;
+    winBody.querySelectorAll('.group-row.revealed').forEach((r) => r.classList.remove('revealed'));
+  });
+
+  // Галерея фото в профиле: полоски следят за прокруткой (scroll не всплывает — ловим на погружении)
+  winBody.addEventListener('scroll', (e) => {
+    const track = e.target;
+    if (!track.classList || !track.classList.contains('ph-track')) return;
+    const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    track.parentElement.querySelectorAll('.ph-bars span').forEach((s, i) => s.classList.toggle('is-on', i === idx));
+  }, true);
+  winBody.addEventListener('click', (e) => {
+    const hero = e.target.closest('.photo-hero.is-many');
+    if (!hero) return;
+    const r = hero.getBoundingClientRect();
+    photoHeroStep(hero, e.clientX - r.left < r.width / 2 ? -1 : 1);
+  });
+  win.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const hero = winBody.querySelector('.photo-hero.is-many');
+    if (!hero || e.target.closest('input, textarea')) return;
+    photoHeroStep(hero, e.key === 'ArrowLeft' ? -1 : 1);
+  });
+
+  // Ползунки фильтров: применяем сразу, карта обновляется с небольшой задержкой
+  winBody.addEventListener('input', (e) => {
+    if (e.target.id !== 'flt-age' && e.target.id !== 'flt-spread') return;
+    if (e.target.id === 'flt-age') mapFilters.age = Number(e.target.value);
+    else mapFilters.spread = Number(e.target.value);
+    syncFiltersUi();
+    applyMapFilters();
+  });
+
+  winBody.addEventListener('click', async (e) => {
+    // ── тема оформления ──
+    const themeBtn = e.target.closest('[data-theme-pref]');
+    if (themeBtn) { setThemePref(themeBtn.dataset.themePref); return; }
+    // ── фильтры групп ──
+    if (e.target.closest('[data-flt-age-toggle]')) {
+      e.stopImmediatePropagation(); // общий обработчик .switch не должен переключить его второй раз
+      mapFilters.ageOn = !mapFilters.ageOn;
+      e.target.closest('[data-flt-age-toggle]').setAttribute('aria-checked', String(mapFilters.ageOn));
+      syncFiltersUi(); applyMapFilters();
+      return;
+    }
+    const compBtn = e.target.closest('[data-flt-comp]');
+    if (compBtn) { mapFilters.comp = compBtn.dataset.fltComp; syncFiltersUi(); applyMapFilters(); return; }
+    if (e.target.closest('[data-flt-reset]')) {
+      mapFilters = { ...DEFAULT_FILTERS };
+      winBody.innerHTML = APPS.filters.render(); syncFiltersUi(); applyMapFilters();
+      return;
+    }
+    if (e.target.closest('[data-flt-done]')) { showMapApp(); return; }
+
+    // ── чат: вложения, запись, просмотр ──
+    if (e.target.closest('[data-chat-attach]')) { const f = winBody.querySelector('#chat-file'); if (f) f.click(); return; }
+    const recBtn = e.target.closest('[data-chat-rec]');
+    if (recBtn) { startChatRecording(recBtn.dataset.chatRec); return; }
+    if (e.target.closest('[data-chat-rec-cancel]')) { stopChatRecording(true); return; }
+    if (e.target.closest('[data-chat-rec-send]')) { stopChatRecording(false); return; }
+    const fileEl = e.target.closest('[data-chat-file]');
+    if (fileEl) {
+      const name = fileEl.dataset.fileName || 'file';
+      const path = fileEl.dataset.mediaPath;
+      const cached = path ? mediaUrlCache.get(path) : null;
+      const fresh = !path || (cached && cached.exp > Date.now());
+      // PDF и то, что браузер показывает сам, открывается во вкладке по обычной ссылке
+      if (fresh && fileEl.getAttribute('href') && isInlineViewable(fileExt(name))) return;
+      e.preventDefault();
+      let url = fresh ? fileEl.getAttribute('href') : null;
+      if (!url && path) {
+        // ссылка устарела (чат открыт больше часа) или ещё не подставлена — берём новую
+        const { data, error } = await supabaseClient.storage.from(CHAT_BUCKET).createSignedUrl(path, 3600);
+        if (error || !data) { alert('Не удалось открыть файл: ' + (error ? error.message : '')); return; }
+        url = data.signedUrl;
+        mediaUrlCache.set(path, { url, exp: Date.now() + 50 * 60 * 1000 });
+        fileEl.href = url;
+      }
+      if (!url) return;
+      if (isInlineViewable(fileExt(name))) window.open(url, '_blank', 'noopener');
+      else downloadChatFile(url, name);
+      return;
+    }
+    const photoEl = e.target.closest('[data-open-photo]');
+    if (photoEl && photoEl.src) { openPhotoViewer(photoEl.src); return; }
+    const circleEl = e.target.closest('[data-circle]');
+    if (circleEl) { toggleCircle(circleEl); return; }
+    const groupChatBtn = e.target.closest('[data-open-group-chat]');
+    if (groupChatBtn) {
+      const gid = groupChatBtn.dataset.openGroupChat;
+      // из списка чатов «назад» ведёт в список, из карточки группы — обратно в карточку
+      const fromList = !!winBody.querySelector('#chats-list');
+      const back = groupDetailsBack;
+      await showGroupChatScreen(gid, fromList ? null : () => showGroupDetailsScreen(gid, back));
+      return;
+    }
+    // ── голосование о союзе в совместном чате ──
+    if (e.target.closest('[data-vote-start]') && chat && chat.type === 'match') { await startMatchVote(chat.matchId); return; }
+    const voteBtn = e.target.closest('[data-vote-yes], [data-vote-no]');
+    if (voteBtn && chat && chat.type === 'match') {
+      winBody.querySelectorAll('.mv-btn').forEach((b) => { b.disabled = true; });
+      await castMatchVote(chat.matchId, voteBtn.hasAttribute('data-vote-yes'));
+      return;
+    }
+    const matchChatBtn = e.target.closest('[data-open-match-chat]');
+    if (matchChatBtn) {
+      // «назад»: в список чатов, в уведомления или в карточку группы — откуда пришли
+      const back = winBody.querySelector('#chats-list') ? null
+        : openApp === 'notifications' ? () => showApp('notifications') : reopenGroupDetails;
+      await showMatchChatScreen(matchChatBtn.dataset.openMatchChat, back);
+      return;
+    }
+
+    // ── группы и match ──
+    const viewProfile = e.target.closest('[data-view-profile]');
+    // кнопки внутри строки («Чат», «×») обрабатываются ниже — профиль по ним не открываем
+    if (viewProfile && !e.target.closest('button')) {
+      const uid = viewProfile.dataset.viewProfile;
+      const back = viewProfile.dataset.profileBack === 'friends' ? showFriendsScreen : reopenGroupDetails;
+      showFriendProfile(uid, personById(uid), back);
+      return;
+    }
+    if (e.target.closest('[data-group-wish-clear]')) {
+      if (groupDetailsId) await saveGroupWish(groupDetailsId, '');
+      return;
+    }
+    const matchSend = e.target.closest('[data-match-send]');
+    if (matchSend) {
+      matchSend.disabled = true;
+      const status = await sendGroupMatch(matchSend.dataset.matchSend, matchSend.dataset.matchTo);
+      if (!status) { matchSend.disabled = false; return; }
+      if (status === 'accepted') alert('У этой группы уже был запрос к вам — match состоялся! Общий чат создан.');
+      reopenGroupDetails();
+      return;
+    }
+    const gmBtn = e.target.closest('[data-gm-accept], [data-gm-decline]');
+    if (gmBtn) {
+      e.stopPropagation();
+      const accept = gmBtn.hasAttribute('data-gm-accept');
+      const matchId = accept ? gmBtn.dataset.gmAccept : gmBtn.dataset.gmDecline;
+      gmBtn.closest('.notif-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      const ok = await respondGroupMatch(matchId, accept);
+      if (openApp === 'notifications') refreshNotifications();
+      else if (ok && winBody.querySelector('.match-rows')) reopenGroupDetails();
+      if (ok && accept) {
+        const doIt = await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже' });
+        if (doIt) {
+          if (openApp !== 'messenger' && openApp !== 'profile') showApp('profile');
+          await showMatchChatScreen(matchId, null);
+        }
+      }
+      return;
+    }
+
+    const avBtn = e.target.closest('[data-av-group]');
+    if (avBtn) {
+      avatarConfig = { ...avatarConfig, [avBtn.dataset.avGroup]: avBtn.dataset.avKey };
+      saveAvatarConfig(avatarConfig);
+      const canvas = winBody.querySelector('#avatar-stage-canvas');
+      if (canvas && canvas.__avatarRefresh) canvas.__avatarRefresh();
+      renderAvatarControls();
+      if (lastUserLocation && settings.geolocation) {
+        placeUserMarker(lastUserLocation);
+        syncWishMarkers();
+        upsertMyLocation(lastUserLocation);
+      }
+      return;
+    }
+    if (e.target.closest('[data-action="open-avatar"]')) { showAvatarEditor(); return; }
+    if (e.target.closest('[data-action="open-places"]')) { showPlacesScreen(); return; }
+    if (e.target.closest('[data-action="open-wishes"]')) { showWishesScreen(); return; }
+    if (e.target.closest('[data-action="new-wish"]')) { showNewWishScreen(); return; }
+    if (e.target.closest('[data-action="edit-profile"]')) { showEditProfile(); return; }
+    if (e.target.closest('[data-action="open-friends"]')) { showFriendsScreen(); return; }
+    if (e.target.closest('[data-action="add-friend"]')) { showAddFriendScreen(); return; }
+    if (e.target.closest('[data-action="open-groups"]')) { showGroupsScreen(); return; }
+    if (e.target.closest('[data-action="create-group"]')) { showCreateGroupScreen(); return; }
+    if (e.target.closest('[data-action="back-to-groups"]')) { goBack(); return; }
+    if (e.target.closest('[data-action="open-rules"]')) { showRulesScreen(); return; }
+    if (e.target.closest('[data-action="open-support"]')) { showSupportChatScreen(); return; }
+    if (e.target.closest('[data-action="logout"]')) { logout(); return; }
+
+    const wEdit = e.target.closest('[data-wish-edit]');
+    if (wEdit) { showNewWishScreen(wEdit.dataset.wishEdit); return; }
+    const wRm = e.target.closest('[data-wish-remove]');
+    if (wRm) {
+      const id = wRm.dataset.wishRemove;
+      const ok = await confirmModal({ title: 'Удалить желание?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
+      if (!ok) return;
+      await supabaseClient.from('wishes').delete().eq('id', id);
+      await loadWishesFromDB(); syncWishMarkers(); showWishesScreen();
+      return;
+    }
+
+    const gearBtn = e.target.closest('[data-group-settings]');
+    if (gearBtn) { e.stopPropagation(); showCreateGroupScreen(gearBtn.dataset.groupSettings); return; }
+    const delBtn = e.target.closest('[data-group-delete]');
+    if (delBtn) {
+      e.stopPropagation();
+      const id = delBtn.dataset.groupDelete;
+      const ok = await confirmModal({ title: 'Удалить группу?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
+      if (!ok) return;
+      await supabaseClient.from('groups').delete().eq('id', id);
+      await refreshGroupsWorld(); showGroupsScreen();
+      return;
+    }
+
+    const groupCard = e.target.closest('.group-card[data-group-id]');
+    if (groupCard) {
+      const row = groupCard.closest('.group-row');
+      if (row && row.classList.contains('revealed')) { row.classList.remove('revealed'); return; }
+      showGroupDetailsScreen(groupCard.dataset.groupId);
+      return;
+    }
+
+    const addFriendBtn = e.target.closest('[data-add-friend]');
+    if (addFriendBtn) {
+      const fid = addFriendBtn.dataset.addFriend;
+      if (!fid || fid === currentUser.id || friends.some((f) => f.id === fid)) return;
+      // Не добавляем сразу — отправляем запрос, человек подтвердит его в уведомлениях.
+      // Если от него уже был встречный запрос, сервер сразу примет его.
+      addFriendBtn.disabled = true;
+      const { data: status, error: reqErr } = await supabaseClient.rpc('send_friend_request', { target: fid });
+      if (reqErr) {
+        console.error('[rpc send_friend_request]', reqErr);
+        addFriendBtn.disabled = false;
+        alert('Не удалось отправить запрос: ' + reqErr.message);
+        return;
+      }
+      if (status === 'accepted' || status === 'already_friends') {
+        await loadFriendsFromDB();
+        await loadIncomingFriendRequests();
+        loadUserLocations();
+        addFriendBtn.textContent = 'Уже друг';
+      } else {
+        addFriendBtn.textContent = 'Запрос отправлен';
+      }
+      return;
+    }
+
+    const frBtn = e.target.closest('[data-fr-accept], [data-fr-decline]');
+    if (frBtn) {
+      e.stopPropagation();
+      const accept = frBtn.hasAttribute('data-fr-accept');
+      const reqId = accept ? frBtn.dataset.frAccept : frBtn.dataset.frDecline;
+      frBtn.closest('.notif-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      await respondFriendRequest(reqId, accept);
+      refreshNotifications();
+      return;
+    }
+
+    const rmFriendBtn = e.target.closest('[data-remove-friend]');
+    if (rmFriendBtn) {
+      const fid = rmFriendBtn.dataset.removeFriend;
+      const { error: rmErr } = await supabaseClient.rpc('remove_friend', { friend_uuid: fid });
+      if (rmErr) {
+        console.error('[rpc remove_friend]', rmErr);
+        alert('Не удалось удалить из друзей: ' + rmErr.message);
+        return;
+      }
+      await refreshFriendsAndMap();
+      showFriendsScreen(); return;
+    }
+
+    const dmBtn = e.target.closest('[data-open-dm]');
+    if (dmBtn) { await showDmScreen(dmBtn.dataset.openDm); return; }
+
+    const viewBtn = e.target.closest('[data-view]');
+    if (viewBtn) {
+      placesView = viewBtn.dataset.view === 'grid' ? 'grid' : 'feed';
+      savePlacesView(placesView);
+      showPlacesScreen(); return;
+    }
+    if (e.target.closest('[data-action="new-post"]')) { showNewPost(); return; }
+
+    const menuBtn = e.target.closest('[data-post-menu]');
+    if (menuBtn) { openPostMenu(menuBtn.dataset.postMenu, menuBtn); return; }
+    const showOnMap = e.target.closest('[data-show-on-map]');
+    if (showOnMap) {
+      const id = showOnMap.dataset.showOnMap;
+      const p = posts.find((x) => x.id === id);
+      closePostMenus();
+      if (p && Array.isArray(p.coords) && map2gis) { showMapApp(); flyToPost(p); setTimeout(() => openPostPopup(p), 500); }
+      return;
+    }
+    const rm = e.target.closest('[data-remove-post]');
+    if (rm) { closePostMenus(); deletePost(rm.dataset.removePost); return; }
+
+    const cell = e.target.closest('.grid-cell[data-post-id]');
+    if (cell) {
+      const id = cell.dataset.postId;
+      const idx = posts.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        placesView = 'feed'; savePlacesView(placesView); showPlacesScreen();
+        requestAnimationFrame(() => { const el = winBody.querySelectorAll('.post')[idx]; if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+      }
+    }
+  });
+
+  winBody.addEventListener('click', (e) => {
+    const sw = e.target.closest('.switch'); if (!sw) return;
+    const key = sw.dataset.setting;
+    const next = !(sw.getAttribute('aria-checked') === 'true');
+    sw.setAttribute('aria-checked', String(next));
+    if (key) {
+      settings = { ...settings, [key]: next }; saveSettings(settings);
+      if (key === 'geolocation') { if (next) startGeolocation(); else stopGeolocation(); }
+    }
+  });
+
+  winBody.addEventListener('click', async (e) => {
+    const row = e.target.closest('[data-notif-id]');
+    if (row) {
+      const id = row.dataset.notifId;
+      await supabaseClient.from('notifications').update({ read: true }).eq('id', id);
+      notifications = notifications.map((n) => n.id === id ? { ...n, read: true } : n);
+      updateBadge();
+    }
+  });
+
+  /* ═══════ DOCK ═══════ */
+  dock.addEventListener('click', (e) => {
+    const btn = e.target.closest('.dock-btn'); if (!btn) return;
+    const id = btn.dataset.app;
+    if (openApp === id && id !== 'map') closeApp(); else showApp(id, btn);
+  });
+
+  document.getElementById('win-back').addEventListener('click', goBack);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeApp(); });
+  // Клик по затемнённой карте за окном — закрыть окно и вернуться к карте
+  document.getElementById('scrim').addEventListener('click', () => closeApp());
+
+  updateBadge();
+
+  /* ═══════ СТАРТ ═══════ */
+  async function bootApp() {
+    const { data: { session: s } } = await supabaseClient.auth.getSession();
+    if (s && s.user) {
+      currentUser = s.user;
+      const row = await loadProfileRow(currentUser.id);
+      applyUserToProfileFromRow(row, currentUser.email);
+      document.body.classList.remove('auth-locked');
+      authScreen.hidden = true;
+      showMapApp();
+      await enterAppAfterLogin();
+      return;
+    }
+    document.body.classList.add('auth-locked');
+    authScreen.hidden = false;
+    Globe.init();
+    Globe.start();
+    renderAuthLogin();
+  }
+
+  supabaseClient.auth.onAuthStateChange((event, s) => {
+    if (event === 'SIGNED_OUT') handleSignedOut();
+  });
+
+  bootApp();
+
+  /* UI hookup */
+  const offlineBadge = document.getElementById('offline-badge');
+  const syncOnline = () => { offlineBadge.hidden = navigator.onLine; };
+  addEventListener('online', syncOnline); addEventListener('offline', syncOnline); syncOnline();
+
+  let installEvent = null;
+  const installBtn = document.getElementById('install-btn');
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; installBtn.hidden = false; });
+  installBtn.addEventListener('click', async () => { if (!installEvent) return; installEvent.prompt(); await installEvent.userChoice; installEvent = null; installBtn.hidden = true; });
+  addEventListener('appinstalled', () => { installBtn.hidden = true; });
+
+  const notifBtn = document.getElementById('notif-btn');
+  if (notifBtn) notifBtn.addEventListener('click', () => { if (openApp === 'notifications') showMapApp(); else showApp('notifications', notifBtn); });
+  const filterBtn = document.getElementById('filter-btn');
+  if (filterBtn) filterBtn.addEventListener('click', () => { if (openApp === 'filters') showMapApp(); else showApp('filters', filterBtn); });
+  const settingsBtn = document.getElementById('settings-btn');
+  if (settingsBtn) settingsBtn.addEventListener('click', () => { if (openApp === 'settings') showMapApp(); else showApp('settings', settingsBtn); });
+
+  /* Fullscreen */
+  const fsBtn = document.getElementById('fs-btn');
+  const fsRoot = document.documentElement;
+  function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  async function toggleFullscreen() {
+    const mapEl = document.getElementById('map');
+    try {
+      if (isFullscreen()) { if (document.exitFullscreen) await document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); }
+      else {
+        if (mapEl) { mapEl.style.width = window.innerWidth + 'px'; mapEl.style.height = window.innerHeight + 'px'; }
+        if (mapEl) void mapEl.offsetHeight;
+        if (fsRoot.requestFullscreen) await fsRoot.requestFullscreen({ navigationUI: 'hide' });
+        else if (fsRoot.webkitRequestFullscreen) fsRoot.webkitRequestFullscreen();
+        if (mapEl) { mapEl.style.width = '100%'; mapEl.style.height = '100%'; }
+        if (map2gis && typeof map2gis.invalidateSize === 'function') requestAnimationFrame(() => { try { map2gis.invalidateSize(); } catch {} });
+      }
+    } catch (err) {}
+  }
+  if (fsBtn) fsBtn.addEventListener('click', toggleFullscreen);
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((evt) => document.addEventListener(evt, () => {
+    if (fsBtn) fsBtn.classList.toggle('is-active', isFullscreen());
+    if (map2gis && typeof map2gis.invalidateSize === 'function') requestAnimationFrame(() => { try { map2gis.invalidateSize(); } catch {} });
+  }));
+
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW', err)); });
+  }
+
+  init2GisMap();
+  </script>
+</body>
+</html>
