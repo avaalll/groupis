@@ -2143,10 +2143,18 @@
     .ph-handle { margin-top: 3px; font-size: 14px; color: rgba(255,255,255,.78); }
     /* Профиль с фото и 3D-аватаром целиком помещается в окно: фото занимает то, что осталось */
     .friend-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(170px, calc(min(680px, 100dvh - 116px) - 372px), 420px); }
-    .friend-fit .user-profile-view { padding: 12px 16px 14px; gap: 10px; }
+    /* блок с аватаром растягивается до нижнего края окна — без пустого места под ним */
+    .friend-fit { display: flex; flex-direction: column; min-height: 100%; }
+    .friend-fit .photo-hero { flex: none; }
+    .friend-fit .user-profile-view { flex: 1; display: flex; flex-direction: column; padding: 12px 16px 16px; gap: 10px; }
+    .friend-fit .friend-avatar-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
     .friend-fit .user-profile-section-title { margin: 0 0 2px; }
-    .friend-fit .friend-avatar-stage { height: 168px; }
-    .friend-fit .friend-avatar-stage canvas { width: 168px; height: 168px; }
+    .friend-fit .friend-avatar-stage { position: relative; display: block; flex: 1; height: auto; min-height: 168px; }
+    /* холст подстраивается под высоту блока и не раздувает его */
+    .friend-fit .friend-avatar-stage canvas {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: auto; height: min(100%, 240px); aspect-ratio: 1;
+    }
     @media (max-width: 640px) {
       .friend-fit .photo-hero { height: clamp(160px, calc(100dvh - 446px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
     }
