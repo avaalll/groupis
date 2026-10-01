@@ -254,36 +254,93 @@
     }
     :root[data-theme="dark"] .memory-more { background: var(--you); }
 
-    .wish-marker {
-      position: relative; pointer-events: auto; cursor: pointer;
-      transition: transform .18s ease-out;
-      width: 220px; height: 140px;
-      display: flex; align-items: center; justify-content: center;
+    /* ── Облако желания над иконкой человека или группы ──
+       Контур строит JS под размер текста; кончик хвостика — точка привязки (.wish-anchor) над иконкой.
+       --wish-k — масштаб от приближения карты, кончик при этом остаётся на месте. */
+    .wish-anchor { position: absolute; left: 50%; top: 5px; width: 0; height: 0; z-index: 1; pointer-events: none; }
+    .wish-anchor.is-right { margin-left: 8px; }
+    .wish-anchor.is-left { margin-left: -8px; }
+    .wish-anchor.is-pair.is-right { margin-left: 13px; }
+    .wish-anchor.is-pair.is-left { margin-left: -13px; }
+    .wish-cloud {
+      --wc-fill: #FFFFFF; --wc-ink: #121514; --wc-edge: #121514; --wc-accent: var(--you); --wc-cap: var(--you-deep);
+      position: absolute; pointer-events: auto; cursor: pointer;
+      transform: scale(var(--wish-k, 1));
+      transition: transform .25s var(--ease);
+      animation: wc-in .55s var(--spring) both;
+      -webkit-tap-highlight-color: transparent;
     }
-    .wish-marker:hover { transform: scale(1.05); }
-    .wish-cloud-shape {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      filter: drop-shadow(0 8px 16px rgba(var(--you-rgb), .45));
-      pointer-events: none;
+    .wish-cloud.is-group { --wc-accent: var(--lime); --wc-cap: var(--lime-deep); }
+    :root[data-theme="dark"] .wish-cloud { --wc-fill: #161B19; --wc-ink: #EEF2EF; --wc-edge: #030504; --wc-cap: var(--you-soft); }
+    :root[data-theme="dark"] .wish-cloud.is-group { --wc-cap: var(--lime); }
+    .wish-cloud svg { position: absolute; left: 0; top: 0; overflow: visible; filter: drop-shadow(0 6px 12px rgba(6, 12, 10, .26)); }
+    .wish-cloud .wc-edge { fill: none; stroke: var(--wc-edge); stroke-width: 7.5; stroke-linejoin: round; }
+    .wish-cloud .wc-body { fill: var(--wc-fill); stroke: var(--wc-accent); stroke-width: 4.2; stroke-linejoin: round; paint-order: stroke; }
+    .wc-text {
+      position: absolute; text-align: center; color: var(--wc-ink);
+      font: 700 13px/1.28 "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: -0.005em;
+      text-wrap: balance; overflow-wrap: anywhere; white-space: normal;
     }
-    .wish-cloud-shape .cloud-body {
-      fill: url(#wishCloudGrad);
-      stroke: rgba(255,255,255,.45);
-      stroke-width: 1; stroke-linejoin: round;
+    .wc-cap {
+      display: block; margin-bottom: 1px; font-size: 9.5px; font-weight: 800; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--wc-cap); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    :root[data-theme="dark"] .wish-cloud-shape .cloud-body { fill: url(#wishCloudGradDark); stroke: rgba(var(--you-rgb), .35); }
-    .wish-cloud-content {
-      position: relative; z-index: 1; width: 74%; max-width: 180px;
-      padding: 0 6px; text-align: center;
-      color: #FFFFFF; font-size: 12.5px; font-weight: 650;
-      line-height: 1.25; letter-spacing: .01em;
-      white-space: normal; word-break: break-word;
-      text-shadow: 0 1px 2px rgba(6, 12, 10, .35);
+    .wc-msg { display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .wc-measure { position: fixed; left: -9999px; top: 0; visibility: hidden; width: max-content; max-width: 150px; pointer-events: none; }
+    @keyframes wc-in { from { opacity: 0; transform: translateY(8px) scale(calc(var(--wish-k, 1) * .6)); } }
+    /* Желание с местом: облако над точкой на карте */
+    .wish-place { position: relative; width: 14px; height: 14px; pointer-events: auto; cursor: pointer; }
+    .wish-place-dot { position: absolute; inset: 0; border-radius: 50%; background: var(--you); box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0, 0, 0, .35); }
+    .wish-place .wish-anchor { top: 2px; margin-left: 0; }
+
+    /* ── Превью облака в экранах желаний: так его видно на карте ── */
+    .wish-preview { --wish-k: 1; display: flex; justify-content: center; padding: 8px 12px 4px; }
+    .wp-stage { position: relative; flex: none; }
+    .wp-stage .wish-cloud { cursor: default; }
+    .wp-stage .wp-pill { position: absolute; transform: translateX(-50%); z-index: 2; pointer-events: none; white-space: nowrap; }
+    .wish-meta { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin-top: 2px; }
+    .wish-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .wa-btn {
+      display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border: 0; border-radius: 999px;
+      background: var(--field); color: var(--ink); font: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+      transition: background .2s, transform .3s var(--spring);
     }
-    .wish-author {
-      display: block; margin-top: 4px; font-size: 10px;
-      font-weight: 700; letter-spacing: .04em;
-      text-transform: uppercase; opacity: .85;
+    .wa-btn svg { width: 16px; height: 16px; flex: none; }
+    .wa-btn:hover { background: var(--row-hover); }
+    .wa-btn:active { transform: scale(.93); transition-duration: .1s; }
+    .wa-btn.danger { color: #E5484D; }
+    .wa-btn.danger:hover { background: rgba(229, 72, 77, .12); }
+    .wa-btn.primary { background: var(--you); color: #fff; box-shadow: 0 8px 18px rgba(var(--you-rgb), .28); }
+    .wa-btn.primary:hover { filter: brightness(1.06); }
+    .wish-block { padding: 6px 12px 14px; }
+    .wish-empty-card {
+      margin: 4px 12px 8px; padding: 18px 16px; border-radius: 22px; text-align: center;
+      background: var(--field); color: var(--ink-soft); font-size: 13px;
+    }
+    .wish-empty-card .wish-actions { margin-top: 12px; }
+    .wish-section-title {
+      font-size: 12px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .07em;
+      padding: 14px 20px 4px;
+    }
+    .wish-list { list-style: none; margin: 0; padding: 0 4px; }
+    .wish-group-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; }
+    .wish-group-row .group-main { min-width: 0; }
+    .wish-group-row .group-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wg-actions { display: flex; gap: 6px; flex: none; }
+    .wa-icon {
+      width: 38px; height: 38px; border: 0; border-radius: 50%; display: grid; place-items: center;
+      background: var(--field); color: var(--ink); cursor: pointer; transition: background .2s, transform .3s var(--spring);
+    }
+    .wa-icon svg { width: 17px; height: 17px; }
+    .wa-icon:hover { background: var(--row-hover); }
+    .wa-icon:active { transform: scale(.88); }
+    .wa-icon.danger { color: #E5484D; }
+    .prompt-field { display: grid; gap: 6px; margin: 4px 0 16px; }
+    .prompt-count { justify-self: end; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    @media (max-width: 640px) {
+      .wish-list .wish-card .wish-card-actions { gap: 6px; }
+      .wish-list .wish-card .wish-card-actions .wa-btn { padding: 7px 10px; gap: 5px; }
+      .wish-list .wish-card { padding: 12px 10px; }
     }
     .wish-empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; }
     .wish-empty svg { width: 44px; height: 44px; opacity: .35; display: block; margin: 0 auto 10px; }
@@ -295,7 +352,10 @@
     :root[data-theme="dark"] .wish-card { background: rgba(255,255,255,.06); }
     .wish-card .wish-card-text { font-weight: 600; white-space: pre-wrap; word-break: break-word; }
     .wish-card .wish-card-meta { color: var(--ink-soft); font-size: 12px; }
-    .wish-card .wish-card-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+    .wish-card .wish-card-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; padding-top: 6px; }
+    .wish-card .wish-card-actions .wa-btn { padding: 7px 13px; font-size: 12.5px; background: var(--win); }
+    .wish-card .wish-card-actions .wa-btn:hover { background: var(--row-hover); }
+    .wish-card .wish-card-author { font-size: 12px; font-weight: 800; color: var(--you); }
 
     .user-avatar-wrap { position: relative; width: 26px; height: 26px; }
     .user-avatar-wrap[data-clickable="true"] { pointer-events: auto !important; cursor: pointer !important; }
@@ -389,8 +449,9 @@
     /* ── Лидер группы на карте: иконка группы и облако с желанием ── */
     .user-badge.is-leader::after { background: #0E1412; border-color: rgba(var(--you-rgb), .45); }
     .user-dot-marker.is-leader { background: #0E1412 !important; box-shadow: 0 0 0 4px rgba(14, 20, 18, .35), 0 2px 6px rgba(0,0,0,.35); }
-    .map-group-chip, .map-group-wish { pointer-events: auto !important; cursor: pointer !important; }
+    .map-group-chip { pointer-events: auto !important; cursor: pointer !important; }
     .map-group-chip {
+      position: relative; z-index: 2;
       display: flex; align-items: center; gap: 6px;
       padding: 3px 8px 3px 3px; border-radius: 999px;
       background: rgba(14, 20, 18, .96); color: #fff;
@@ -411,42 +472,11 @@
       background: rgba(255,255,255,.16); color: var(--you-soft); white-space: nowrap;
     }
     .map-group-count::before { content: "👥 "; }
-    /* Облако-«мысль» с желанием группы */
-    .map-group-wish {
-      position: relative; margin-bottom: 12px;
-      width: max-content; max-width: 210px; padding: 9px 14px;
-      border-radius: 20px;
-      background: linear-gradient(145deg, var(--you-2), var(--you-deep));
-      border: 1px solid rgba(255,255,255,.45);
-      box-shadow: 0 8px 18px rgba(var(--you-rgb), .45);
-      color: #fff; font-size: 12.5px; font-weight: 650; line-height: 1.25;
-      text-align: center; text-shadow: 0 1px 2px rgba(6, 12, 10, .35);
-      animation: map-wish-in .4s ease-out;
-    }
-    @keyframes map-wish-in {
-      from { opacity: 0; transform: translateY(6px) scale(.9); }
-      to   { opacity: 1; transform: none; }
-    }
-    .map-group-wish span {
-      display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical;
-      overflow: hidden; word-break: break-word; white-space: normal;
-    }
-    .map-group-wish::before, .map-group-wish::after {
-      content: ""; position: absolute; left: 50%; border-radius: 50%;
-      background: var(--you-deep); border: 1px solid rgba(255,255,255,.45);
-    }
-    .map-group-wish::before { width: 9px; height: 9px; bottom: -8px; margin-left: -10px; }
-    .map-group-wish::after  { width: 5px; height: 5px; bottom: -13px; margin-left: -4px; }
 
     /* ── Карточка группы: желание и match ── */
     .group-map-hint { margin: 0; }
     .group-wish-form { display: grid; gap: 8px; padding: 4px 12px 8px; }
     .group-wish-form .edit-actions { margin: 0; }
-    .group-wish-cloud {
-      margin: 4px 12px; padding: 12px 16px; border-radius: 18px;
-      background: linear-gradient(145deg, var(--you-2), var(--you-deep)); color: #fff;
-      font-weight: 650; word-break: break-word;
-    }
     .match-hint { padding: 8px 12px; color: var(--ink-soft); font-size: 13px; }
     .match-rows { margin: 0; }
     .match-row {
@@ -1699,14 +1729,12 @@
 
       .auth-age-row { gap: 10px; }
 
-      .modal { width: calc(100vw - 24px); padding: 16px 14px 12px; }
+      .modal { width: 100%; padding: 16px 14px 12px; }
+      .modal-backdrop { padding: 12px; }
       .popover { min-width: 180px; }
 
       .memory-marker { width: 72px; height: 72px; }
       .memory-card { width: 52px; height: 58px; }
-
-      .wish-marker { width: 190px; height: 120px; }
-      .wish-cloud-content { font-size: 11.5px; }
     }
 
     @media (max-width: 380px) {
@@ -2247,9 +2275,6 @@
     .map-group-count { color: #BFFBEA; }
     .user-badge.is-leader::after { background: #0E1412; border-color: rgba(var(--lime-rgb), .45); }
     .user-dot-marker.is-leader { background: #0E1412 !important; box-shadow: 0 0 0 2px var(--lime), 0 2px 6px rgba(0,0,0,.35); }
-    .map-group-wish { background: linear-gradient(135deg, var(--you-2), var(--you-deep)); box-shadow: 0 8px 18px rgba(var(--you-rgb), .4); text-shadow: none; }
-    .map-group-wish::before, .map-group-wish::after { background: var(--you-deep); }
-    .group-wish-cloud { background: linear-gradient(135deg, var(--you-2), var(--you-deep)); }
 
     /* «Сигнальные кольца» на земле под маркером (сплющены — как будто лежат на карте) */
     .user-avatar-wrap { isolation: isolate; }
@@ -2339,15 +2364,7 @@
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <linearGradient id="wishCloudGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#FFA07E"/>
-        <stop offset="1" stop-color="#FF5B2E"/>
-      </linearGradient>
       <clipPath id="featClipA"><circle cx="17" cy="22" r="11"/></clipPath>
-      <linearGradient id="wishCloudGradDark" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#FF7A50"/>
-        <stop offset="1" stop-color="#E0401A"/>
-      </linearGradient>
     </defs>
   </svg>
 
@@ -3989,8 +4006,8 @@
     const ch2 = supabaseClient.channel('rt:wishes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes' }, async () => {
         await loadWishesFromDB();
-        syncWishMarkers();
-        if (openApp === 'profile' && winTitle.textContent === 'Желания') showWishesScreen();
+        refreshWishClouds();
+        if (openApp === 'profile' && winTitle.textContent === 'Желания' && !win.querySelector('.modal-backdrop')) showWishesScreen();
       }).subscribe();
     rtChannels.push(ch2);
 
@@ -4173,26 +4190,26 @@
     return names.length > 1 ? `${first} +${names.length - 1}` : first;
   }
 
-  /* Иконки групп лидера над его аватаром: облако с желанием группы и плашка с названием.
+  // Плашка группы на карте: фото, название, число участников
+  function mapGroupChipHtml(g, extraClass = '', attrs = '') {
+    let name = (g.name || 'Группа').trim();
+    if (name.length > 22) name = name.slice(0, 21) + '…';
+    const count = (g.members || []).length + 1; // участники + лидер
+    const ava = g.photo
+      ? `<span class="map-group-ava" style="background-image:url('${safeUrl(g.photo)}')"></span>`
+      : `<span class="map-group-ava">${escapeHtml((g.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+    return `<div class="map-group-chip ${extraClass}" ${attrs}>
+        ${ava}
+        <span class="map-group-name">${escapeHtml(name)}</span>
+        <span class="map-group-count">${count}</span>
+      </div>`;
+  }
+
+  /* Иконки групп лидера над его аватаром. Группа с желанием — верхняя: облако висит над ней.
      Клик по ним открывает карточку группы (data-map-group). */
   function mapGroupBadgesHtml(ownedGroups) {
-    return ownedGroups.map((g) => {
-      let name = (g.name || 'Группа').trim();
-      if (name.length > 22) name = name.slice(0, 21) + '…';
-      const count = (g.members || []).length + 1; // участники + лидер
-      const ava = g.photo
-        ? `<span class="map-group-ava" style="background-image:url('${safeUrl(g.photo)}')"></span>`
-        : `<span class="map-group-ava">${escapeHtml((g.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
-      const wish = g.wish
-        ? `<div class="map-group-wish" data-map-group="${escapeHtml(g.id)}"><span>${escapeHtml(g.wish)}</span></div>`
-        : '';
-      return `${wish}
-        <div class="map-group-chip" data-map-group="${escapeHtml(g.id)}">
-          ${ava}
-          <span class="map-group-name">${escapeHtml(name)}</span>
-          <span class="map-group-count">${count}</span>
-        </div>`;
-    }).join('');
+    return [...ownedGroups].sort((a, b) => (b.wish ? 1 : 0) - (a.wish ? 1 : 0))
+      .map((g) => mapGroupChipHtml(g, '', `data-map-group="${escapeHtml(g.id)}"`)).join('');
   }
 
   function mapGroupsKey(ownedGroups) {
@@ -4204,7 +4221,7 @@
     return !!myId && groups.some((g) => isGroupParticipant(g, myId) && isGroupParticipant(g, userId));
   }
 
-  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = []) {
+  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = []) {
     const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
     let label = (person.name || '').trim() || person.handle || 'Пользователь';
     if (label.length > 18) label = label.slice(0, 17) + '…';
@@ -4227,10 +4244,11 @@
         ? `<div class="user-dot-marker is-leader"></div>`
         : `<div class="user-dot-marker ${tone}" style="background:${dotColor}"></div>`;
 
-    // Лидер чужой группы: вместо плашки с именем — иконка группы (и облако с её желанием)
+    // Лидер чужой группы: вместо плашки с именем — иконка группы. Облака желаний — над плашкой
     const badge = isLeader
-      ? `<div class="user-badge is-leader" data-clickable="true">${mapGroupBadgesHtml(ownedGroups)}</div>`
+      ? `<div class="user-badge is-leader" data-clickable="true">${wishAnchorsHtml(clouds)}${mapGroupBadgesHtml(ownedGroups)}</div>`
       : `<div class="user-badge" data-clickable="true">
+          ${wishAnchorsHtml(clouds)}
           <div class="user-badge-inner ${tone}">
             ${avatarInner}
             <span class="user-badge-name">${escapeHtml(label)}</span>
@@ -4259,6 +4277,183 @@
       <circle class="fx" cx="27" cy="22" r="11" clip-path="url(#featClipA)"/></svg>`;
   }
 
+  /* ═══════ ОБЛАКО ЖЕЛАНИЯ ═══════
+     Контур — «барашки» по краю суперэллипса, в который вписан текст: облако растёт под текст,
+     а барашки не растягиваются. Снизу хвостик, его кончик — точка привязки над иконкой. */
+  const WISH_TEXT_MAX = 150;          // ширина текста в облаке (как max-width у .wc-measure)
+  const wishSizeCache = new Map();
+  const wishGeomCache = new Map();
+  let wishMeasureEl = null;
+
+  function wishTextInner(text, caption) {
+    return `${caption ? `<span class="wc-cap">${escapeHtml(caption)}</span>` : ''}<span class="wc-msg">${escapeHtml(text)}</span>`;
+  }
+
+  function measureWishText(text, caption) {
+    const key = text + '\u0001' + caption;
+    let size = wishSizeCache.get(key);
+    if (size) return size;
+    if (!wishMeasureEl) {
+      wishMeasureEl = document.createElement('div');
+      wishMeasureEl.className = 'wc-text wc-measure';
+      wishMeasureEl.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(wishMeasureEl);
+    }
+    wishMeasureEl.innerHTML = wishTextInner(text, caption);
+    const r = wishMeasureEl.getBoundingClientRect();
+    size = { w: Math.min(WISH_TEXT_MAX, Math.ceil(r.width)) + 2, h: Math.max(16, Math.ceil(r.height)) };
+    wishSizeCache.set(key, size);
+    return size;
+  }
+
+  // side: 'right' — облако справа от иконки, хвостик уходит влево вниз; 'left' — зеркально.
+  // pair — над иконкой два облака: хвостик у края облака, чтобы облака разошлись в стороны
+  function wishCloudGeometry(tw, th, side, pair = false) {
+    const key = `${tw}x${th}:${side}:${pair ? 2 : 1}`;
+    const hit = wishGeomCache.get(key);
+    if (hit) return hit;
+    const a = Math.max(50, tw / 2 / 0.9 + 9);
+    const b = Math.max(25, th / 2 / 0.78 + 7);
+    // контур — суперэллипс |x/a|⁴ + |y/b|⁴ = 1, обход по часовой стрелке (y вниз)
+    const S = 480, P = [];
+    for (let i = 0; i <= S; i++) {
+      const t = (i / S) * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+      P.push([a * Math.sign(c) * Math.sqrt(Math.abs(c)), b * Math.sign(s) * Math.sqrt(Math.abs(s))]);
+    }
+    // «взвешенная» длина контура: сверху барашки крупнее, снизу мельче
+    const U = [0];
+    for (let i = 1; i <= S; i++) {
+      const w = 1.05 - 0.34 * ((P[i - 1][1] + P[i][1]) / 2 / b);
+      U.push(U[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]) / w);
+    }
+    const total = U[S];
+    const n = Math.max(7, Math.min(16, Math.round(total / 30)));
+    const step = total / n;
+    const dir = side === 'left' ? 1 : -1;   // куда смещён кончик хвостика
+    // хвостик — снизу, ближе к стороне иконки: одна «ячейка» контура отдаётся под его основание
+    let ti = 0, best = Infinity;
+    for (let i = 0; i <= S; i++) {
+      const d = Math.abs(P[i][0] - dir * a * (pair ? 0.68 : 0.42));
+      if (P[i][1] > 0 && d < best) { best = d; ti = i; }
+    }
+    const at = (u) => {
+      u = ((u % total) + total) % total;
+      let lo = 0, hi = S;
+      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (U[mid] <= u) lo = mid; else hi = mid; }
+      const k = (u - U[lo]) / Math.max(1e-9, U[hi] - U[lo]);
+      return [P[lo][0] + (P[hi][0] - P[lo][0]) * k, P[lo][1] + (P[hi][1] - P[lo][1]) * k];
+    };
+    const pts = [];
+    for (let k = 0; k < n; k++) pts.push(at(U[ti] - step / 2 + k * step));
+
+    const f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+    const bb = [Infinity, Infinity, -Infinity, -Infinity];
+    const add = (x, y) => { bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); };
+    // барашки: дуги между соседними точками, выпуклые наружу
+    const A = pts[0], B = pts[1];   // основание хвостика (обход снизу идёт справа налево)
+    let d = `M${f(B)}`;
+    for (let k = 1; k < n; k++) {
+      const p = pts[k], q = pts[(k + 1) % n];
+      const vx = q[0] - p[0], vy = q[1] - p[1], len = Math.hypot(vx, vy);
+      const r = len * 0.56;
+      d += `A${r.toFixed(1)} ${r.toFixed(1)} 0 0 1 ${f(q)}`;
+      const h = Math.sqrt(Math.max(0, r * r - len * len / 4));
+      const cx = (p[0] + q[0]) / 2 - (vy / len) * h, cy = (p[1] + q[1]) / 2 + (vx / len) * h;  // центр — внутри облака
+      const a0 = Math.atan2(p[1] - cy, p[0] - cx);
+      let da = Math.atan2(q[1] - cy, q[0] - cx) - a0;
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      for (let j = 0; j <= 8; j++) add(cx + r * Math.cos(a0 + da * j / 8), cy + r * Math.sin(a0 + da * j / 8));
+    }
+    // хвостик: изогнутый «рожок» к иконке
+    const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+    const T = [M[0] + dir * (pair ? 22 : 15), M[1] + 25];
+    const outer = dir < 0 ? A : B;
+    const cOut = [outer[0] + dir * 2, M[1] + 21];
+    const cIn = [M[0] + dir * 6, M[1] + 13];
+    const c1 = dir < 0 ? cOut : cIn, c2 = dir < 0 ? cIn : cOut;
+    d += `Q${f(c1)} ${f(T)}Q${f(c2)} ${f(B)}Z`;
+    [A, B, T, c1, c2].forEach((p) => add(p[0], p[1]));
+
+    const pad = 6;
+    const x0 = bb[0] - pad, y0 = bb[1] - pad;
+    const w = Math.ceil(bb[2] - bb[0] + pad * 2), hgt = Math.ceil(bb[3] - bb[1] + pad * 2);
+    const geom = { w, h: hgt, vb: `${x0.toFixed(1)} ${y0.toFixed(1)} ${w} ${hgt}`, d, tipX: T[0] - x0, tipY: T[1] - y0, cx: -x0, cy: -y0 - 1 };
+    wishGeomCache.set(key, geom);
+    return geom;
+  }
+
+  function wishCloud({ text, caption = '', tone = 'me', side = 'right', pair = false, attrs = '' }) {
+    text = String(text || '');
+    const t = measureWishText(text, caption);
+    const g = wishCloudGeometry(t.w, t.h, side, pair);
+    const html = `<div class="wish-cloud is-${tone}" ${attrs} style="left:${(-g.tipX).toFixed(1)}px;top:${(-g.tipY).toFixed(1)}px;width:${g.w}px;height:${g.h}px;transform-origin:${g.tipX.toFixed(1)}px ${g.tipY.toFixed(1)}px">
+        <svg width="${g.w}" height="${g.h}" viewBox="${g.vb}" aria-hidden="true"><path class="wc-edge" d="${g.d}"/><path class="wc-body" d="${g.d}"/></svg>
+        <div class="wc-text" style="left:${(g.cx - t.w / 2).toFixed(1)}px;top:${(g.cy - t.h / 2).toFixed(1)}px;width:${t.w}px">${wishTextInner(text, caption)}</div>
+      </div>`;
+    return { html, g };
+  }
+
+  // Облака над маркером: первое — сверху справа, второе (если есть) — сверху слева
+  function wishAnchorsHtml(clouds) {
+    const list = (clouds || []).slice(0, 2);
+    const pair = list.length > 1;
+    return list.map((c, i) => {
+      const side = i ? 'left' : 'right';
+      return `<span class="wish-anchor is-${side} ${pair ? 'is-pair' : ''}">${wishCloud({ ...c, side, pair }).html}</span>`;
+    }).join('');
+  }
+  function wishCloudsKey(clouds) { return (clouds || []).map((c) => [c.tone, c.text, c.caption || ''].join('|')).join('¦'); }
+
+  // Текущее желание человека — последнее без места: оно висит облаком над его иконкой
+  function currentWishOf(userId) {
+    const uid = String(userId);
+    let best = null;
+    for (const w of visibleWishes()) {
+      if (String(w.authorId) !== uid || Array.isArray(w.coords)) continue;
+      if (!best || (w.ts || 0) > (best.ts || 0)) best = w;
+    }
+    return best;
+  }
+  function myCurrentWish() { return currentUser ? currentWishOf(currentUser.id) : null; }
+
+  // Группы человека с желанием, которые я вижу: облако группы висит над её лидером
+  function wishGroupsOf(userId) {
+    const myId = currentUser && currentUser.id;
+    return groupsOwnedBy(userId).filter((g) => g.wish && (isGroupParticipant(g, myId) || (!groupHiddenForMe(g) && groupPassesFilters(g))));
+  }
+
+  /* Облака для маркера человека: личное желание и желание его группы.
+     asGroupIcon — маркер показан иконкой группы (лидер чужой группы): тогда главное облако — группы. */
+  function personWishClouds(userId, person, wishGroups, asGroupIcon) {
+    const w = currentWishOf(userId);
+    const g = (wishGroups || []).find((x) => x.wish);
+    const mine = currentUser && String(userId) === String(currentUser.id);
+    const firstName = ((person && person.name) || '').trim().split(/\s+/)[0];
+    const personal = w ? { text: w.text, tone: 'me', caption: asGroupIcon ? firstName : '', attrs: mine ? 'data-wish-mine' : '' } : null;
+    const group = g ? {
+      text: g.wish, tone: 'group',
+      // над иконкой группы подпись не нужна; над человеком — название группы
+      caption: asGroupIcon && wishGroups.length < 2 ? '' : (g.name || 'Группа'),
+      attrs: `data-map-group="${escapeHtml(g.id)}"`,
+    } : null;
+    return (asGroupIcon ? [group, personal] : [personal, group]).filter(Boolean);
+  }
+
+  // Желания изменились: облака на местах, над моей иконкой и над друзьями
+  function refreshWishClouds() {
+    if (!map2gis) return;
+    syncWishMarkers();
+    refreshMyMarker();
+    for (const [uid, fm] of [...friendMarkerCoords.entries()]) {
+      upsertFriendMarker(uid, fm.person, fm.coords, friends.some((f) => f.id === uid), userAvatarCfgById.get(uid) || null);
+    }
+  }
+  // Шрифт догрузился — размеры текста другие: перемеряем облака
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { wishSizeCache.clear(); wishGeomCache.clear(); refreshWishClouds(); }).catch(() => {});
+  }
+
   // Клик по иконке группы на карте: открыть её карточку
   function openMapGroup(e) {
     const chip = e.target.closest('[data-map-group]');
@@ -4272,9 +4467,9 @@
 
   /* Реальный DOM-элемент маркера друга с обработчиком клика —
      так же, как у твоего собственного маркера и маркеров воспоминаний. */
-  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = []) {
+  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = []) {
     const tpl = document.createElement('div');
-    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups).trim();
+    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds).trim();
     const el = tpl.firstElementChild;
 
     const openProfile = (e) => {
@@ -4350,12 +4545,17 @@
     const groupLabel = sharesGroup || !isFriend ? sharedGroupsLabel(userId) : '';
     const ownedGroups = sharesGroup ? [] : visibleGroupsOfLeader(userId);
     const groupsKey = mapGroupsKey(ownedGroups);
+    // Облака: над иконкой группы — её желание; над человеком — его желание и желание его группы
+    const asGroupIcon = ownedGroups.length > 0;
+    const clouds = personWishClouds(userId, person, asGroupIcon ? ownedGroups : wishGroupsOf(userId), asGroupIcon);
+    const cloudsKey = wishCloudsKey(clouds);
     if (existing) {
       const same =
         existing.avatarKey === cfgKey &&
         existing.isFriend === isFriend &&
         existing.groupLabel === groupLabel &&
         existing.groupsKey === groupsKey &&
+        existing.cloudsKey === cloudsKey &&
         existing.personName === (person.name || '') &&
         existing.personAvatar === (person.avatar || '');
       if (same) {
@@ -4367,7 +4567,7 @@
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
-    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups);
+    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds);
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
@@ -4381,6 +4581,7 @@
       isFriend,
       groupLabel,
       groupsKey,
+      cloudsKey,
       personName: person.name || '',
       personAvatar: person.avatar || '',
     });
@@ -4471,6 +4672,17 @@
       map2gis.on('click', () => {
         if (openApp !== null) closeApp(); else closePopup();
       });
+
+      // Облака желаний плавно уменьшаются при отдалении карты; кончик хвостика остаётся у иконки
+      const mapEl = document.getElementById('map');
+      let wishScaleRaf = 0;
+      const syncWishScale = () => {
+        wishScaleRaf = 0;
+        const k = Math.max(0.7, Math.min(1, 0.7 + (map2gis.getZoom() - 11) * 0.075));
+        mapEl.style.setProperty('--wish-k', k.toFixed(3));
+      };
+      map2gis.on('zoom', () => { if (!wishScaleRaf) wishScaleRaf = requestAnimationFrame(syncWishScale); });
+      syncWishScale();
 
       syncPostMarkers(); syncWishMarkers(); startGeolocation();
     } catch (err) { console.error('[карта]', err); }
@@ -4611,7 +4823,12 @@
       let angle = 0, raf = null;
       function tick() { angle += 0.008; group.rotation.y = Math.sin(angle) * 0.35; renderer.render(scene, camera); raf = requestAnimationFrame(tick); }
       tick();
-      canvas.__avatarStop = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
+      // остановить и освободить WebGL-контекст: маркер пересоздаётся, а число контекстов у браузера ограничено
+      canvas.__avatarStop = () => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = null;
+        try { renderer.dispose(); renderer.forceContextLoss(); } catch {}
+      };
       return true;
     } catch (err) { console.warn('[аватар]', err); return false; }
   }
@@ -4649,9 +4866,18 @@
   let userLocationWatchId = null;
   let lastUserLocation = null;
   let userAvatarCanvas = null;
+  let userMarkerKey = '';
 
   function placeUserMarker(coords) {
     if (!map2gis) return;
+    // Над собой: моё текущее желание и желание группы, где я лидер
+    const clouds = currentUser ? personWishClouds(currentUser.id, profile, wishGroupsOf(currentUser.id), false) : [];
+    const key = [profile.name, profile.avatar, avatarCfgKey(avatarConfig), wishCloudsKey(clouds)].join('§');
+    // Ничего не поменялось — только двигаем маркер, не пересоздавая 3D-аватар
+    if (userLocationMarker && key === userMarkerKey) {
+      try { userLocationMarker.setCoordinates(coords); return; } catch {}
+    }
+    userMarkerKey = key;
     if (userLocationMarker) {
       try { if (userAvatarCanvas && userAvatarCanvas.__avatarStop) userAvatarCanvas.__avatarStop(); userLocationMarker.destroy(); } catch {}
       userLocationMarker = null; userAvatarCanvas = null;
@@ -4670,12 +4896,18 @@
     badge.className = 'user-badge'; badge.dataset.clickable = 'true';
     // Себя я всегда вижу просто по имени — иконку группы видят только те, кто не в ней
     badge.innerHTML = `
+      ${wishAnchorsHtml(clouds)}
       <div class="user-badge-inner">
         ${avatarInner}
         <span class="user-badge-name">${escapeHtml(label)}</span>
         <span class="user-badge-status" aria-hidden="true"></span>
       </div>`;
-    badge.addEventListener('click', (e) => { e.stopPropagation(); showApp('profile'); showUserProfileScreen(); });
+    badge.addEventListener('click', (e) => {
+      if (openMapGroup(e)) return;                     // облако группы — карточка группы
+      e.stopPropagation();
+      showApp('profile');
+      if (e.target.closest('[data-wish-mine]')) showWishesScreen(); else showUserProfileScreen();
+    });
     wrap.appendChild(badge);
     wrap.insertAdjacentHTML('beforeend', signalRingsHtml('is-me'));
     if (use3D) {
@@ -4833,101 +5065,209 @@
   }
 
   /* ═══════ ЖЕЛАНИЯ ═══════ */
+  /* Желание без места висит облаком над иконкой автора (видно только последнее — «текущее»),
+     желание с местом — облаком над точкой на карте. Желание группы хранится в groups.wish. */
   function visibleWishes() {
-    const myGroupIds = new Set(groups.filter((g) => g.ownerId === (currentUser && currentUser.id)).map((g) => g.id));
-    const friendIds = new Set(friends.map((f) => f.id));
+    const myId = currentUser && String(currentUser.id);
+    const friendIds = new Set(friends.map((f) => String(f.id)));
     return wishes.filter((w) => {
       if (!currentUser) return w.audience === 'all';
-      if (w.authorId === currentUser.id) return true;
+      if (String(w.authorId) === myId) return true;
       if (w.audience === 'all') return true;
-      if (w.audience === 'friends') return friendIds.has(w.authorId);
-      if (w.audience === 'group') return w.groupId && myGroupIds.has(w.groupId);
+      if (w.audience === 'friends') return friendIds.has(String(w.authorId));
+      if (w.audience === 'group') return !!w.groupId && isGroupParticipant(groupById(w.groupId), currentUser.id);
       if (w.audience === 'me') return false;
       return true;
     });
   }
 
-  function wishesToRenderAsMarkers() {
-    return visibleWishes().filter((w) => {
-      if (w.authorId === (currentUser && currentUser.id) && !Array.isArray(w.coords)) return true;
-      return Array.isArray(w.coords);
+  function syncWishMarkers() {
+    if (!map2gis) return;
+    const myId = currentUser && String(currentUser.id);
+    const list = visibleWishes().filter((w) => Array.isArray(w.coords));
+    const alive = new Set(list.map((w) => w.id));
+    for (const [id, wm] of [...wishMarkers.entries()]) {
+      if (!alive.has(id)) { try { wm.marker.destroy(); } catch {} wishMarkers.delete(id); }
+    }
+    for (const w of list) {
+      const mine = String(w.authorId) === myId;
+      const caption = mine ? '' : (w.authorName || '');
+      const key = [w.text, caption, w.coords.join(',')].join('|');
+      const existing = wishMarkers.get(w.id);
+      if (existing && existing.key === key) continue;
+      if (existing) { try { existing.marker.destroy(); } catch {} }
+      const el = document.createElement('div');
+      el.className = 'wish-place';
+      el.innerHTML = `<span class="wish-place-dot"></span><span class="wish-anchor is-right">${wishCloud({ text: w.text, caption }).html}</span>`;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showApp('profile');
+        if (mine) showWishesScreen(); else showFriendProfile(w.authorId, personById(w.authorId));
+      });
+      const marker = new mapgl.HtmlMarker(map2gis, { coordinates: w.coords, html: el, anchor: [0.5, 0.5], preventMapInteractions: true });
+      wishMarkers.set(w.id, { marker, key });
+    }
+  }
+
+  const ICON_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>`;
+  const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>`;
+  const ICON_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`;
+  const ICON_PIN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s-7-6.1-7-11.7a7 7 0 0 1 14 0c0 5.6-7 11.7-7 11.7z"/><circle cx="12" cy="9.8" r="2.6"/></svg>`;
+
+  function wishAudienceLabel(w) {
+    if (w.audience === 'me') return '👤 Только мне';
+    if (w.audience === 'friends') return '👥 Друзьям';
+    if (w.audience === 'group') { const g = groupById(w.groupId); return '👥 ' + (g ? g.name : 'Группа'); }
+    return '🌍 Всем';
+  }
+  function wishTimeLabel(ts) {
+    return new Date(ts || Date.now()).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  /* Превью: облако над плашкой — ровно так, как его видно на карте.
+     pillW — примерная ширина плашки, чтобы она не вылезала за край. */
+  function wishPreviewHtml({ text, tone, caption = '', pillHtml, pillW }) {
+    const { html, g } = wishCloud({ text, caption, tone, side: 'right' });
+    const pillX = g.tipX - 8;      // облако правее центра плашки, как над иконкой
+    const pillTop = g.tipY - 5;    // кончик хвостика уходит под плашку
+    const shift = Math.max(0, Math.round(pillW / 2 - pillX));
+    return `<div class="wish-preview"><div class="wp-stage" style="width:${g.w}px;height:${Math.ceil(pillTop + 32)}px;margin-left:${shift}px">
+        <span class="wish-anchor" style="left:${g.tipX.toFixed(1)}px;top:${g.tipY.toFixed(1)}px;margin:0">${html}</span>
+        ${pillHtml.replace('class="', `style="left:${pillX.toFixed(1)}px;top:${pillTop.toFixed(1)}px" class="wp-pill `)}
+      </div></div>`;
+  }
+
+  function myWishPreviewHtml(w) {
+    const name = (profile.name || 'Я').trim();
+    const ava = profile.avatar
+      ? `<span class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></span>`
+      : `<span class="user-badge-avatar">${escapeHtml(name.charAt(0).toUpperCase() || '?')}</span>`;
+    return wishPreviewHtml({
+      text: w.text, tone: 'me',
+      pillHtml: `<div class="user-badge-inner">${ava}<span class="user-badge-name">${escapeHtml(name)}</span></div>`,
+      pillW: 42 + Math.min(18, name.length) * 7.2,
     });
   }
 
-  function wishCoordinates(w) {
-    if (w.authorId === (currentUser && currentUser.id) && !Array.isArray(w.coords)) return lastUserLocation;
-    return Array.isArray(w.coords) ? w.coords : null;
+  function groupWishPreviewHtml(g) {
+    return wishPreviewHtml({
+      text: g.wish, tone: 'group',
+      pillHtml: mapGroupChipHtml(g),
+      pillW: 78 + Math.min(22, (g.name || '').length) * 7.4,
+    });
   }
 
-  function buildWishMarkerElement(wish) {
-    const el = document.createElement('div'); el.className = 'wish-marker';
-    const text = escapeHtml(wish.text || '');
-    const author = wish.authorName ? escapeHtml(wish.authorName) : '';
-    el.innerHTML = `
-      <svg class="wish-cloud-shape" viewBox="0 0 220 140" preserveAspectRatio="none" aria-hidden="true">
-        <path class="cloud-body" d="M 44 118 C 20 118, 6 104, 6 86 C 6 68, 20 56, 38 56 C 40 36, 60 20, 82 20 C 98 20, 112 28, 120 42 C 128 26, 146 14, 166 14 C 190 14, 210 32, 212 56 C 216 58, 218 62, 218 70 C 218 88, 204 102, 184 104 C 180 114, 166 124, 150 124 C 140 124, 132 121, 124 114 C 116 122, 102 126, 90 126 C 72 126, 56 120, 48 110 Z"/>
-      </svg>
-      <div class="wish-cloud-content">${text}${author ? `<span class="wish-author">${author}</span>` : ''}</div>`;
-    return el;
+  function wishCardHtml(w, mine) {
+    const meta = [];
+    if (w.place) meta.push('📍 ' + escapeHtml(w.place));
+    meta.push(escapeHtml(wishAudienceLabel(w)));
+    meta.push(wishTimeLabel(w.ts));
+    const id = escapeHtml(w.id);
+    return `
+      <li class="wish-card" data-wish-id="${id}">
+        ${mine ? '' : `<div class="wish-card-author">${escapeHtml(w.authorName || 'Пользователь')}</div>`}
+        <div class="wish-card-text">${escapeHtml(w.text)}</div>
+        <div class="wish-card-meta">${meta.join(' • ')}</div>
+        ${Array.isArray(w.coords) || mine ? `<div class="wish-card-actions">
+          ${Array.isArray(w.coords) ? `<button class="wa-btn" type="button" data-wish-map="${id}">${ICON_PIN}На карте</button>` : ''}
+          ${mine ? `<button class="wa-btn" type="button" data-wish-edit="${id}">${ICON_EDIT}Изменить</button>
+            <button class="wa-btn danger" type="button" data-wish-remove="${id}">${ICON_TRASH}Удалить</button>` : ''}
+        </div>` : ''}
+      </li>`;
   }
 
-  function syncWishMarkers() {
-    if (!map2gis) return;
-    const list = wishesToRenderAsMarkers().filter((w) => Array.isArray(wishCoordinates(w)));
-    const alive = new Set(list.map((w) => w.id));
-    for (const [id, marker] of [...wishMarkers.entries()]) {
-      if (!alive.has(id)) { try { marker.destroy(); } catch {} wishMarkers.delete(id); }
-    }
-    for (const w of list) {
-      const coords = wishCoordinates(w); if (!coords) continue;
-      if (wishMarkers.has(w.id)) { try { wishMarkers.get(w.id).destroy(); } catch {} wishMarkers.delete(w.id); }
-      const html = buildWishMarkerElement(w);
-      html.addEventListener('click', (e) => { e.stopPropagation(); showApp('profile'); showWishesScreen(); });
-      const pinned = w.authorId === (currentUser && currentUser.id) && !Array.isArray(w.coords);
-      const marker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html, anchor: [0.5, 1], offset: pinned ? [0, -34] : [0, 0], preventMapInteractions: false });
-      wishMarkers.set(w.id, marker);
-    }
+  // Желание группы: изменить / удалить (менять может любой участник — так разрешает set_group_wish)
+  function groupWishActionsHtml(g) {
+    const id = escapeHtml(g.id);
+    return `<div class="wish-actions">
+      <button class="wa-btn" type="button" data-gwish-edit="${id}">${ICON_EDIT}Изменить</button>
+      <button class="wa-btn danger" type="button" data-gwish-delete="${id}">${ICON_TRASH}Удалить</button>
+    </div>`;
   }
 
   function showWishesScreen() {
     setScreen(() => {
       winTitle.textContent = 'Желания';
-      winBody.scrollTop = 0;
-      const list = wishes.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-      const audienceLabel = (w) => {
-        if (w.audience === 'me') return '👤 Только мне';
-        if (w.audience === 'friends') return '👥 Друзьям';
-        if (w.audience === 'group') { const g = groups.find((x) => x.id === w.groupId); return '👥 ' + (g ? escapeHtml(g.name) : 'Группа'); }
-        return '🌍 Всем';
-      };
-      const rowsHtml = list.length
-        ? list.map((w) => {
-            const metaBits = [];
-            if (w.place) metaBits.push('📍 ' + escapeHtml(w.place));
-            metaBits.push(audienceLabel(w));
-            metaBits.push(new Date(w.ts || Date.now()).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
-            const isMine = w.authorId === (currentUser && currentUser.id);
-            return `
-              <li class="wish-card" data-wish-id="${escapeHtml(w.id)}">
-                <div class="wish-card-text">${escapeHtml(w.text)}</div>
-                <div class="wish-card-meta">${metaBits.join(' • ')}</div>
-                ${isMine ? `<div class="wish-card-actions">
-                  <button class="btn" type="button" data-wish-edit="${escapeHtml(w.id)}">Изменить</button>
-                  <button class="btn btn-danger" type="button" data-wish-remove="${escapeHtml(w.id)}">Удалить</button>
-                </div>` : ''}
-              </li>`;
-          }).join('')
-        : `<div class="wish-empty">Пока нет желаний.<br>Нажмите <b>+</b>, чтобы загадать первое.</div>`;
+      const myId = currentUser ? String(currentUser.id) : '';
+      const byTs = (a, b) => (b.ts || 0) - (a.ts || 0);
+      const current = myCurrentWish();
+      const mineOther = wishes.filter((w) => String(w.authorId) === myId && w !== current).sort(byTs);
+      const others = visibleWishes().filter((w) => String(w.authorId) !== myId).sort(byTs);
+      const gs = myGroups();
+
+      const currentHtml = current
+        ? `<div class="wish-block">
+            ${myWishPreviewHtml(current)}
+            <div class="wish-meta">${escapeHtml(wishAudienceLabel(current))} · ${wishTimeLabel(current.ts)}</div>
+            <div class="wish-actions">
+              <button class="wa-btn" type="button" data-wish-edit="${escapeHtml(current.id)}">${ICON_EDIT}Изменить</button>
+              <button class="wa-btn danger" type="button" data-wish-remove="${escapeHtml(current.id)}">${ICON_TRASH}Удалить</button>
+            </div>
+          </div>`
+        : `<div class="wish-empty-card">Желания пока нет. Загадайте — оно появится облаком над вашей иконкой на карте.
+            <div class="wish-actions"><button class="wa-btn primary" type="button" data-action="new-wish">${ICON_PLUS}Загадать желание</button></div>
+          </div>`;
+
+      const groupsHtml = gs.map((g) => {
+        const id = escapeHtml(g.id);
+        const av = g.photo
+          ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
+          : `<span class="group-avatar">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+        return `<li class="wish-group-row">
+            ${av}
+            <div class="group-main">
+              <div class="group-name">${escapeHtml(g.name)}</div>
+              <div class="group-sub">${g.wish ? '☁ ' + escapeHtml(g.wish) : 'Желания нет'}</div>
+            </div>
+            <div class="wg-actions">
+              ${g.wish
+                ? `<button class="wa-icon" type="button" data-gwish-edit="${id}" aria-label="Изменить желание группы" title="Изменить">${ICON_EDIT}</button>
+                   <button class="wa-icon danger" type="button" data-gwish-delete="${id}" aria-label="Удалить желание группы" title="Удалить">${ICON_TRASH}</button>`
+                : `<button class="wa-icon" type="button" data-gwish-edit="${id}" aria-label="Загадать желание группы" title="Загадать">${ICON_PLUS}</button>`}
+            </div>
+          </li>`;
+      }).join('');
+
       winBody.innerHTML = `
         <div class="sub-toolbar">
-          <span class="sub-toolbar-title">Желания</span>
+          <span class="sub-toolbar-title">Над вашей иконкой</span>
           <span class="sub-toolbar-spacer"></span>
           <button class="icon-btn" type="button" data-action="new-wish" aria-label="Новое желание" title="Новое желание">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
           </button>
         </div>
-        ${rowsHtml}`;
+        ${currentHtml}
+        ${mineOther.length ? `<div class="wish-section-title">Другие мои желания</div><ul class="wish-list">${mineOther.map((w) => wishCardHtml(w, true)).join('')}</ul>` : ''}
+        ${gs.length ? `<div class="wish-section-title">Желания моих групп</div><ul class="wish-list">${groupsHtml}</ul>` : ''}
+        ${others.length ? `<div class="wish-section-title">Желания других</div><ul class="wish-list">${others.map((w) => wishCardHtml(w, false)).join('')}</ul>` : ''}`;
+      winBody.scrollTop = 0;
     }, () => showApp('profile'));
+  }
+
+  // Изменить или загадать желание группы — окно с полем ввода
+  async function editGroupWish(groupId) {
+    const g = groupById(groupId);
+    if (!g) return;
+    const text = await promptModal({
+      title: g.wish ? 'Желание группы' : 'Новое желание группы',
+      text: 'Облако появится над иконкой группы на карте — его увидят все.',
+      value: g.wish || '', placeholder: 'Например: сходить в кино сегодня вечером', maxLength: 120,
+      confirmLabel: g.wish ? 'Сохранить' : 'Опубликовать',
+    });
+    if (text === null || text === (g.wish || '')) return;
+    if (await saveGroupWish(groupId, text)) rerenderWishContext();
+  }
+
+  async function deleteGroupWish(groupId) {
+    const ok = await confirmModal({ title: 'Удалить желание группы?', text: 'Облако исчезнет с карты у всех.', confirmLabel: 'Удалить' });
+    if (ok && await saveGroupWish(groupId, '')) rerenderWishContext();
+  }
+
+  // После изменения желания перерисовать открытый экран: список желаний или карточку группы
+  function rerenderWishContext() {
+    if (openApp !== 'profile' || win.hidden) return;
+    if (winTitle.textContent === 'Желания') showWishesScreen();
+    else if (groupDetailsId) reopenGroupDetails();
   }
 
   function showNewWishScreen(editingId = null) {
@@ -4939,10 +5279,11 @@
       const currentPlace = editing ? (editing.place || '') : '';
       const currentAudience = editing ? editing.audience : 'all';
       const currentGroup = editing ? (editing.groupId || '') : '';
-      const myGroups = groups.filter((g) => g.ownerId === (currentUser && currentUser.id));
-      const groupOptions = myGroups.length
-        ? myGroups.map((g) => `<option value="${escapeHtml(g.id)}" ${currentGroup === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')
+      const memberOf = myGroups();
+      const groupOptions = memberOf.length
+        ? memberOf.map((g) => `<option value="${escapeHtml(g.id)}" ${String(currentGroup) === String(g.id) ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')
         : `<option value="">— нет групп —</option>`;
+      const replacing = !editing && myCurrentWish();
 
       winBody.innerHTML = `
         <form class="edit-form" id="wish-form" novalidate>
@@ -4950,7 +5291,7 @@
           <label class="edit-field">
             <span class="edit-label">Место (необязательно)</span>
             <input class="edit-input" type="text" id="wish-place" maxlength="80" value="${escapeHtml(currentPlace)}">
-            <span class="edit-hint">Если пусто — облако над вашей иконкой.</span>
+            <span class="edit-hint">Если пусто — облако над вашей иконкой${replacing ? ' (заменит текущее желание)' : ''}. С местом — облако над этой точкой на карте.</span>
           </label>
           <div class="edit-field">
             <span class="edit-label">Кому видно</span>
@@ -4997,26 +5338,41 @@
         if (place) {
           if (editing && editing.place === place && Array.isArray(editing.coords)) coords = editing.coords;
           else { try { coords = await geocodePlace(place); } catch {} }
+          if (!coords) {
+            submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+            alert('Место не найдено. Уточните адрес или оставьте поле пустым — тогда облако будет над вашей иконкой.');
+            placeEl.focus();
+            return;
+          }
         }
 
-        submitBtn.disabled = false; submitBtn.textContent = oldLabel;
-
+        let error = null;
         if (editing) {
-          const { error } = await supabaseClient.from('wishes').update({
-            text, place, coords, audience, group_id: groupId,
-          }).eq('id', editingId);
-          if (error) { console.warn('[wishes] update:', error.message); return; }
+          const patch = { text, place, coords, audience, group_id: groupId };
+          // убрали место — желание становится текущим, над иконкой
+          if (!coords && Array.isArray(editing.coords)) patch.ts = Date.now();
+          ({ error } = await supabaseClient.from('wishes').update(patch).eq('id', editingId));
+        } else if (!coords && replacing) {
+          // над иконкой одно желание: новое без места заменяет текущее
+          ({ error } = await supabaseClient.from('wishes').update({
+            text, place: '', coords: null, audience, group_id: groupId, author_name: profile.name, ts: Date.now(),
+          }).eq('id', replacing.id));
         } else {
           const id = 'w' + Date.now() + Math.random().toString(36).slice(2, 8);
-          const { error } = await supabaseClient.from('wishes').insert({
+          ({ error } = await supabaseClient.from('wishes').insert({
             id, author_id: currentUser.id, author_name: profile.name,
             text, place, coords, audience, group_id: groupId, ts: Date.now(),
-          });
-          if (error) { console.warn('[wishes] insert:', error.message); return; }
+          }));
+        }
+        submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+        if (error) {
+          console.warn('[wishes] save:', error.message);
+          alert('Не удалось сохранить желание: ' + error.message);
+          return;
         }
 
         await loadWishesFromDB();
-        syncWishMarkers();
+        refreshWishClouds();
         showWishesScreen();
         if (coords && map2gis) { map2gis.setCenter(coords); map2gis.setZoom(15); }
       });
@@ -5448,23 +5804,27 @@
           </li>`;
       }).join('');
 
-      const wishHtml = isMember
-        ? `<form class="group-wish-form" id="group-wish-form">
-            <input class="edit-input" type="text" id="group-wish-input" maxlength="120" value="${escapeHtml(g.wish || '')}" placeholder="Например: сходить в кино сегодня вечером">
-            <div class="edit-actions">
-              ${g.wish ? `<button type="button" class="btn" data-group-wish-clear>Убрать</button>` : ''}
-              <button type="submit" class="btn btn-primary">${g.wish ? 'Обновить' : 'Опубликовать'}</button>
-            </div>
-            <span class="edit-hint">Желание появится облаком над иконкой группы на карте — его увидят все.</span>
-          </form>`
-        : g.wish
-          ? `<div class="group-wish-cloud">☁ ${escapeHtml(g.wish)}</div>`
+      // Есть желание — превью облака над иконкой группы и кнопки «Изменить» / «Удалить» для участников
+      const wishHtml = g.wish
+        ? `<div class="wish-block">
+            ${groupWishPreviewHtml(g)}
+            ${g.wishAt ? `<div class="wish-meta">обновлено ${wishTimeLabel(Date.parse(g.wishAt))}</div>` : ''}
+            ${isMember ? groupWishActionsHtml(g) : ''}
+          </div>`
+        : isMember
+          ? `<form class="group-wish-form" id="group-wish-form">
+              <input class="edit-input" type="text" id="group-wish-input" maxlength="120" placeholder="Например: сходить в кино сегодня вечером">
+              <div class="edit-actions">
+                <button type="submit" class="btn btn-primary">Опубликовать</button>
+              </div>
+              <span class="edit-hint">Желание появится облаком над иконкой группы на карте — его увидят все.</span>
+            </form>`
           : `<div class="match-hint">Группа пока не опубликовала желание.</div>`;
 
       winBody.innerHTML = `
         <div class="user-profile-view">
           <div class="user-profile-hero">
-            <div class="user-profile-avatar ${g.photo ? 'no-3d' : ''}" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
+            <div class="user-profile-avatar no-3d" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
             <div class="user-profile-name">${escapeHtml(g.name)}</div>
             <div class="user-profile-handle">${escapeHtml([membersLabel(people.length), groupStatsText(g)].filter(Boolean).join(' · '))}</div>
           </div>
@@ -5479,23 +5839,26 @@
 
       const wishForm = winBody.querySelector('#group-wish-form');
       if (wishForm) {
-        wishForm.addEventListener('submit', (e) => {
+        wishForm.addEventListener('submit', async (e) => {
           e.preventDefault();
-          saveGroupWish(g.id, winBody.querySelector('#group-wish-input').value);
+          const input = winBody.querySelector('#group-wish-input');
+          if (!input.value.trim()) { input.focus(); return; }
+          if (await saveGroupWish(g.id, input.value)) rerenderWishContext();
         });
       }
     }, back);
   }
 
+  // Пустой текст удаляет желание группы (так устроена set_group_wish)
   async function saveGroupWish(groupId, text) {
     const { error } = await supabaseClient.rpc('set_group_wish', { gid: String(groupId), wish_text: (text || '').trim() });
     if (error) {
       console.error('[rpc set_group_wish]', error);
       alert('Не удалось сохранить желание: ' + error.message);
-      return;
+      return false;
     }
     await refreshGroupsWorld();
-    if (String(groupDetailsId) === String(groupId) && openApp === 'profile') reopenGroupDetails();
+    return true;
   }
 
   /* ═══════ ПРАВИЛА ═══════ */
@@ -6748,6 +7111,7 @@
   function showMapApp() {
     leaveChat();
     clearTimeout(closeTimer); closePostMenus();
+    win.querySelectorAll(':scope > .modal-backdrop').forEach((el) => el.remove());   // незакрытые окна подтверждения
     if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
     if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
     winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
@@ -6953,12 +7317,55 @@
             <button type="button" class="btn btn-danger" data-confirm>${escapeHtml(confirmLabel)}</button>
           </div>
         </div>`;
-      winBody.appendChild(back);
+      // поверх всего окна, а не внутри прокрутки — иначе на длинном экране окно уезжает из виду
+      win.appendChild(back);
       const cleanup = () => back.remove();
       back.querySelector('[data-cancel]').addEventListener('click', () => { cleanup(); resolve(false); });
       back.querySelector('[data-confirm]').addEventListener('click', () => { cleanup(); resolve(true); });
       back.addEventListener('click', (e) => { if (e.target === back) { cleanup(); resolve(false); } });
       back.querySelector('[data-confirm]').focus();
+    });
+  }
+
+  // Окно с полем ввода: возвращает текст или null, если отменили
+  function promptModal({ title, text = '', value = '', placeholder = '', maxLength = 120, confirmLabel = 'Сохранить' }) {
+    return new Promise((resolve) => {
+      const back = document.createElement('div'); back.className = 'modal-backdrop';
+      back.innerHTML = `
+        <form class="modal" role="dialog" aria-modal="true" novalidate>
+          <h3 class="modal-title">${escapeHtml(title)}</h3>
+          ${text ? `<p class="modal-text">${escapeHtml(text)}</p>` : ''}
+          <label class="prompt-field">
+            <textarea class="edit-textarea" maxlength="${maxLength}" rows="3" placeholder="${escapeHtml(placeholder)}">${escapeHtml(value)}</textarea>
+            <span class="prompt-count"></span>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn" data-cancel>Отмена</button>
+            <button type="submit" class="btn btn-primary">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </form>`;
+      win.appendChild(back);
+      const form = back.querySelector('form');
+      const ta = back.querySelector('textarea');
+      const count = back.querySelector('.prompt-count');
+      const syncCount = () => { count.textContent = `${ta.value.length} / ${maxLength}`; };
+      const done = (v) => { back.remove(); resolve(v); };
+      syncCount();
+      ta.addEventListener('input', syncCount);
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); done(null); }
+        else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+      });
+      back.querySelector('[data-cancel]').addEventListener('click', () => done(null));
+      back.addEventListener('click', (e) => { if (e.target === back) done(null); });
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const v = ta.value.trim();
+        if (!v) { ta.focus(); return; }
+        done(v);
+      });
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
     });
   }
 
@@ -7569,10 +7976,11 @@
       showFriendProfile(uid, personById(uid), back);
       return;
     }
-    if (e.target.closest('[data-group-wish-clear]')) {
-      if (groupDetailsId) await saveGroupWish(groupDetailsId, '');
-      return;
-    }
+    // ── желание группы: изменить / загадать / удалить ──
+    const gwEdit = e.target.closest('[data-gwish-edit]');
+    if (gwEdit) { await editGroupWish(gwEdit.dataset.gwishEdit); return; }
+    const gwDel = e.target.closest('[data-gwish-delete]');
+    if (gwDel) { await deleteGroupWish(gwDel.dataset.gwishDelete); return; }
     const matchSend = e.target.closest('[data-match-send]');
     if (matchSend) {
       matchSend.disabled = true;
@@ -7634,10 +8042,17 @@
     const wRm = e.target.closest('[data-wish-remove]');
     if (wRm) {
       const id = wRm.dataset.wishRemove;
-      const ok = await confirmModal({ title: 'Удалить желание?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
+      const ok = await confirmModal({ title: 'Удалить желание?', text: 'Облако исчезнет с карты. Это действие нельзя отменить.', confirmLabel: 'Удалить' });
       if (!ok) return;
-      await supabaseClient.from('wishes').delete().eq('id', id);
-      await loadWishesFromDB(); syncWishMarkers(); showWishesScreen();
+      const { error } = await supabaseClient.from('wishes').delete().eq('id', id);
+      if (error) { alert('Не удалось удалить желание: ' + error.message); return; }
+      await loadWishesFromDB(); refreshWishClouds(); showWishesScreen();
+      return;
+    }
+    const wMap = e.target.closest('[data-wish-map]');
+    if (wMap) {
+      const w = wishes.find((x) => x.id === wMap.dataset.wishMap);
+      if (w && Array.isArray(w.coords) && map2gis) { showMapApp(); map2gis.setCenter(w.coords); map2gis.setZoom(15); }
       return;
     }
 
