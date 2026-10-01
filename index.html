@@ -965,6 +965,16 @@
       box-shadow: inset 0 0 0 1px var(--win-line), 0 8px 24px var(--glass-shadow);
     }
     .user-profile-avatar canvas { display: block; width: 100%; height: 100%; }
+    /* Профиль друга: кнопка «Написать» по центру, 3D-аватар отдельной карточкой под ней (если есть фото) */
+    .friend-actions { display: flex; justify-content: center; }
+    .friend-actions .btn { min-width: 180px; padding: 12px 22px; }
+    .friend-avatar-card { display: grid; gap: 6px; }
+    .friend-avatar-stage {
+      height: 220px; border-radius: 22px; overflow: hidden;
+      background: radial-gradient(circle at 50% 70%, rgba(139, 115, 255, .22), transparent 65%), var(--field);
+      display: grid; place-items: center;
+    }
+    .friend-avatar-stage canvas { width: 220px; height: 220px; display: block; }
     .user-profile-avatar.no-3d {
       display: grid; place-items: center;
       background: linear-gradient(#8B73FF, #5A3DF0);
@@ -6564,14 +6574,24 @@
         const handle = '@' + (p.username || 'user');
         const initial = (name.charAt(0) || '?').toUpperCase();
 
+        // Есть фото — оно главное в шапке профиля, а 3D-аватар показываем ниже, под «Написать».
+        // Фото нет — в шапке 3D-аватар (или буква, если и аватара нет).
+        const photo = safeUrl(p.avatar);
+        const avatarCanvas = `<canvas id="friend-avatar-canvas" width="256" height="256"></canvas>`;
         let avatarHtml;
-        if (use3D) {
-          avatarHtml = `<div class="user-profile-avatar"><canvas id="friend-avatar-canvas" width="256" height="256"></canvas></div>`;
-        } else if (p.avatar) {
-          avatarHtml = `<div class="user-profile-avatar no-3d" style="background-image:url('${safeUrl(p.avatar)}')"></div>`;
+        if (photo) {
+          avatarHtml = `<div class="user-profile-avatar no-3d" style="background-image:url('${photo}')"></div>`;
+        } else if (use3D) {
+          avatarHtml = `<div class="user-profile-avatar">${avatarCanvas}</div>`;
         } else {
           avatarHtml = `<div class="user-profile-avatar no-3d">${escapeHtml(initial)}</div>`;
         }
+        const avatarBelow = photo && use3D
+          ? `<div class="friend-avatar-card">
+              <div class="user-profile-section-title">Аватар</div>
+              <div class="friend-avatar-stage">${avatarCanvas}</div>
+            </div>`
+          : '';
 
         winBody.innerHTML = `
           <div class="user-profile-view">
@@ -6581,16 +6601,21 @@
               <div class="user-profile-handle">${escapeHtml(handle)}</div>
               ${p.bio ? `<div class="profile-bio">${escapeHtml(p.bio)}</div>` : ''}
             </div>
-            <div class="edit-actions">
-              <button type="button" class="btn" id="friend-open-chat">Написать</button>
+            <div class="friend-actions">
+              <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
             </div>
+            ${avatarBelow}
           </div>`;
 
         if (use3D) {
           const canvas = winBody.querySelector('#friend-avatar-canvas');
           if (canvas) {
             const ok = renderAvatarToCanvas(canvas, 256, cfg);
-            if (!ok) {
+            if (!ok && photo) {
+              // аватар под кнопкой не отрисовался — просто убираем этот блок, фото уже в шапке
+              const card = winBody.querySelector('.friend-avatar-card');
+              if (card) card.remove();
+            } else if (!ok) {
               canvas.parentElement.classList.add('no-3d');
               canvas.parentElement.style.background = 'linear-gradient(#8B73FF,#5A3DF0)';
               canvas.parentElement.textContent = initial;
