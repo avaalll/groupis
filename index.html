@@ -1236,6 +1236,26 @@
       background: rgba(0,0,0,.18); color: inherit; font-weight: 600; text-decoration: none;
     }
     .chat-media-fallback:hover { background: rgba(0,0,0,.28); }
+    /* Карточка файла (PDF, документ, архив) */
+    .chat-file {
+      display: flex; align-items: center; gap: 10px;
+      min-width: 200px; max-width: 280px; padding: 8px 10px 8px 8px; border-radius: 11px;
+      background: rgba(0,0,0,.14); color: inherit; text-decoration: none; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; transition: background .15s;
+    }
+    .chat-file:hover { background: rgba(0,0,0,.22); }
+    .chat-msg.them .chat-file { background: rgba(120,128,160,.16); }
+    .chat-msg.them .chat-file:hover { background: rgba(120,128,160,.26); }
+    .chat-file-ico {
+      flex: none; width: 40px; height: 46px; border-radius: 8px;
+      display: grid; place-items: center; color: #fff;
+      font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+    }
+    .chat-file-main { display: grid; gap: 2px; min-width: 0; }
+    .chat-file-name { font-weight: 650; font-size: 13px; line-height: 1.25; word-break: break-word;
+      display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .chat-file-size { font-size: 11.5px; opacity: .75; }
 
     .chat-recbar {
       display: flex; align-items: center; gap: 8px;
@@ -5008,22 +5028,23 @@
   function normDmRow(r) {
     return { id: r.id, fromId: r.from_id, toId: r.to_id, groupId: null, matchId: null, authorName: null,
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, createdAt: r.created_at };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
   }
   function normGroupRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: r.group_id, matchId: null, authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, createdAt: r.created_at };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
   }
   // Совместный чат двух групп после match
   function normMatchRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: null, matchId: String(r.match_id), authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, createdAt: r.created_at };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
   }
 
   function chatPreviewText(m) {
     const labels = { image: '📷 Фото', video: '🎬 Видео', voice: '🎤 Голосовое сообщение', circle: '⭕ Видеосообщение' };
+    if (m.kind === 'file') return '📎 ' + (m.fileName || 'Файл');
     if (m.kind && m.kind !== 'text') return labels[m.kind] || 'Вложение';
     return (m.content || '').trim();
   }
@@ -5067,7 +5088,57 @@
         <span class="chat-circle-sound" aria-hidden="true">🔇</span>
       </div>`;
     }
+    if (m.kind === 'file') {
+      // Карточка файла: значок по расширению, имя, размер. Ссылку подставит hydrateChatMedia
+      const name = m.fileName || 'Файл';
+      const ext = fileExt(name);
+      const href = m.localUrl ? `href="${escapeHtml(m.localUrl)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
+      return `<a class="chat-file" ${href} target="_blank" rel="noopener" data-chat-file data-file-name="${escapeHtml(name)}">
+        <span class="chat-file-ico" style="background:${fileIconColor(ext)}">${escapeHtml((ext || 'file').slice(0, 4).toUpperCase())}</span>
+        <span class="chat-file-main">
+          <span class="chat-file-name">${escapeHtml(name)}</span>
+          <span class="chat-file-size">${m.fileSize ? escapeHtml(fmtFileSize(m.fileSize)) + ' · ' : ''}${isInlineViewable(ext) ? 'открыть' : 'скачать'}</span>
+        </span>
+      </a>`;
+    }
     return '';
+  }
+
+  /* ── Файлы (PDF, документы, архивы) ── */
+  // Исполняемые файлы и скрипты не принимаем — их могут подсунуть как «документ»
+  const BLOCKED_FILE_EXT = new Set(['exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'pif', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'ps1', 'jar', 'apk', 'app', 'dmg', 'sh', 'reg', 'lnk', 'hta', 'cpl']);
+  function fileExt(name) { const m = /\.([a-z0-9]{1,8})$/i.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
+  function fmtFileSize(b) {
+    if (b < 1024) return b + ' Б';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(b < 10240 ? 1 : 0) + ' КБ';
+    return (b / 1024 / 1024).toFixed(1) + ' МБ';
+  }
+  // Что браузер умеет показать сам — открываем во вкладке, остальное скачиваем с нормальным именем
+  function isInlineViewable(ext) { return ['pdf', 'txt', 'csv', 'json', 'md', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp3', 'mp4'].includes(ext); }
+  function fileIconColor(ext) {
+    if (ext === 'pdf') return 'linear-gradient(#FF6B5E,#C9302C)';
+    if (['doc', 'docx', 'rtf', 'odt', 'pages'].includes(ext)) return 'linear-gradient(#5B9BFF,#2B5FC9)';
+    if (['xls', 'xlsx', 'csv', 'ods', 'numbers'].includes(ext)) return 'linear-gradient(#4CD07A,#1E8A45)';
+    if (['ppt', 'pptx', 'odp', 'key'].includes(ext)) return 'linear-gradient(#FFA94D,#D9661F)';
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'linear-gradient(#B08BFF,#6A43C9)';
+    if (['txt', 'md', 'json', 'xml'].includes(ext)) return 'linear-gradient(#9AA6C8,#5C6690)';
+    return 'linear-gradient(#8B9AFF,#4A5FD6)';
+  }
+
+  // Скачать файл под его настоящим именем (в хранилище он лежит под служебным)
+  async function downloadChatFile(url, name) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blobUrl = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = blobUrl; a.download = name || 'file';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      console.warn('[chat file] download:', err);
+      window.open(url, '_blank', 'noopener');
+    }
   }
 
   function chatBubbleHtml(m) {
@@ -5088,7 +5159,8 @@
 
   async function hydrateChatMedia(root) {
     if (!root) return;
-    const els = [...root.querySelectorAll('[data-media-path]')].filter((el) => el.dataset.mediaPath && !el.getAttribute('src'));
+    const els = [...root.querySelectorAll('[data-media-path]')]
+      .filter((el) => el.dataset.mediaPath && !el.getAttribute(el.tagName === 'A' ? 'href' : 'src'));
     if (!els.length) return;
     const now = Date.now();
     const need = [...new Set(els.map((el) => el.dataset.mediaPath))].filter((p) => {
@@ -5105,6 +5177,7 @@
     for (const el of els) {
       const cached = mediaUrlCache.get(el.dataset.mediaPath);
       if (!cached) continue;
+      if (el.tagName === 'A') { el.href = cached.url; continue; }   // карточка файла
       // когда медиа загрузится, высота сообщения вырастет — держим ленту внизу
       el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); }, { once: true });
       if (el.tagName !== 'IMG') el.addEventListener('error', () => showMediaFallback(el, cached.url), { once: true });
@@ -5134,8 +5207,8 @@
         <div class="support-chat-body" id="chat-view-body">${rows}</div>
         <div class="chat-rec-preview" id="chat-rec-preview" hidden><video playsinline muted></video><span class="chat-rec-ring"></span></div>
         <form class="support-chat-form chat-composer" id="chat-composer">
-          <button type="button" class="chat-tool" data-chat-attach title="Фото или видео" aria-label="Прикрепить фото или видео">${ICON_CLIP}</button>
-          <input type="file" id="chat-file" accept="image/*,video/*" multiple hidden>
+          <button type="button" class="chat-tool" data-chat-attach title="Фото, видео или файл" aria-label="Прикрепить фото, видео или файл">${ICON_CLIP}</button>
+          <input type="file" id="chat-file" multiple hidden>
           <input class="support-chat-input" type="text" id="chat-text" placeholder="Сообщение…" maxlength="1000" autocomplete="off">
           <button type="button" class="chat-tool" data-chat-rec="voice" title="Голосовое сообщение" aria-label="Записать голосовое сообщение">${ICON_MIC}</button>
           <button type="button" class="chat-tool" data-chat-rec="circle" title="Видеосообщение" aria-label="Записать видеокружок">${ICON_CIRCLE}</button>
@@ -5207,17 +5280,19 @@
     })[baseMime(type)] || 'bin';
   }
 
-  async function insertChatRow(c, { kind, content, mediaPath, duration }) {
+  async function insertChatRow(c, { kind, content, mediaPath, duration, fileName, fileSize }) {
+    // имя и размер — только у файлов: так фото/голосовые работают и без миграции supabase_chat_files.sql
+    const fileCols = kind === 'file' ? { file_name: fileName || null, file_size: fileSize || null } : {};
     if (c.type === 'dm') {
       const row = { from_id: currentUser.id, to_id: c.peerId, content: content || '' };
       // Для текста шлём только старые поля — так текст работает и до выполнения миграции
-      if (kind !== 'text') Object.assign(row, { kind, media_path: mediaPath, duration: duration || null });
+      if (kind !== 'text') Object.assign(row, { kind, media_path: mediaPath, duration: duration || null }, fileCols);
       const { data, error } = await supabaseClient.from('dm_messages').insert(row).select().single();
       return { data: data ? normDmRow(data) : null, error };
     }
     const row = {
       user_id: currentUser.id, author_name: profile.name,
-      content: content || '', kind, media_path: mediaPath || null, duration: duration || null,
+      content: content || '', kind, media_path: mediaPath || null, duration: duration || null, ...fileCols,
     };
     if (c.type === 'match') {
       row.match_id = Number(c.matchId);
@@ -5229,18 +5304,21 @@
     return { data: data ? normGroupRow(data) : null, error };
   }
 
-  async function sendChatMessage({ kind = 'text', content = '', blob = null, duration = null }) {
+  async function sendChatMessage({ kind = 'text', content = '', blob = null, duration = null, fileName = null }) {
     const c = chat;
     if (!c || !currentUser) return;
     let mediaPath = null, localUrl = null;
+    const fileSize = kind === 'file' && blob ? blob.size : null;
     if (blob) {
-      mediaPath = `${chatMediaFolder(c)}/${currentUser.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extForMime(blob.type)}`;
+      // у документа берём его собственное расширение (в хранилище — служебное имя, настоящее — в file_name)
+      const ext = kind === 'file' ? (fileExt(fileName) || 'bin') : extForMime(blob.type);
+      mediaPath = `${chatMediaFolder(c)}/${currentUser.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       localUrl = URL.createObjectURL(blob);
     }
     const tmp = {
       id: 'tmp-' + Date.now() + Math.random().toString(36).slice(2, 6),
       fromId: currentUser.id, toId: c.peerId || null, groupId: c.groupId || null, matchId: c.matchId || null, authorName: profile.name,
-      content, kind, mediaPath, duration, localUrl, pending: true, createdAt: new Date().toISOString(),
+      content, kind, mediaPath, duration, fileName, fileSize, localUrl, pending: true, createdAt: new Date().toISOString(),
     };
     c.messages.push(tmp);
     if (chat === c) appendChatBubble(tmp);
@@ -5250,14 +5328,17 @@
           .upload(mediaPath, blob, { contentType: baseMime(blob.type) || 'application/octet-stream', upsert: false });
         if (upErr) throw upErr;
       }
-      const { data, error } = await insertChatRow(c, { kind, content, mediaPath, duration });
+      const { data, error } = await insertChatRow(c, { kind, content, mediaPath, duration, fileName, fileSize });
       if (error) throw error;
       if (data) { data.localUrl = localUrl; finalizeChatMessage(c, tmp.id, data); }
     } catch (err) {
-      console.warn('[chat] send:', err && err.message ? err.message : err);
+      const msg = err && err.message ? err.message : String(err);
+      console.warn('[chat] send:', msg);
       c.messages = c.messages.filter((x) => x.id !== tmp.id);
       if (chat === c) { const el = chatBubbleEl(tmp.id); if (el) el.remove(); }
-      alert('Не удалось отправить: ' + (err && err.message ? err.message : err));
+      // Документы требуют миграции: без неё хранилище не примет тип файла, а таблица — kind='file'
+      const needsSql = kind === 'file' && /mime|file_name|file_size|kind_check|check constraint/i.test(msg);
+      alert('Не удалось отправить: ' + msg + (needsSql ? '\n\nВыполните supabase_chat_files.sql в Supabase.' : ''));
     }
   }
 
@@ -5340,6 +5421,12 @@
       } else if (file.type.startsWith('video/')) {
         if (file.size > MAX_VIDEO_BYTES) { alert(`Видео «${file.name}» больше 50 МБ`); continue; }
         sendChatMessage({ kind: 'video', blob: file });
+      } else {
+        // Любой другой файл — PDF, документ, таблица, архив — уходит карточкой с именем и размером
+        if (BLOCKED_FILE_EXT.has(fileExt(file.name))) { alert(`Файл «${file.name}» нельзя отправить: исполняемые файлы и скрипты запрещены`); continue; }
+        if (file.size > MAX_VIDEO_BYTES) { alert(`Файл «${file.name}» больше 50 МБ`); continue; }
+        if (!file.size) { alert(`Файл «${file.name}» пустой`); continue; }
+        sendChatMessage({ kind: 'file', blob: file, fileName: file.name });
       }
     }
   }
@@ -6389,6 +6476,29 @@
     if (recBtn) { startChatRecording(recBtn.dataset.chatRec); return; }
     if (e.target.closest('[data-chat-rec-cancel]')) { stopChatRecording(true); return; }
     if (e.target.closest('[data-chat-rec-send]')) { stopChatRecording(false); return; }
+    const fileEl = e.target.closest('[data-chat-file]');
+    if (fileEl) {
+      const name = fileEl.dataset.fileName || 'file';
+      const path = fileEl.dataset.mediaPath;
+      const cached = path ? mediaUrlCache.get(path) : null;
+      const fresh = !path || (cached && cached.exp > Date.now());
+      // PDF и то, что браузер показывает сам, открывается во вкладке по обычной ссылке
+      if (fresh && fileEl.getAttribute('href') && isInlineViewable(fileExt(name))) return;
+      e.preventDefault();
+      let url = fresh ? fileEl.getAttribute('href') : null;
+      if (!url && path) {
+        // ссылка устарела (чат открыт больше часа) или ещё не подставлена — берём новую
+        const { data, error } = await supabaseClient.storage.from(CHAT_BUCKET).createSignedUrl(path, 3600);
+        if (error || !data) { alert('Не удалось открыть файл: ' + (error ? error.message : '')); return; }
+        url = data.signedUrl;
+        mediaUrlCache.set(path, { url, exp: Date.now() + 50 * 60 * 1000 });
+        fileEl.href = url;
+      }
+      if (!url) return;
+      if (isInlineViewable(fileExt(name))) window.open(url, '_blank', 'noopener');
+      else downloadChatFile(url, name);
+      return;
+    }
     const photoEl = e.target.closest('[data-open-photo]');
     if (photoEl && photoEl.src) { openPhotoViewer(photoEl.src); return; }
     const circleEl = e.target.closest('[data-circle]');
