@@ -1,7 +1,7 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.0.75';
+const VERSION = 'v1.0.76';
 const CACHE = `groupies-${VERSION}`;
 
 const APP_SHELL = [
