@@ -2171,11 +2171,10 @@
       transition: background-color .4s ease, border-color .4s ease, color .3s ease, fill .4s ease !important;
     }
 
-    /* ── Карта в палитре приложения: красим только слой карты, маркеры остаются как есть ── */
-    #map canvas { filter: grayscale(1) sepia(.16) hue-rotate(105deg) brightness(1.04) contrast(.9); transition: filter .45s ease; }
-    :root[data-theme="dark"] #map canvas { filter: grayscale(1) invert(.92) sepia(.22) hue-rotate(110deg) brightness(.85) contrast(.95); }
-    #map[data-map-style="native"] canvas, :root[data-theme="dark"] #map[data-map-style="native"] canvas { filter: saturate(.85); }
-    #map .user-avatar-wrap canvas { filter: none !important; }
+    /* ── Прокрутка внутри окна без полосы прокрутки: листается колесом, тачпадом и пальцем ── */
+    .window, .window * { scrollbar-width: none; }
+    .window ::-webkit-scrollbar, .window::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
     .scrim { background: rgba(6, 12, 10, .38); }
     :root[data-theme="dark"] .scrim { background: rgba(0, 0, 0, .5); }
 
@@ -4478,8 +4477,7 @@
   /* ═══════ ТЕМА ═══════ */
   // Начальную тему ставит скрипт в <head> (до отрисовки), здесь — переключение из настроек и смена системной
   const THEME_KEY = 'app.theme';
-  // Карта красится CSS-фильтром под палитру приложения. Если сделать свои стили в редакторе 2GIS
-  // (styles.2gis.com), их ID можно вписать сюда — тогда фильтр заменится на лёгкую подкраску.
+  // Карта — в стандартном стиле 2GIS. Свои стили из редактора 2GIS (styles.2gis.com) можно вписать сюда.
   const MAP_STYLE = { light: null, dark: null };
   const themeMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function getThemePref() { try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch { return 'auto'; } }
