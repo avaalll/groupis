@@ -2876,6 +2876,58 @@
     .auth-card .btn-ghost { color: #CABDFF; }
     .auth-avatar-preview { background: linear-gradient(145deg, #4FE3EE, #8A6CFF); }
 
+    /* ── 3D-аватар: сцена редактора, образцы, маркер на карте ── */
+    .avatar-editor { gap: 18px; grid-template-columns: minmax(0, 1fr); }
+    .avatar-stage {
+      height: 300px; border-radius: 26px; cursor: grab; touch-action: pan-y;
+      background:
+        radial-gradient(70% 55% at 50% 100%, rgba(var(--you-rgb), .16), transparent 70%),
+        radial-gradient(60% 60% at 50% 30%, rgba(var(--lime-rgb), .08), transparent 70%),
+        var(--field);
+      box-shadow: inset 0 0 0 1px var(--win-line);
+    }
+    .avatar-stage:active { cursor: grabbing; }
+    .avatar-stage-hint {
+      position: absolute; left: 16px; top: 14px; pointer-events: none;
+      font: 500 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); opacity: .75;
+      transition: opacity .4s ease;
+    }
+    .avatar-zoom {
+      position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border: 0; border-radius: 50%;
+      display: grid; place-items: center; cursor: pointer; color: var(--ink);
+      background: var(--glass); box-shadow: 0 8px 20px -8px var(--glass-shadow), inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--glass-edge);
+      transition: transform .4s var(--spring), background .2s, color .2s;
+    }
+    .avatar-zoom svg { width: 19px; height: 19px; }
+    .avatar-zoom:active { transform: scale(.86); }
+    .avatar-zoom[aria-pressed="true"] { background: var(--act); color: var(--act-ink); }
+    .avatar-controls { display: grid; gap: 16px; }
+    .avatar-row { gap: 9px; }
+    .avatar-swatch {
+      width: 34px; height: 34px; border: 0; border-radius: 50%;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .14);
+      transition: transform .4s var(--spring), box-shadow .2s;
+    }
+    .avatar-swatch[aria-pressed="true"] { transform: scale(1.06); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .14), 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
+    :root[data-theme="dark"] .avatar-swatch { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+    :root[data-theme="dark"] .avatar-swatch[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
+    .avatar-stage.is-touched .avatar-stage-hint { opacity: 0; }
+    .avatar-pill { border-radius: 999px; padding: 8px 15px; font-weight: 650; transition: background .2s, color .2s, transform .4s var(--spring); }
+    .avatar-pill:active, .avatar-swatch:active { transform: scale(.9); transition-duration: .08s; }
+    .user-avatar-wrap { width: 44px; height: 44px; }
+    .user-profile-avatar:not(.no-3d) { background: radial-gradient(circle at 50% 80%, rgba(var(--you-rgb), .2), transparent 70%), var(--field); }
+    /* выбор пола при регистрации — портреты аватаров */
+    .gender-opt .gender-ava {
+      width: 76px; height: 76px; border-radius: 50%; display: block;
+      background: radial-gradient(circle at 50% 75%, rgba(169, 140, 255, .28), rgba(255, 255, 255, .04) 72%);
+      transition: transform .4s var(--spring), box-shadow .25s;
+    }
+    .gender-opt[aria-pressed="true"] .gender-ava { transform: scale(1.06); box-shadow: 0 0 0 2px #A98CFF, 0 10px 26px -8px rgba(169, 140, 255, .6); }
+    @media (max-width: 640px) {
+      .avatar-stage { height: 260px; }
+      .gender-opt .gender-ava { width: 64px; height: 64px; }
+    }
+
     /* ── Телефоны ── */
     @media (max-width: 640px) {
       .menubar { height: 46px; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px)); }
@@ -3836,6 +3888,7 @@
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     groupMatches = []; groupMatchOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
     groupStats = new Map();
+    avatarConfig = defaultAvatarFor('male'); avatarConfigReady = false;
     syncPostMarkers(); syncWishMarkers(); updateBadge();
 
     document.body.classList.add('auth-locked');
@@ -4243,10 +4296,15 @@
         };
         unameEl.addEventListener('input', runCheck);
       } else if (step === 'gender') {
+        // вместо эмодзи — портреты аватаров: какой выберете, такой и появится на карте
+        const genderFace = (g, emoji) => {
+          const src = getAvatarSnapshotDataURL(defaultAvatarFor(g), 'bust');
+          return src ? `<img class="gender-ava" src="${src}" alt="" draggable="false">` : `<span class="gender-emoji">${emoji}</span>`;
+        };
         body.innerHTML = `
           <div class="gender-row" id="gender-row">
-            <button class="gender-opt" type="button" data-gender="male" aria-pressed="${draft.gender === 'male'}"><span class="gender-emoji">👨</span><span class="gender-label">Мужской</span></button>
-            <button class="gender-opt" type="button" data-gender="female" aria-pressed="${draft.gender === 'female'}"><span class="gender-emoji">👩</span><span class="gender-label">Женский</span></button>
+            <button class="gender-opt" type="button" data-gender="male" aria-pressed="${draft.gender === 'male'}">${genderFace('male', '👨')}<span class="gender-label">Мужской</span></button>
+            <button class="gender-opt" type="button" data-gender="female" aria-pressed="${draft.gender === 'female'}">${genderFace('female', '👩')}<span class="gender-label">Женский</span></button>
           </div>`;
         authCard.querySelectorAll('.gender-opt').forEach((b) => {
           b.addEventListener('click', () => {
@@ -4406,7 +4464,11 @@
           name: draft.name, username: draft.username,
           bio: authCard.querySelector('#reg-bio') ? authCard.querySelector('#reg-bio').value.trim() : '',
           avatar: draft.avatar || '',
+          gender: draft.gender, age: draft.age,
         }, draft.email);
+        // новый аккаунт — аватар по выбранному полу: мужская или женская фигура
+        avatarConfig = defaultAvatarFor(draft.gender);
+        saveAvatarConfig(avatarConfig);
 
         await enterAppAfterLogin();
       });
@@ -4421,6 +4483,7 @@
     if (openApp === null) showMapApp();   // на карте активна вкладка «Карта» — капсула панели встаёт на место
     // Данные грузятся по сети, пока камера летит к Земле (это не нагружает анимацию)
     const loading = Promise.all([
+      loadMyAvatarConfig(),
       loadPostsFromDB(),
       loadWishesFromDB(),
       loadGroupsFromDB(),
@@ -5442,12 +5505,10 @@
   async function upsertMyLocation(coords) {
     if (!currentUser || !Array.isArray(coords) || coords.length !== 2) return;
     const [lon, lat] = coords;
-    const { error } = await supabaseClient.from('user_locations').upsert({
-      user_id: currentUser.id,
-      lat, lon,
-      avatar_config: avatarConfig,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
+    const row = { user_id: currentUser.id, lat, lon, updated_at: new Date().toISOString() };
+    // аватар отправляем, только когда свой уже загружен — иначе затрём сохранённый на сервере
+    if (avatarConfigReady) row.avatar_config = avatarConfig;
+    const { error } = await supabaseClient.from('user_locations').upsert(row, { onConflict: 'user_id' });
     if (error) console.warn('[user_locations] upsert:', error.message);
   }
 
@@ -5562,91 +5623,599 @@
   }
   applyTheme();
 
-  /* ═══════ 3D-АВАТАР ═══════ */
-  const AVATAR_KEY = 'avatar.3d.v1';
-  const AVATAR_SKINS = { light:{base:0xF1C9A5}, tan:{base:0xD9A276}, brown:{base:0xA66A44}, dark:{base:0x6B3E27} };
-  // Одежда: первые три — в цветах «Призмы» (графит, ирис, лёд), дальше прежние
-  const AVATAR_CLOTHES = { ink:{body:0x2A2A33,legs:0x15151A}, iris:{body:0x6E58E0,legs:0x22203A}, ice:{body:0x3FB5C9,legs:0x1D2440}, rust:{body:0x8A4A2F,legs:0x3F2C24}, olive:{body:0x4A6B33,legs:0x2A1E16}, amber:{body:0xD9A84A,legs:0x3F2C24}, dark:{body:0x3F2C24,legs:0x1F1611} };
-  const AVATAR_HAIRS = { none:{color:null,style:'none'}, short:{color:0x3F2C24,style:'short'}, long:{color:0x5C3A24,style:'long'}, blond:{color:0xD9A84A,style:'short'}, ginger:{color:0xB85C2B,style:'long'} };
-  const DEFAULT_AVATAR = { skin:'tan', clothes:'ink', hair:'short' };
+  /* ═══════ 3D-АВАТАР ═══════
+     Фигура собирается из простых тел — сфер, «капсул» и тел вращения. Мужская и женская фигуры
+     различаются пропорциями (плечи, талия, бёдра, черты лица), у каждой свои причёски и одежда.
+     Цвета задаются в sRGB и переводятся в линейное пространство, а картинка выводится в sRGB —
+     так кожа и ткань освещаются естественно, без серого налёта. Фигура по умолчанию — по полу из профиля. */
+  const AVATAR_KEY = 'avatar.3d.v2';
+  const AVATAR_SKINS = {
+    porcelain: { base: 0xF6DBC8, label: 'Фарфоровый' },
+    light:     { base: 0xEEC5A3, label: 'Светлый' },
+    tan:       { base: 0xD8A47C, label: 'Средний' },
+    olive:     { base: 0xBA8A5F, label: 'Оливковый' },
+    brown:     { base: 0x8E5B3C, label: 'Смуглый' },
+    dark:      { base: 0x5B3927, label: 'Тёмный' },
+  };
+  const AVATAR_HAIR_COLORS = {
+    black:    { hex: 0x1E1815, label: 'Чёрные' },
+    espresso: { hex: 0x3D2A1E, label: 'Тёмно-каштановые' },
+    chestnut: { hex: 0x704529, label: 'Каштановые' },
+    blond:    { hex: 0xDAB878, label: 'Блонд' },
+    ginger:   { hex: 0xB6562C, label: 'Рыжие' },
+    platinum: { hex: 0xE6E0D6, label: 'Платиновые' },
+    iris:     { hex: 0x8E78EC, label: 'Ирис' },
+  };
+  // Одежда: цвет верха и низа. Первые — в цветах «Призмы», дальше прежние
+  const AVATAR_CLOTHES = {
+    ink:   { body: 0x2A2A33, legs: 0x15151A, label: 'Графит' },
+    iris:  { body: 0x6E58E0, legs: 0x22203A, label: 'Ирис' },
+    ice:   { body: 0x3FB5C9, legs: 0x1D2440, label: 'Лёд' },
+    rose:  { body: 0xE48DAF, legs: 0x2B2C40, label: 'Роза' },
+    white: { body: 0xF0EFEB, legs: 0x34466B, label: 'Белый и деним' },
+    rust:  { body: 0x8A4A2F, legs: 0x3F2C24, label: 'Ржавчина' },
+    olive: { body: 0x4A6B33, legs: 0x2A1E16, label: 'Олива' },
+    amber: { body: 0xD9A84A, legs: 0x3F2C24, label: 'Янтарь' },
+    dark:  { body: 0x3F2C24, legs: 0x1F1611, label: 'Шоколад' },
+  };
+  const AVATAR_HAIR_STYLES = {
+    male:   { none: 'Нет', buzz: 'Ёжик', short: 'Короткая', quiff: 'Кок', curly: 'Кудри' },
+    female: { long: 'Длинные', bob: 'Каре', ponytail: 'Хвост', bun: 'Пучок', curly: 'Кудри' },
+  };
+  const AVATAR_OUTFITS = {
+    male:   { tee: 'Футболка', hoodie: 'Худи', jacket: 'Куртка' },
+    female: { tee: 'Топ', dress: 'Платье', hoodie: 'Худи' },
+  };
+  // Смена фигуры: причёска и одежда, которых у другой фигуры нет, заменяются на похожие
+  const AVATAR_HAIR_SWAP = {
+    male:   { long: 'short', bob: 'short', ponytail: 'short', bun: 'short' },
+    female: { none: 'bob', buzz: 'bob', short: 'bob', quiff: 'bob' },
+  };
+  const AVATAR_OUTFIT_SWAP = { male: { dress: 'tee' }, female: { jacket: 'tee' } };
+  // Старый формат: hair = none | short | long | blond | ginger — стиль и цвет вместе
+  const AVATAR_LEGACY_HAIR = {
+    none: ['none', 'espresso'], short: ['short', 'espresso'], long: ['long', 'chestnut'],
+    blond: ['short', 'blond'], ginger: ['long', 'ginger'],
+  };
 
-  function loadAvatarConfig() {
-    try { const raw = localStorage.getItem(AVATAR_KEY); if (!raw) return { ...DEFAULT_AVATAR }; return { ...DEFAULT_AVATAR, ...JSON.parse(raw) }; }
-    catch { return { ...DEFAULT_AVATAR }; }
+  function defaultAvatarFor(gender) {
+    return gender === 'female'
+      ? { gender: 'female', skin: 'light', clothes: 'rose', hair: 'long', hairColor: 'chestnut', outfit: 'dress' }
+      : { gender: 'male', skin: 'tan', clothes: 'ink', hair: 'short', hairColor: 'espresso', outfit: 'tee' };
   }
-  function saveAvatarConfig(a) { try { localStorage.setItem(AVATAR_KEY, JSON.stringify(a)); } catch {} }
-  let avatarConfig = loadAvatarConfig();
 
-  function buildAvatarGroup(THREE, cfg) {
-    const skin = AVATAR_SKINS[cfg.skin] || AVATAR_SKINS.tan;
-    const clothes = AVATAR_CLOTHES[cfg.clothes] || AVATAR_CLOTHES.ink;
-    const hair = AVATAR_HAIRS[cfg.hair] || AVATAR_HAIRS.short;
+  // Любая конфигурация (своя, чужая, старого формата) → полная и допустимая для своей фигуры
+  function normalizeAvatar(raw, genderHint) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const gender = src.gender === 'female' || src.gender === 'male' ? src.gender : (genderHint === 'female' ? 'female' : 'male');
+    const cfg = defaultAvatarFor(gender);
+    if (AVATAR_SKINS[src.skin]) cfg.skin = src.skin;
+    if (AVATAR_CLOTHES[src.clothes]) cfg.clothes = src.clothes;
+    let hair = src.hair, color = src.hairColor;
+    if (!AVATAR_HAIR_COLORS[color] && AVATAR_LEGACY_HAIR[hair]) [hair, color] = AVATAR_LEGACY_HAIR[hair];
+    hair = AVATAR_HAIR_STYLES[gender][hair] ? hair : AVATAR_HAIR_SWAP[gender][hair];
+    if (hair) cfg.hair = hair;
+    if (AVATAR_HAIR_COLORS[color]) cfg.hairColor = color;
+    const outfit = AVATAR_OUTFITS[gender][src.outfit] ? src.outfit : AVATAR_OUTFIT_SWAP[gender][src.outfit];
+    if (outfit) cfg.outfit = outfit;
+    return cfg;
+  }
+
+  // Аватар хранится по аккаунту: у разных людей на одном устройстве — свои
+  function avatarStoreKey(uid) { return AVATAR_KEY + ':' + (uid || 'guest'); }
+  function loadLocalAvatar(uid) {
+    try { const raw = localStorage.getItem(avatarStoreKey(uid)); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+  function saveAvatarConfig(a) { try { localStorage.setItem(avatarStoreKey(currentUser && currentUser.id), JSON.stringify(a)); } catch {} }
+  let avatarConfig = defaultAvatarFor('male');
+  // Пока свой аватар не загружен, на сервер его не отправляем — иначе затрём сохранённый
+  let avatarConfigReady = false;
+
+  /* Свой аватар после входа: сначала тот, что сохранён на сервере (виден друзьям), потом — на этом
+     устройстве, иначе — новый по полу из профиля. Старая конфигурация без пола получает фигуру по профилю. */
+  async function loadMyAvatarConfig() {
+    if (!currentUser) return;
+    const uid = currentUser.id;
+    let raw = null;
+    try {
+      const { data, error } = await supabaseClient.from('user_locations').select('avatar_config').eq('user_id', uid).maybeSingle();
+      if (error) console.warn('[avatar] load:', error.message);
+      raw = data && data.avatar_config;
+    } catch (err) { console.warn('[avatar] load:', err); }
+    if (!currentUser || currentUser.id !== uid) return;
+    if (!raw || typeof raw !== 'object') raw = loadLocalAvatar(uid);
+    avatarConfig = normalizeAvatar(raw, profile.gender);
+    avatarConfigReady = true;
+    saveAvatarConfig(avatarConfig);
+    if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); upsertMyLocation(lastUserLocation); }
+  }
+
+  // Пропорции фигур (метры, ступни на y = 0). torso — профиль тела вращения: [радиус, высота]
+  function avatarProportions(gender) {
+    return gender === 'female' ? {
+      headY: 1.655, headR: 0.138, headScale: [0.88, 0.98, 0.96], chin: [0.3, 0.15],
+      neckR: 0.044, shoulderY: 1.405, shoulderX: 0.198, wristOut: 0.085, legX: 0.088, hipY: 0.9,
+      thigh: 0.088, knee: 0.058, ankle: 0.04, armR: [0.047, 0.039, 0.032], hand: 0.85,
+      torso: [[0, 0.84], [0.165, 0.85], [0.212, 0.9], [0.2, 0.98], [0.156, 1.1], [0.163, 1.19], [0.178, 1.27], [0.172, 1.35], [0.13, 1.42], [0.06, 1.465], [0, 1.47]],
+      torsoZ: 0.68, waistY: 1.1, split: 1.02, bustY: 1.262,
+      eyeX: 0.315, eyeR: 0.172, browW: 0.0035, noseK: 0.86,
+    } : {
+      headY: 1.705, headR: 0.146, headScale: [0.9, 1.0, 0.97], chin: [0.2, 0.2],
+      neckR: 0.057, shoulderY: 1.45, shoulderX: 0.238, wristOut: 0.06, legX: 0.1, hipY: 0.92,
+      thigh: 0.09, knee: 0.066, ankle: 0.05, armR: [0.058, 0.048, 0.04], hand: 1,
+      torso: [[0, 0.86], [0.17, 0.87], [0.2, 0.92], [0.196, 1.02], [0.19, 1.12], [0.204, 1.24], [0.222, 1.34], [0.214, 1.42], [0.15, 1.48], [0.07, 1.51], [0, 1.515]],
+      torsoZ: 0.66, waistY: 1.12, split: 1.0, bustY: 0,
+      eyeX: 0.33, eyeR: 0.16, browW: 0.0068, noseK: 1,
+    };
+  }
+
+  // «Капсула» с разными радиусами концов: от y = 0 (радиус r0) до y = len (радиус r1)
+  function capsuleGeo(THREE, r0, r1, len, seg = 16) {
+    const pts = [], n = 6;
+    for (let i = 0; i <= n; i++) { const a = -Math.PI / 2 + (i / n) * (Math.PI / 2); pts.push(new THREE.Vector2(Math.cos(a) * r0, Math.sin(a) * r0)); }
+    for (let i = 0; i <= n; i++) { const a = (i / n) * (Math.PI / 2); pts.push(new THREE.Vector2(Math.cos(a) * r1, len + Math.sin(a) * r1)); }
+    pts[0].x = 0; pts[pts.length - 1].x = 0;
+    return new THREE.LatheGeometry(pts, seg);
+  }
+  function profileRadius(pts, y) {
+    if (y <= pts[0][1]) return pts[0][0];
+    for (let i = 1; i < pts.length; i++) {
+      const [r0, y0] = pts[i - 1], [r1, y1] = pts[i];
+      if (y <= y1) return r0 + (r1 - r0) * ((y - y0) / ((y1 - y0) || 1));
+    }
+    return pts[pts.length - 1][0];
+  }
+  // Кусок профиля между y0 и y1 — с точками ровно на концах
+  function profileRange(pts, y0, y1) {
+    const out = [[profileRadius(pts, y0), y0]];
+    for (const p of pts) if (p[1] > y0 + 1e-4 && p[1] < y1 - 1e-4) out.push(p);
+    out.push([profileRadius(pts, y1), y1]);
+    return out;
+  }
+  // Детерминированный «шум» — причёска одинаковая при каждой отрисовке
+  function avatarRnd(i) { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+
+  // После деформации сферы нормали на её шве и на полюсах усредняем — иначе виден стык
+  function smoothSphereNormals(geo, ws, hs, bottomPole = false) {
+    const n = geo.attributes.normal;
+    const avg = (ids) => {
+      const s = ids.reduce((a, k) => [a[0] + n.getX(k), a[1] + n.getY(k), a[2] + n.getZ(k)], [0, 0, 0]);
+      const l = Math.hypot(s[0], s[1], s[2]) || 1;
+      ids.forEach((k) => n.setXYZ(k, s[0] / l, s[1] / l, s[2] / l));
+    };
+    for (let iy = 0; iy <= hs; iy++) avg([iy * (ws + 1), iy * (ws + 1) + ws]);
+    avg(Array.from({ length: ws + 1 }, (_, k) => k));
+    if (bottomPole) avg(Array.from({ length: ws + 1 }, (_, k) => hs * (ws + 1) + k));
+  }
+
+  function buildAvatarGroup(THREE, rawCfg) {
+    const cfg = normalizeAvatar(rawCfg);
+    const fem = cfg.gender === 'female';
+    const P = avatarProportions(cfg.gender);
+    const R = P.headR, HS = P.headScale;
+    const dress = cfg.outfit === 'dress', hoodie = cfg.outfit === 'hoodie', jacket = cfg.outfit === 'jacket';
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const UP = V(0, 1, 0);
+    const mix = (a, b, k) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
+    const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+    const mat = (hex, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color: lin(hex), roughness, metalness: 0, ...extra });
+
+    const skinHex = AVATAR_SKINS[cfg.skin].base;
+    const hairHex = AVATAR_HAIR_COLORS[cfg.hairColor].hex;
+    const cloth = AVATAR_CLOTHES[cfg.clothes];
+    const lightHair = cfg.hairColor === 'blond' || cfg.hairColor === 'platinum';
+
+    // кожа чуть «светится» тёплым изнутри — так она выглядит живой, а не пластиковой
+    const skin = mat(skinHex, 0.5, { emissive: lin(mix(skinHex, 0xFF5A3C, 0.35)), emissiveIntensity: 0.07 });
+    const top = mat(cloth.body, 0.82);
+    const topOpen = mat(cloth.body, 0.82, { side: THREE.DoubleSide });
+    const pants = mat(cloth.legs, 0.9);
+    const hairM = mat(hairHex, 0.46, { side: THREE.DoubleSide });
+    const browM = mat(mix(hairHex, 0x2A1D16, lightHair ? 0.45 : 0.25), 0.7);
+    const lipM = mat(mix(skinHex, fem ? 0xC4475F : 0xA0504A, fem ? 0.58 : 0.36), 0.42);
+    const eyeWhite = mat(0xF6F3EF, 0.32), irisM = mat(fem ? 0x5A3A26 : 0x4A3022, 0.28), pupilM = mat(0x0E0B0A, 0.2);
+    const shineM = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+    const goldM = mat(0xE3BE70, 0.28, { metalness: 0.7 });
+
     const group = new THREE.Group();
-    const skinMat = new THREE.MeshStandardMaterial({ color: skin.base, roughness: 0.55 });
-    const clothMat = new THREE.MeshStandardMaterial({ color: clothes.body, roughness: 0.85 });
-    const legsMat = new THREE.MeshStandardMaterial({ color: clothes.legs, roughness: 0.85 });
-    const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = true; group.add(mesh); return mesh; };
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 32, 24), skinMat), 0, 1.55, 0);
-    const earGeo = new THREE.SphereGeometry(0.07, 16, 12);
-    add(new THREE.Mesh(earGeo, skinMat), -0.32, 1.55, 0);
-    add(new THREE.Mesh(earGeo, skinMat),  0.32, 1.55, 0);
-    const eyeGeo = new THREE.SphereGeometry(0.045, 16, 12);
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1F1611, roughness: 0.25 });
-    add(new THREE.Mesh(eyeGeo, eyeMat), -0.12, 1.58, 0.29);
-    add(new THREE.Mesh(eyeGeo, eyeMat),  0.12, 1.58, 0.29);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.12, 16), skinMat), 0, 1.28, 0);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.75, 24), clothMat), 0, 0.85, 0);
-    const shoulderGeo = new THREE.SphereGeometry(0.17, 20, 16);
-    add(new THREE.Mesh(shoulderGeo, clothMat), -0.34, 1.13, 0);
-    add(new THREE.Mesh(shoulderGeo, clothMat),  0.34, 1.13, 0);
-    const armGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.7, 16);
-    add(new THREE.Mesh(armGeo, clothMat), -0.42, 0.75, 0).rotation.z = 0.12;
-    add(new THREE.Mesh(armGeo, clothMat),  0.42, 0.75, 0).rotation.z = -0.12;
-    const handGeo = new THREE.SphereGeometry(0.09, 16, 12);
-    add(new THREE.Mesh(handGeo, skinMat), -0.45, 0.4, 0);
-    add(new THREE.Mesh(handGeo, skinMat),  0.45, 0.4, 0);
-    const legGeo = new THREE.CylinderGeometry(0.12, 0.11, 0.45, 16);
-    add(new THREE.Mesh(legGeo, legsMat), -0.14, 0.23, 0);
-    add(new THREE.Mesh(legGeo, legsMat),  0.14, 0.23, 0);
-    const shoeGeo = new THREE.BoxGeometry(0.2, 0.1, 0.32);
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1F1611, roughness: 0.9 });
-    add(new THREE.Mesh(shoeGeo, shoeMat), -0.14, 0.05, 0.04);
-    add(new THREE.Mesh(shoeGeo, shoeMat),  0.14, 0.05, 0.04);
-    if (hair.color) {
-      const hairMat = new THREE.MeshStandardMaterial({ color: hair.color, roughness: 0.8 });
-      add(new THREE.Mesh(new THREE.SphereGeometry(0.335, 32, 24, 0, Math.PI * 2, 0, Math.PI / 1.8), hairMat), 0, 1.55, 0);
-      if (hair.style === 'long') {
-        add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.5, 20, 1, true), hairMat), 0, 1.32, -0.05);
+    const add = (parent, geo, m, pos, scale, rot) => {
+      const mesh = new THREE.Mesh(geo, m);
+      if (pos) mesh.position.copy(pos);
+      if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
+      if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+      parent.add(mesh);
+      return mesh;
+    };
+    const ball = (r, w = 24, h = 16) => new THREE.SphereGeometry(r, w, h);
+    const limb = (parent, a, b, r0, r1, m, seg = 16) => {
+      const d = V(0, 0, 0).subVectors(b, a);
+      const mesh = new THREE.Mesh(capsuleGeo(THREE, r0, r1, d.length(), seg), m);
+      mesh.position.copy(a);
+      mesh.quaternion.setFromUnitVectors(UP, d.normalize());
+      parent.add(mesh);
+      return mesh;
+    };
+    // шов тела вращения — сзади (phiStart = π), чтобы спереди не было видно стыка
+    const lathe = (parent, pts, m, zScale = 1, inflate = 0, phiStart = Math.PI, phiLen = Math.PI * 2) => {
+      const g = new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r > 0 ? r + inflate : 0, y)), 44, phiStart, phiLen);
+      const mesh = new THREE.Mesh(g, m);
+      mesh.scale.z = zScale;
+      parent.add(mesh);
+      return mesh;
+    };
+    const ring = (parent, r, tube, y, m, zScale = 1) =>
+      add(parent, new THREE.TorusGeometry(r, tube, 8, 44), m, V(0, y, 0), [1, zScale, 1], [Math.PI / 2, 0, 0]);
+
+    /* ── Туловище: низ — брюки (у платья — та же ткань), верх — одежда чуть поверх ── */
+    const T = P.torso, yBot = T[0][1], yTop = T[T.length - 1][1];
+    const bulk = hoodie ? 0.014 : 0.005;
+    const frontZ = (y, extra = 0) => (profileRadius(T, y) + extra) * P.torsoZ;
+    lathe(group, profileRange(T, yBot, P.split + 0.015), dress ? top : pants, P.torsoZ);
+    const shirt = jacket ? mat(0xF1EFEA, 0.85) : top;
+    const chest = lathe(group, profileRange(T, P.split - 0.03, yTop), shirt, P.torsoZ, bulk);
+    ring(group, profileRadius(T, P.split - 0.03) + bulk, hoodie ? 0.014 : 0.008, P.split - 0.03, shirt, P.torsoZ);
+    if (fem) {
+      // женский силуэт: грудь — плавный изгиб самой ткани спереди, без отдельных форм
+      const amp = (hoodie ? 0.018 : 0.028) / P.torsoZ;
+      const pos = chest.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        if (z <= 0) continue;
+        const r = Math.hypot(x, z) || 1;
+        const lobes = Math.exp(-(((x - 0.068) / 0.052) ** 2)) + Math.exp(-(((x + 0.068) / 0.052) ** 2));
+        const dy = (y - P.bustY) / (y < P.bustY ? 0.045 : 0.065);
+        pos.setZ(i, z + amp * Math.min(1, lobes) * Math.exp(-dy * dy) * (z / r) ** 2);
+      }
+      chest.geometry.computeVertexNormals();
+    }
+    if (!fem && !hoodie) ring(group, P.neckR + 0.013, 0.011, yTop - 0.024, shirt);   // круглый ворот
+    if (hoodie) {
+      add(group, new THREE.TorusGeometry(P.neckR + 0.05, fem ? 0.03 : 0.036, 10, 28), top, V(0, P.shoulderY + 0.03, -0.03), [1, 0.8, 1], [Math.PI / 2 - 0.5, 0, 0]);
+      const py = P.split + 0.075;
+      add(group, ball(0.09), mat(mix(cloth.body, 0x000000, 0.14), 0.85), V(0, py, frontZ(py, bulk) - 0.024), [fem ? 1.15 : 1.35, 0.55, 0.32]);
+      const cord = mat(0xF3F1EC, 0.6);
+      for (const s of [-1, 1]) {
+        const a = V(s * 0.03, P.shoulderY - 0.005, frontZ(P.shoulderY - 0.005, bulk) + 0.004);
+        const b = V(s * 0.034, P.shoulderY - 0.12, frontZ(P.shoulderY - 0.12, bulk) + 0.004);
+        limb(group, a, b, 0.0045, 0.0045, cord, 6);
+        add(group, ball(0.0075, 10, 8), cord, b);
+      }
+    }
+    if (jacket) {
+      // расстёгнутая куртка поверх белой футболки: оболочка с разрезом спереди, лацканы и воротник
+      lathe(group, profileRange(T, P.split - 0.06, yTop - 0.014), topOpen, P.torsoZ, 0.02, Math.PI * 0.16, Math.PI * 1.68);
+      for (const s of [-1, 1]) {
+        const ly = P.shoulderY - 0.085;
+        add(group, new THREE.BoxGeometry(0.045, 0.16, 0.012), top, V(s * 0.07, ly, frontZ(ly, 0.02) + 0.004), null, [-0.18, 0, s * 0.36]);
+      }
+      add(group, new THREE.TorusGeometry(P.neckR + 0.03, 0.017, 8, 28, Math.PI * 1.3), top, V(0, yTop - 0.03, -0.004), null, [-Math.PI / 2, 0, -0.15 * Math.PI]);
+    }
+    if (dress) {
+      // юбка-«колокол» до колена и тонкий пояс
+      lathe(group, [[0.152, P.waistY + 0.01], [0.19, 1.02], [0.229, 0.9], [0.258, 0.73], [0.279, 0.565], [0.272, 0.54], [0.258, 0.535]], topOpen, 0.8);
+      ring(group, profileRadius(T, P.waistY) + 0.011, 0.011, P.waistY, mat(mix(cloth.body, 0x000000, 0.3), 0.6), P.torsoZ);
+    }
+
+    /* ── Руки ── */
+    const longSleeve = hoodie || jacket;
+    const [ra, re, rw] = P.armR;
+    for (const s of [-1, 1]) {
+      const sh = V(s * P.shoulderX, P.shoulderY - 0.035, 0);
+      const el = V(s * (P.shoulderX + 0.032), P.shoulderY - 0.31, -0.022);
+      const wr = V(s * (P.shoulderX + P.wristOut), P.shoulderY - 0.565, 0.03);
+      add(group, ball(ra + (longSleeve ? 0.012 : 0.009)), top, sh, [1, 0.9, 0.92]);
+      if (longSleeve) {
+        limb(group, sh, el, ra + 0.01, re + 0.01, top);
+        limb(group, el, wr, re + 0.01, rw + 0.012, top);
+      } else {
+        limb(group, sh, el, ra, re, skin);
+        limb(group, el, wr, re, rw, skin);
+        limb(group, sh, sh.clone().lerp(el, 0.46), ra + 0.009, ra + 0.006, top);   // короткий рукав
+      }
+      const dir = V(0, 0, 0).subVectors(wr, el).normalize();
+      const hc = wr.clone().addScaledVector(dir, 0.052 * P.hand);
+      const hand = add(group, ball(0.046 * P.hand, 20, 14), skin, hc, [0.8, 1.2, 0.56]);
+      hand.quaternion.setFromUnitVectors(UP, dir);
+      add(group, ball(0.016 * P.hand, 12, 8), skin, hc.clone().add(V(-s * 0.004, 0.014, 0.026 * P.hand)), [0.9, 1.4, 0.9]);
+    }
+
+    /* ── Ноги и обувь ── */
+    for (const s of [-1, 1]) {
+      const hip = V(s * P.legX, P.hipY, 0), knee = V(s * P.legX * 0.9, 0.5, 0.014), ank = V(s * P.legX * 0.84, 0.115, -0.004);
+      const legM = dress ? skin : pants;
+      const kneeR = dress ? P.knee : P.knee + (fem ? 0.004 : 0.01);
+      const ankR = dress ? P.ankle : P.ankle + (fem ? 0.004 : 0.012);
+      limb(group, hip, knee, P.thigh + (dress ? -0.006 : 0.004), kneeR, legM);
+      limb(group, knee, ank, kneeR, ankR, legM);
+      const sz = fem ? 0.84 : 1;
+      const upper = fem ? (dress ? 0x2B2228 : 0xF1EEE9) : 0x2B2C31;
+      const sole = fem ? (dress ? 0x1A1518 : 0xDAD4CC) : 0xF3F1EC;
+      add(group, ball(0.07 * sz), mat(upper, 0.6), V(ank.x, 0.055 * sz + 0.004, 0.04 * sz), [0.78, 0.6, 1.5]);
+      add(group, ball(0.07 * sz), mat(sole, 0.75), V(ank.x, 0.02, 0.042 * sz), [0.85, 0.28, 1.56]);
+    }
+
+    /* ── Шея и голова ── */
+    limb(group, V(0, yTop - 0.06, -0.006), V(0, P.headY - 0.075, 0.004), P.neckR, P.neckR * 0.94, skin);
+    const head = new THREE.Group();
+    head.position.set(0, P.headY, 0.008);
+    group.add(head);
+    group.userData.head = head;
+    /* Голова — одна плавная форма без швов: сфера, нижняя половина которой сужается к подбородку
+       (у женской фигуры — сильнее, лицо уже и мягче), вытягивается вниз и чуть выдвигается вперёд. */
+    const [KX, KY] = P.chin, KZ = 0.1, KF = 0.1;
+    const headGeo = new THREE.SphereGeometry(R, 48, 36);
+    const hp = headGeo.attributes.position;
+    const deformHead = (x, y, z) => {
+      if (y >= 0) return [x, y, z];
+      const t = -y / R;
+      return [x * (1 - KX * t * Math.sqrt(t)), y * (1 + KY * t), z * (1 - KZ * t * (z < 0 ? 2 : 0.4)) + KF * R * t];
+    };
+    for (let i = 0; i < hp.count; i++) {
+      const p = deformHead(hp.getX(i), hp.getY(i), hp.getZ(i));
+      hp.setXYZ(i, p[0], p[1], p[2]);
+    }
+    headGeo.computeVertexNormals();
+    smoothSphereNormals(headGeo, 48, 36, true);
+    add(head, headGeo, skin, null, HS);
+    // глубина лица в точке (x, y) — та же формула деформации, решённая обратно
+    const faceZ = (x, y) => {
+      const ys = y / HS[1];
+      const y0 = ys < 0 ? (1 - Math.sqrt(1 - 4 * (KY / R) * ys)) / (2 * KY / R) : ys;
+      const t = y0 < 0 ? -y0 / R : 0;
+      const x0 = x / HS[0] / (1 - KX * t * Math.sqrt(t));
+      const q = R * R - x0 * x0 - y0 * y0;
+      return q > 0 ? (Math.sqrt(q) * (1 - KZ * t * 0.4) + KF * R * t) * HS[2] : 0;
+    };
+    for (const s of [-1, 1]) {
+      add(head, ball(R * 0.25, 16, 12), skin, V(s * R * HS[0] * 0.97, -R * 0.05, -R * 0.05), [0.42, 0.8, 0.62], [0, s * 0.35, 0]);
+      if (fem) add(head, ball(0.0075, 10, 8), goldM, V(s * R * HS[0] * 0.99, -R * 0.33, -R * 0.03));
+    }
+
+    // глаза: белок, радужка, зрачок, блик и верхнее веко
+    const er = R * P.eyeR, ey = R * 0.07;
+    for (const s of [-1, 1]) {
+      const x = s * R * P.eyeX, z0 = faceZ(x, ey) - er * 0.25;
+      add(head, ball(er, 20, 14), eyeWhite, V(x, ey, z0), [1, 0.78, 0.55]);
+      const front = z0 + er * 0.55, ir = er * 0.56;
+      add(head, ball(ir, 16, 12), irisM, V(x, ey - er * 0.04, front - ir * 0.5 + 0.0012), [1, 1, 0.5]);
+      add(head, ball(ir * 0.5, 12, 8), pupilM, V(x, ey - er * 0.04, front - ir * 0.25 + 0.0022), [1, 1, 0.5]);
+      add(head, ball(ir * 0.26, 8, 6), shineM, V(x + ir * 0.35, ey + ir * 0.3, front + 0.003));
+      add(head, new THREE.SphereGeometry(er * 1.1, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.32), skin, V(x, ey, z0), [1, 0.8, 0.58], [0.22, 0, 0]);
+      if (fem) {
+        add(head, new THREE.TorusGeometry(er * 1.06, 0.0021, 6, 18, Math.PI), pupilM, V(x, ey + er * 0.08, z0 + er * 0.3), [1, 0.62, 1], [0.2, 0, 0]);
+        add(head, new THREE.BoxGeometry(0.008, 0.0022, 0.003), pupilM, V(x + s * er * 1.08, ey + er * 0.18, z0 + er * 0.24), null, [0, 0, s * 0.5]);
+      }
+      // брови: у мужской фигуры прямые и плотные, у женской — тонкие с изгибом
+      const by = R * 0.43;
+      const pts = [V(s * R * 0.14, by + 0.002, 0), V(s * R * 0.33, by + (fem ? 0.012 : 0.006), 0), V(s * R * 0.52, by + (fem ? 0.001 : 0.002), 0)];
+      pts.forEach((p) => { p.z = faceZ(p.x, p.y) + 0.0015; });
+      limb(head, pts[0], pts[1], P.browW * 1.15, P.browW, browM, 8);
+      limb(head, pts[1], pts[2], P.browW, P.browW * 0.65, browM, 8);
+    }
+
+    // нос: спинка, кончик и крылья
+    const nk = P.noseK;
+    const nTop = V(0, R * 0.22, faceZ(0, R * 0.22) - 0.004), nTip = V(0, -R * 0.2, faceZ(0, -R * 0.2) + 0.012 * nk);
+    limb(head, nTop, nTip, 0.0085 * nk, 0.0135 * nk, skin, 12);
+    add(head, ball(0.0172 * nk, 16, 12), skin, nTip.clone().add(V(0, -0.004, 0.002)), [1.1, 0.9, 0.95]);
+    for (const s of [-1, 1]) add(head, ball(0.0105 * nk, 12, 8), skin, V(s * 0.0135 * nk, nTip.y - 0.007, nTip.z - 0.009), [1.1, 0.85, 0.9]);
+
+    // губы: у мужской фигуры — сдержанная улыбка, у женской — пухлые губы с «луком Купидона»
+    const my = -R * 0.6, mz = faceZ(0, my);
+    if (fem) {
+      for (const s of [-1, 1]) add(head, ball(0.0085, 14, 10), lipM, V(s * 0.0072, my + 0.0055, mz - 0.0035), [1.55, 0.6, 0.6], [0, 0, s * 0.22]);
+      add(head, ball(0.0105, 16, 10), lipM, V(0, my - 0.0045, mz - 0.004), [1.75, 0.68, 0.62]);
+      const blush = mat(0xEE8C8C, 0.6, { transparent: true, opacity: 0.3, depthWrite: false });
+      for (const s of [-1, 1]) add(head, ball(0.024, 16, 10), blush, V(s * R * 0.5, -R * 0.25, faceZ(s * R * 0.5, -R * 0.25) - 0.004), [1, 0.62, 0.3]);
+    } else {
+      const arc = Math.PI * 0.62, rr = R * 0.16;
+      add(head, new THREE.TorusGeometry(rr, 0.0042, 8, 18, arc), lipM, V(0, my + rr * 0.9, mz - 0.003), [1, 1, 0.6], [0, 0, -Math.PI / 2 - arc / 2]);
+    }
+
+    /* ── Причёска ── */
+    /* «Шапка» волос облегает голову (та же деформация, что у головы) и идёт по естественной линии роста:
+       высоко надо лбом, ниже у висков, над ушами и низко на затылке. Линия — угол от макушки в градусах:
+       спереди, у виска, над ухом, за ухом и сзади. */
+    const HAIRLINE = {
+      short: [60, 70, 80, 112, 136], buzz: [62, 72, 80, 110, 134], curly: [58, 68, 80, 112, 136],
+      flowing: [62, 78, 96, 116, 136], sleek: [60, 76, 88, 114, 136],
+    };
+    const hairlineAt = (line, az) => {
+      const a = Math.abs((((az + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * 180 / Math.PI;
+      const keys = [0, 45, 90, 130, 180];
+      for (let i = 1; i < keys.length; i++) {
+        if (a > keys[i]) continue;
+        const k = (a - keys[i - 1]) / (keys[i] - keys[i - 1]), s = k * k * (3 - 2 * k);
+        return (line[i - 1] + (line[i] - line[i - 1]) * s) * Math.PI / 180;
+      }
+      return line[4] * Math.PI / 180;
+    };
+    // точка на «шапке»: frac — доля от макушки до линии роста, az — угол вокруг головы (0 — лоб, к +x)
+    const hairPoint = (line, frac, az) => {
+      const th = frac * hairlineAt(line, az);
+      return deformHead(R * Math.sin(th) * Math.sin(az), R * Math.cos(th), R * Math.sin(th) * Math.cos(az));
+    };
+    const cap = (line, k, m = hairM) => {
+      const ws = 56, hsg = 18;
+      const g = new THREE.SphereGeometry(R, ws, hsg, 0, Math.PI * 2, 0, Math.PI / 2);
+      const pos = g.attributes.position;
+      for (let iy = 0; iy <= hsg; iy++) {
+        for (let ix = 0; ix <= ws; ix++) {
+          const frac = iy / hsg, p = hairPoint(line, frac, (ix / ws) * Math.PI * 2 - Math.PI / 2);
+          // объём сверху, а к линии роста волосы прилегают к коже — край не отстоит от головы
+          const w = 1 - 0.88 * frac * frac * frac;
+          pos.setXYZ(iy * (ws + 1) + ix, p[0] * HS[0] * (1 + (k[0] - 1) * w), p[1] * HS[1] * (1 + (k[1] - 1) * w), p[2] * HS[2] * (1 + (k[2] - 1) * w));
+        }
+      }
+      g.computeVertexNormals();
+      smoothSphereNormals(g, ws, hsg);
+      return add(head, g, m);
+    };
+    const curls = (list) => {
+      const im = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 10), hairM, list.length);
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = V(1, 1, 1);
+      list.forEach((c, i) => { sc.setScalar(c.r); m4.compose(c.p, q, sc); im.setMatrixAt(i, m4); });
+      im.instanceMatrix.needsUpdate = true;
+      head.add(im);
+    };
+    const topCurls = (n, line, k, rMin, rMax) => {
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const p = hairPoint(line, Math.sqrt((i + 0.5) / n) * 0.9, i * 2.39996);
+        out.push({ p: V(p[0] * HS[0] * k[0], p[1] * HS[1] * k[1], p[2] * HS[2] * k[2]), r: rMin + (rMax - rMin) * avatarRnd(i) });
+      }
+      return out;
+    };
+    const hs = cfg.hair;
+    if (!fem) {
+      if (hs === 'buzz') cap(HAIRLINE.buzz, [1.03, 1.04, 1.04], mat(mix(hairHex, skinHex, 0.28), 0.8));
+      if (hs === 'short') {
+        // короткая стрижка: объём сверху и мягкая чёлка, зачёсанная набок
+        cap(HAIRLINE.short, [1.07, 1.16, 1.09]);
+        add(head, ball(R * 0.34, 24, 16), hairM, V(R * 0.14, R * 0.64, R * 0.7), [1.55, 0.42, 0.62], [-0.85, 0, -0.28]);
+      }
+      if (hs === 'quiff') {
+        cap(HAIRLINE.short, [1.05, 1.07, 1.06]);
+        add(head, ball(R * 0.56, 28, 18), hairM, V(0, R * 0.9, R * 0.4), [1.12, 0.72, 1.1], [-0.38, 0, 0]);
+      }
+      if (hs === 'curly') {
+        cap(HAIRLINE.curly, [1.06, 1.1, 1.08]);
+        curls(topCurls(48, HAIRLINE.curly, [1.1, 1.13, 1.11], R * 0.15, R * 0.21));
+      }
+    } else {
+      if (hs === 'long' || hs === 'bob' || hs === 'curly') cap(HAIRLINE.flowing, [1.07, 1.09, 1.08]);
+      if (hs === 'ponytail' || hs === 'bun') cap(HAIRLINE.sleek, [1.04, 1.05, 1.05]);
+      if (hs === 'long') {
+        // прямые длинные волосы до груди, спереди открывают лицо; косая чёлка
+        lathe(head, [[R * 0.6, R * 0.85], [R * 0.92, R * 0.4], [R * 1.04, -R * 0.1], [R * 1.1, -R * 0.85], [R * 1.13, -R * 1.6], [R * 1.11, -R * 2.2], [R * 1.02, -R * 2.42], [R * 0.93, -R * 2.46]],
+          hairM, 1, 0, Math.PI * 0.3, Math.PI * 1.4).scale.x = 0.98;
+        add(head, ball(R * 0.5, 24, 16), hairM, V(R * 0.2, R * 0.63, R * 0.58), [1.3, 0.42, 0.72], [-0.38, 0, -0.38]);
+      }
+      if (hs === 'bob') {
+        // каре до подбородка с прямой чёлкой
+        lathe(head, [[R * 0.6, R * 0.85], [R * 0.95, R * 0.35], [R * 1.1, -R * 0.15], [R * 1.16, -R * 0.62], [R * 1.15, -R * 0.9], [R * 1.07, -R * 1.04], [R * 0.97, -R * 1.07]],
+          hairM, 1, 0, Math.PI * 0.26, Math.PI * 1.48).scale.x = 0.98;
+        add(head, ball(R * 0.6, 28, 16), hairM, V(0, R * 0.56, R * 0.58), [1.3, 0.38, 0.7], [-0.55, 0, 0]);
+      }
+      if (hs === 'ponytail') {
+        const base = V(0, R * 0.28, -R * 1.02);
+        add(head, new THREE.TorusGeometry(R * 0.2, R * 0.07, 8, 18), mat(mix(hairHex, 0x000000, 0.4), 0.5), base, null, [0.95, 0, 0]);
+        const pts = [base, V(0, R * 0.02, -R * 1.38), V(0, -R * 0.75, -R * 1.5), V(0, -R * 1.6, -R * 1.34), V(0, -R * 2.0, -R * 1.18)];
+        const rad = [R * 0.22, R * 0.24, R * 0.2, R * 0.13, R * 0.04];
+        for (let i = 0; i < pts.length - 1; i++) limb(head, pts[i], pts[i + 1], rad[i], rad[i + 1], hairM, 14);
+      }
+      if (hs === 'bun') {
+        const bc = V(0, R * 0.92, -R * 0.55);
+        add(head, ball(R * 0.46, 24, 18), hairM, bc, [1, 0.92, 1]);
+        add(head, new THREE.TorusGeometry(R * 0.36, R * 0.09, 8, 20), hairM, bc.clone().add(V(0, -R * 0.2, R * 0.06)), null, [Math.PI / 2 - 0.5, 0, 0]);
+      }
+      if (hs === 'curly') {
+        // пышные кудри: макушка и объём по бокам и сзади до плеч
+        const list = topCurls(36, HAIRLINE.flowing, [1.1, 1.12, 1.1], R * 0.16, R * 0.22);
+        const n = 120;
+        for (let i = 0; i < n; i++) {
+          const y = R * (0.55 - ((i + 0.5) / n) * 2.15);
+          const az = Math.PI * 0.27 + ((i * 0.618034) % 1) * Math.PI * 1.46;
+          const rr = R * (1.06 + 0.22 * Math.min(1, Math.max(0, (0.3 * R - y) / (1.6 * R))));
+          list.push({ p: V(Math.sin(az) * rr * 0.97, y, Math.cos(az) * rr), r: R * (0.19 + 0.07 * avatarRnd(i + 50)) });
+        }
+        curls(list);
       }
     }
     return group;
   }
 
-  function renderAvatarToCanvas(canvas, size, cfg) {
+  // Свет «студии»: тёплый основной, холодная заливка и два цветных контровых в цветах «Призмы»
+  function addAvatarLights(THREE, scene) {
+    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x6A5D57, 0.62));
+    const key = new THREE.DirectionalLight(0xFFF1E4, 1.15); key.position.set(2.2, 3.6, 3.4); scene.add(key);
+    const fill = new THREE.DirectionalLight(0xD3DCFF, 0.38); fill.position.set(-3, 1.4, 2.2); scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xB9A2FF, 0.75); rim.position.set(-2.2, 2.6, -3.4); scene.add(rim);
+    const rim2 = new THREE.DirectionalLight(0x86E8F0, 0.4); rim2.position.set(2.6, 1.6, -3); scene.add(rim2);
+  }
+  // Мягкая тень под ногами — градиент, а не тяжёлые карты теней
+  function avatarShadow(THREE) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 2, 64, 64, 63);
+    gr.addColorStop(0, 'rgba(0,0,0,0.45)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.62), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+    mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.003;
+    return mesh;
+  }
+  function makeAvatarRenderer(THREE, canvas, preserve) {
+    const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: !!preserve });
+    r.outputEncoding = THREE.sRGBEncoding;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = 1.15;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    return r;
+  }
+  function disposeObject(root) {
+    root.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      ms.forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); });
+    });
+  }
+
+  /* Сцена с аватаром. framing: 'full' — в полный рост, 'bust' — портрет по плечи.
+     Камера к новой точке переезжает плавно (в редакторе — кнопка «крупно»). */
+  function createAvatarScene(THREE, cfg, { framing = 'full', aspect = 1 } = {}) {
+    const scene = new THREE.Scene();
+    addAvatarLights(THREE, scene);
+    scene.add(avatarShadow(THREE));
+    const camera = new THREE.PerspectiveCamera(30, aspect, 0.05, 30);
+    const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), curPos = new THREE.Vector3(), curLook = new THREE.Vector3();
+    let group = null, P = null, mode = framing, aimed = false;
+    const aim = () => {
+      if (mode === 'bust') { camPos.set(0, P.headY - 0.03, 1.32); camLook.set(0, P.headY - 0.09, 0); }
+      else { camPos.set(0, 1.06, 3.75); camLook.set(0, 0.94, 0); }
+      if (!aimed) { curPos.copy(camPos); curLook.copy(camLook); aimed = true; }
+    };
+    const setConfig = (c) => {
+      if (group) { scene.remove(group); disposeObject(group); }
+      group = buildAvatarGroup(THREE, c);
+      P = avatarProportions(normalizeAvatar(c).gender);
+      scene.add(group);
+      aim();
+    };
+    setConfig(cfg);
+    return {
+      scene, camera, setConfig,
+      setFraming(f) { mode = f; aim(); },
+      get framing() { return mode; },
+      animate(t, yaw = 0, sway = 1) {
+        group.rotation.y = yaw + Math.sin(t * 0.55) * 0.3 * sway;
+        const head = group.userData.head;
+        if (head) { head.rotation.z = Math.sin(t * 0.8) * 0.03 * sway; head.rotation.x = Math.sin(t * 0.63 + 1) * 0.025 * sway; }
+        curPos.lerp(camPos, 0.12); curLook.lerp(camLook, 0.12);
+        camera.position.copy(curPos); camera.lookAt(curLook);
+      },
+      resize(a) { camera.aspect = a; camera.updateProjectionMatrix(); },
+      dispose() { disposeObject(scene); },
+    };
+  }
+
+  // opts: framing ('full' | 'bust'), still — один неподвижный кадр (снимок для карты), yaw — поворот
+  function renderAvatarToCanvas(canvas, size, cfg, opts = {}) {
     if (!isThreeAvailable()) return false;
     const THREE = window.THREE;
+    const { framing = 'full', still = false, yaw = 0.18 } = opts;
     try {
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      const renderer = makeAvatarRenderer(THREE, canvas, true);
       renderer.setSize(size, size, false);
-      renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 20);
-      camera.position.set(0, 1.5, 3.6); camera.lookAt(0, 1.0, 0);
-      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-      const key = new THREE.DirectionalLight(0xffd9b3, 1.15); key.position.set(3, 5, 3); key.castShadow = true; scene.add(key);
-      const fill = new THREE.DirectionalLight(0xB9C6FF, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
-      const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
-      shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.001; scene.add(shadow);
-      const group = buildAvatarGroup(THREE, cfg); scene.add(group);
-      let angle = 0, raf = null;
-      function tick() { angle += 0.008; group.rotation.y = Math.sin(angle) * 0.35; renderer.render(scene, camera); raf = requestAnimationFrame(tick); }
-      tick();
+      const av = createAvatarScene(THREE, cfg, { framing });
+      let raf = null;
+      const draw = (now) => { av.animate(now / 1000, yaw, still ? 0 : 1); renderer.render(av.scene, av.camera); };
+      if (still) draw(0);
+      else { const tick = (now) => { draw(now); raf = requestAnimationFrame(tick); }; tick(performance.now()); }
       // остановить и освободить WebGL-контекст: маркер пересоздаётся, а число контекстов у браузера ограничено
       canvas.__avatarStop = () => {
         if (raf) cancelAnimationFrame(raf);
         raf = null;
-        try { renderer.dispose(); renderer.forceContextLoss(); } catch {}
+        try { av.dispose(); renderer.dispose(); renderer.forceContextLoss(); } catch {}
       };
       return true;
     } catch (err) { console.warn('[аватар]', err); return false; }
@@ -5656,18 +6225,19 @@
 
   function avatarCfgKey(cfg) {
     if (!cfg || typeof cfg !== 'object') return '';
-    return `${cfg.skin || ''}|${cfg.clothes || ''}|${cfg.hair || ''}`;
+    const c = normalizeAvatar(cfg);
+    return [c.gender, c.skin, c.clothes, c.hair, c.hairColor, c.outfit].join('|');
   }
 
-  function getAvatarSnapshotDataURL(cfg) {
+  function getAvatarSnapshotDataURL(cfg, framing = 'full') {
     if (!isThreeAvailable() || !cfg || typeof cfg !== 'object') return null;
-    const key = avatarCfgKey(cfg);
+    const key = avatarCfgKey(cfg) + '|' + framing;
     if (avatarSnapshotCache.has(key)) return avatarSnapshotCache.get(key);
     try {
-      const size = 96;
+      const size = framing === 'bust' ? 128 : 112;
       const off = document.createElement('canvas');
       off.width = size; off.height = size;
-      const ok = renderAvatarToCanvas(off, size, cfg);
+      const ok = renderAvatarToCanvas(off, size, cfg, { framing, still: true, yaw: 0.3 });
       if (!ok) { avatarSnapshotCache.set(key, null); return null; }
       const dataUrl = off.toDataURL('image/png');
       if (off.__avatarStop) { off.__avatarStop(); off.__avatarStop = null; }
@@ -5731,9 +6301,9 @@
     wrap.insertAdjacentHTML('beforeend', signalRingsHtml('is-me'));
     if (use3D) {
       const inner = document.createElement('div'); inner.className = 'user-avatar-marker';
-      const canvas = document.createElement('canvas'); canvas.width = 26; canvas.height = 26;
+      const canvas = document.createElement('canvas'); canvas.width = 44; canvas.height = 44;
       inner.appendChild(canvas); wrap.appendChild(inner);
-      const ok = renderAvatarToCanvas(canvas, 26, avatarConfig);
+      const ok = renderAvatarToCanvas(canvas, 44, avatarConfig);
       if (ok) userAvatarCanvas = canvas; else inner.className = 'user-dot-marker';
     } else {
       const dot = document.createElement('div'); dot.className = 'user-dot-marker'; wrap.appendChild(dot);
@@ -8436,53 +9006,86 @@
       winBody.scrollTop = 0;
       winBody.innerHTML = `
         <div class="avatar-editor">
-          <div class="avatar-stage"><canvas id="avatar-stage-canvas" width="480" height="240"></canvas></div>
-          <div><div class="avatar-group-title">Цвет кожи</div><div class="avatar-row" id="av-skin-row"></div></div>
-          <div><div class="avatar-group-title">Одежда</div><div class="avatar-row" id="av-clothes-row"></div></div>
-          <div><div class="avatar-group-title">Причёска</div><div class="avatar-row" id="av-hair-row"></div></div>
-          <div class="edit-actions"><button type="button" class="btn" id="av-cancel">Готово</button></div>
+          <div class="avatar-stage">
+            <canvas id="avatar-stage-canvas" width="480" height="300"></canvas>
+            <button class="avatar-zoom" type="button" data-av-zoom aria-pressed="false" aria-label="Крупный план" title="Крупный план">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5M10.5 8v5M8 10.5h5"/></svg>
+            </button>
+            <span class="avatar-stage-hint">Покрутите пальцем</span>
+          </div>
+          <div class="avatar-controls" id="av-controls"></div>
+          <div class="edit-actions"><button type="button" class="btn btn-primary" id="av-cancel">Готово</button></div>
         </div>`;
       setupAvatarStage(winBody.querySelector('#avatar-stage-canvas'));
       renderAvatarControls();
       winBody.querySelector('#av-cancel').addEventListener('click', goBack);
     }, () => showProfileScreen());
   }
+
+  /* Сцена редактора: аватар можно крутить пальцем или мышью, кнопка с лупой — крупный план лица */
   function setupAvatarStage(canvas) {
     if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
     if (!isThreeAvailable()) { canvas.style.display = 'none'; return; }
     const THREE = window.THREE;
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(canvas.clientWidth || 480, canvas.clientHeight || 240, false);
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(35, (canvas.clientWidth || 480) / (canvas.clientHeight || 240), 0.1, 100);
-    camera.position.set(0, 1.5, 4); camera.lookAt(0, 1.0, 0);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const key = new THREE.DirectionalLight(0xffd9b3, 1.2); key.position.set(3, 5, 3); key.castShadow = true; scene.add(key);
-    const fill = new THREE.DirectionalLight(0xB9C6FF, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
-    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.001; scene.add(shadow);
-    let group = buildAvatarGroup(THREE, avatarConfig); scene.add(group);
-    let t = 0, raf = null;
-    function tick() { t += 0.012; group.rotation.y = Math.sin(t) * 0.6; renderer.render(scene, camera); raf = requestAnimationFrame(tick); }
-    tick();
-    function onResize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-    window.addEventListener('resize', onResize);
-    canvas.__avatarRefresh = () => {
-      scene.remove(group);
-      group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose()); else o.material.dispose(); } });
-      group = buildAvatarGroup(THREE, avatarConfig); scene.add(group);
+    const renderer = makeAvatarRenderer(THREE, canvas, false);
+    const size = () => [canvas.clientWidth || 480, canvas.clientHeight || 300];
+    let [w, h] = size();
+    renderer.setSize(w, h, false);
+    const av = createAvatarScene(THREE, avatarConfig, { aspect: w / h });
+    let yaw = 0.2, drag = null, raf = null;
+    const onDown = (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      drag = { x: e.clientX, yaw };
+      if (canvas.parentElement) canvas.parentElement.classList.add('is-touched');
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
     };
-    avatarStageCleanup = () => { if (raf) cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); renderer.dispose(); };
+    const onMove = (e) => { if (drag) yaw = drag.yaw + (e.clientX - drag.x) * 0.012; };
+    const onUp = () => { drag = null; };
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+    function tick(now) {
+      av.animate(now / 1000, yaw, drag ? 0.25 : 1);
+      renderer.render(av.scene, av.camera);
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    function onResize() {
+      [w, h] = size();
+      renderer.setSize(w, h, false);
+      av.resize(w / h);
+    }
+    window.addEventListener('resize', onResize);
+    canvas.__avatarRefresh = () => av.setConfig(avatarConfig);
+    canvas.__avatarZoom = () => { av.setFraming(av.framing === 'bust' ? 'full' : 'bust'); return av.framing === 'bust'; };
+    avatarStageCleanup = () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      av.dispose();
+      try { renderer.dispose(); renderer.forceContextLoss(); } catch {}
+    };
   }
+
   function renderAvatarControls() {
-    const skinRow = winBody.querySelector('#av-skin-row'); if (!skinRow) return;
-    const clothesRow = winBody.querySelector('#av-clothes-row');
-    const hairRow = winBody.querySelector('#av-hair-row');
-    skinRow.innerHTML = Object.entries(AVATAR_SKINS).map(([k, s]) => `<button class="avatar-swatch" type="button" data-av-group="skin" data-av-key="${k}" aria-pressed="${avatarConfig.skin === k}" style="background:#${s.base.toString(16).padStart(6,'0')}"></button>`).join('');
-    clothesRow.innerHTML = Object.entries(AVATAR_CLOTHES).map(([k, c]) => `<button class="avatar-swatch" type="button" data-av-group="clothes" data-av-key="${k}" aria-pressed="${avatarConfig.clothes === k}" style="background:#${c.body.toString(16).padStart(6,'0')}"></button>`).join('');
-    hairRow.innerHTML = Object.entries(AVATAR_HAIRS).map(([k]) => `<button class="avatar-pill" type="button" data-av-group="hair" data-av-key="${k}" aria-pressed="${avatarConfig.hair === k}">${{none:'Нет',short:'Короткая',long:'Длинная',blond:'Блонд',ginger:'Рыжая'}[k] || k}</button>`).join('');
+    const box = winBody.querySelector('#av-controls'); if (!box) return;
+    const c = avatarConfig, g = c.gender;
+    const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+    const pill = (group, key, label) =>
+      `<button class="avatar-pill" type="button" data-av-group="${group}" data-av-key="${key}" aria-pressed="${c[group] === key}">${escapeHtml(label)}</button>`;
+    const swatch = (group, key, bg, label) =>
+      `<button class="avatar-swatch" type="button" data-av-group="${group}" data-av-key="${key}" aria-pressed="${c[group] === key}" style="background:${bg}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>`;
+    const block = (title, inner) => `<div><div class="avatar-group-title">${title}</div><div class="avatar-row">${inner}</div></div>`;
+    box.innerHTML = [
+      block('Фигура', pill('gender', 'male', 'Мужская') + pill('gender', 'female', 'Женская')),
+      block('Цвет кожи', Object.entries(AVATAR_SKINS).map(([k, s]) => swatch('skin', k, hex(s.base), s.label)).join('')),
+      block('Причёска', Object.entries(AVATAR_HAIR_STYLES[g]).map(([k, l]) => pill('hair', k, l)).join('')),
+      c.hair === 'none' ? '' : block('Цвет волос', Object.entries(AVATAR_HAIR_COLORS).map(([k, h]) => swatch('hairColor', k, hex(h.hex), h.label)).join('')),
+      block('Одежда', Object.entries(AVATAR_OUTFITS[g]).map(([k, l]) => pill('outfit', k, l)).join('')),
+      // образец цвета одежды: верх и низ
+      block('Цвет одежды', Object.entries(AVATAR_CLOTHES).map(([k, cl]) =>
+        swatch('clothes', k, `linear-gradient(135deg, ${hex(cl.body)} 0 54%, ${hex(cl.legs)} 54% 100%)`, cl.label)).join('')),
+    ].join('');
   }
 
   /* ═══════ ПРОФИЛЬ ═══════ */
@@ -8676,7 +9279,8 @@
         if (use3D) {
           const canvas = winBody.querySelector('#friend-avatar-canvas');
           if (canvas) {
-            const ok = renderAvatarToCanvas(canvas, 256, cfg);
+            // в круглой шапке профиля — портрет по плечи, в карточке под фото — в полный рост
+            const ok = renderAvatarToCanvas(canvas, 256, cfg, { framing: photo ? 'full' : 'bust' });
             if (!ok && photo) {
               // аватар под кнопкой не отрисовался — просто убираем этот блок, фото уже в шапке
               const card = winBody.querySelector('.friend-avatar-card');
@@ -8798,6 +9402,12 @@
         // Локальный профиль меняем только после успешного сохранения
         profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar, gender: editGender, age: editAge };
         loadGroupStats(); // мой пол и возраст влияют на сводку моих групп
+        // сменили пол — аватар меняет фигуру (кожа и цвет волос остаются)
+        if (editGender && avatarConfigReady && editGender !== avatarConfig.gender) {
+          avatarConfig = { ...defaultAvatarFor(editGender), skin: avatarConfig.skin, hairColor: avatarConfig.hairColor };
+          saveAvatarConfig(avatarConfig);
+          if (lastUserLocation && settings.geolocation) upsertMyLocation(lastUserLocation);
+        }
         if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
         loadUserLocations();
         showProfileScreen();
@@ -8963,9 +9573,20 @@
       return;
     }
 
+    const zoomBtn = e.target.closest('[data-av-zoom]');
+    if (zoomBtn) {
+      const canvas = winBody.querySelector('#avatar-stage-canvas');
+      if (canvas && canvas.__avatarZoom) zoomBtn.setAttribute('aria-pressed', String(canvas.__avatarZoom()));
+      return;
+    }
     const avBtn = e.target.closest('[data-av-group]');
     if (avBtn) {
-      avatarConfig = { ...avatarConfig, [avBtn.dataset.avGroup]: avBtn.dataset.avKey };
+      const group = avBtn.dataset.avGroup, key = avBtn.dataset.avKey;
+      if (group === 'gender') {
+        // другая фигура — её причёска и одежда по умолчанию, кожа и цвет волос сохраняются
+        if (key !== avatarConfig.gender) avatarConfig = { ...defaultAvatarFor(key), skin: avatarConfig.skin, hairColor: avatarConfig.hairColor };
+      } else avatarConfig = normalizeAvatar({ ...avatarConfig, [group]: key });
+      avatarConfigReady = true;
       saveAvatarConfig(avatarConfig);
       const canvas = winBody.querySelector('#avatar-stage-canvas');
       if (canvas && canvas.__avatarRefresh) canvas.__avatarRefresh();
