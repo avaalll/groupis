@@ -7086,7 +7086,13 @@
         if (!name) { winBody.querySelector('#group-name').focus(); return; }
         const members = known.filter((p) => selectedIds.has(p.id));
 
-        const gid = editing ? editingId : 'g' + Date.now();
+        // повторные нажатия, пока идёт сохранение, не создают вторую группу
+        const form = e.currentTarget;
+        if (form.dataset.saving) return;
+        form.dataset.saving = '1';
+        form.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+
+        const gid = editing ? editingId : 'g' + Date.now() + Math.random().toString(36).slice(2, 6);
 
         // Меняем состав только по разнице: удаляем тех, с кого сняли галочку,
         // добавляем новых. Остальные участники не трогаются.
@@ -7094,9 +7100,22 @@
         const removedIds = [...existingIds].filter((id) => !selectedIds.has(id));
         const added = members.filter((m) => !existingIds.has(m.id));
 
+        // Группа появляется в списке сразу, а на сервер сохраняется в фоне
+        const localMembers = members.map((m) => ({ id: m.id, name: m.name, handle: m.handle || '', avatar: m.avatar || '' }));
+        if (editing) groups = groups.map((g) => (g.id === editingId ? { ...g, name, photo: groupPhoto, members: localMembers } : g));
+        else groups = [{ id: gid, ownerId: currentUser.id, name, photo: groupPhoto, visibility: 'public', members: localMembers, wish: '', wishAt: null, unionWith: null }, ...groups];
+        showGroupsScreen();
+        refreshMyMarker();
+        const failed = async (what, error) => {
+          console.warn('[groups] ' + what + ':', error.message);
+          await refreshGroupsWorld();
+          if (openApp === 'groups' && winTitle.textContent === 'Группы') showGroupsScreen();
+          alert((editing ? 'Не удалось сохранить группу: ' : 'Не удалось создать группу: ') + error.message);
+        };
+
         if (editing) {
           const { error } = await supabaseClient.from('groups').update({ name, photo: groupPhoto }).eq('id', editingId);
-          if (error) { console.warn('[groups] update:', error.message); return; }
+          if (error) { await failed('update', error); return; }
           if (removedIds.length) {
             const { error: rmErr } = await supabaseClient.from('group_members').delete()
               .eq('group_id', editingId).in('user_id', removedIds);
@@ -7106,7 +7125,7 @@
           const { error } = await supabaseClient.from('groups').insert({
             id: gid, owner_id: currentUser.id, name, photo: groupPhoto, visibility: 'public',
           });
-          if (error) { console.warn('[groups] insert:', error.message); return; }
+          if (error) { await failed('insert', error); return; }
         }
 
         if (added.length) {
@@ -7133,7 +7152,7 @@
         }
 
         await refreshGroupsWorld();
-        showGroupsScreen();
+        if (openApp === 'groups' && winTitle.textContent === 'Группы') showGroupsScreen();
       });
     }, () => showGroupsScreen());
   }
