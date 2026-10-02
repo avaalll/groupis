@@ -3022,6 +3022,50 @@
       .dock-label { display: none; }
       .dock-pill::after { bottom: 2px; }
     }
+
+    /* ── Чат: меню сообщения, выбор нескольких, закреплённое ── */
+    .chat-msg { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: opacity .2s ease, box-shadow .2s ease; }
+    .chat-view.is-selecting .chat-msg { cursor: pointer; }
+    .chat-view.is-selecting .chat-msg:not(.is-selected) { opacity: .5; }
+    .chat-msg.is-selected { box-shadow: 0 0 0 2px var(--win), 0 0 0 4px var(--c2); }
+    .chat-msg.is-flash { animation: msg-flash 1.2s ease; }
+    @keyframes msg-flash { 0%, 55% { box-shadow: 0 0 0 2px var(--win), 0 0 0 4px var(--c3); } }
+    .chat-pin {
+      display: flex; align-items: center; gap: 10px; margin: 0 12px 6px; padding: 7px 6px 7px 10px;
+      border-radius: 16px; background: var(--field); cursor: pointer; transition: background .2s;
+    }
+    .chat-pin:hover { background: var(--row-hover); }
+    .chat-pin::before { content: ""; flex: none; width: 3px; align-self: stretch; border-radius: 3px; background: var(--prism); }
+    .chat-pin-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+    .chat-pin-cap { font: 500 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+    .chat-pin-text { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-pin-x {
+      flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft);
+      font-size: 19px; line-height: 1; cursor: pointer; transition: background .2s, color .2s;
+    }
+    .chat-pin-x:hover { background: var(--win); color: var(--ink); }
+    .chat-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px 12px; background: var(--win); }
+    .chat-selbar .btn { padding: 10px 14px; font-size: 13px; }
+    .chat-selbar .btn:disabled { opacity: .4; cursor: default; }
+    .chat-sel-count { flex: 1; min-width: 0; text-align: center; font-weight: 700; font-size: 13px; white-space: nowrap; }
+    .msg-menu { z-index: 8; min-width: 190px; transform-origin: 0 0; }
+    .fwd-list { list-style: none; margin: 4px -8px 14px; padding: 0; max-height: min(46vh, 320px); overflow: auto; }
+    .fwd-list .person-card { padding: 8px 10px; cursor: pointer; }
+
+    /* ── Кнопка «моё место» — в правом нижнем углу, на одной линии с панелью вкладок ── */
+    .geo-btn { right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+    @media (max-width: 640px) {
+      .geo-btn { width: 48px; height: 48px; right: max(10px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    }
+    /* На телефоне панель по центру не оставляет места сбоку: она занимает ширину слева, кнопка — справа от неё */
+    @media (max-width: 520px) {
+      .dock-wrap { justify-content: flex-start; padding: 0 calc(max(10px, env(safe-area-inset-right, 0px)) + 56px) 0 max(10px, env(safe-area-inset-left, 0px)); }
+      .dock, :root[data-theme="dark"] .dock { flex: 1; max-width: none; }
+      .dock-item { flex: 1 1 0; width: auto; min-width: 0; }
+    }
+    @media (max-height: 480px) and (orientation: landscape) {
+      .geo-btn { width: 44px; height: 44px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+    }
   </style>
 </head>
 <body class="auth-locked">
@@ -3953,12 +3997,13 @@
     friendMarkers.clear(); friendMarkerCoords.clear();
     userLocationsById.clear(); userAvatarCfgById.clear(); groupMemberProfiles.clear();
     posts = []; wishes = []; groups = []; notifications = []; friends = [];
-    leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = [];
+    leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = []; chatsListShown = '';
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     groupMatches = []; groupMatchOutcome.clear(); groupInvites = []; groupInviteOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
     groupStats = new Map();
     avatarConfig = defaultAvatarFor('male'); avatarConfigReady = false;
     syncPostMarkers(); syncWishMarkers(); updateBadge();
+    clearLocalCaches();
 
     document.body.classList.add('auth-locked');
     authScreen.classList.remove('is-diving', 'is-leaving');
@@ -4281,6 +4326,17 @@
 
   const REG_STEPS = ['name', 'username', 'gender', 'password', 'age', 'photo', 'bio'];
 
+  /* Портреты для шага «пол» рисуются в 3D (отдельная сцена на каждый). Если делать это в момент показа шага,
+     переход заметно дёргается — поэтому готовим их заранее, по одному, пока человек вводит имя */
+  function prewarmGenderAvatars() {
+    const idle = (fn, ms) => setTimeout(() => {
+      if (authBusy) { idle(fn, 500); return; }
+      (window.requestIdleCallback || ((cb) => setTimeout(cb, 0)))(fn, { timeout: 1500 });
+    }, ms);
+    idle(() => getAvatarSnapshotDataURL(defaultAvatarFor('male'), 'bust'), 700);
+    idle(() => getAvatarSnapshotDataURL(defaultAvatarFor('female'), 'bust'), 1500);
+  }
+
   function renderAuthRegister() {
     const draft = { name: '', username: '', gender: '', password: '', age: 18, avatar: '', photo: '', bio: '', email: '' };
     let stepIdx = 0;
@@ -4543,13 +4599,15 @@
       });
     }
     // Из входа — пунктир к первому шагу регистрации
-    return authTransition((size) => Globe.advance(size), renderStep);
+    return authTransition((size) => Globe.advance(size), renderStep).then(prewarmGenderAvatars);
   }
 
   async function enterAppAfterLogin() {
     document.body.classList.remove('auth-locked');
     ensureMapStarted();
     if (openApp === null) showMapApp();   // на карте активна вкладка «Карта» — капсула панели встаёт на место
+    // Данные с прошлого запуска — сразу в память: экраны открываются мгновенно, а сервер потом обновит их на месте
+    await hydrateStateFromCache();
     // Данные грузятся по сети, пока камера летит к Земле (это не нагружает анимацию)
     const loading = Promise.all([
       loadMyAvatarConfig(),
@@ -4572,6 +4630,9 @@
       await loadGroupMemberProfiles();
       await loadUserLocations();
       refreshMyMarker(); // если я лидер группы — облако желания группы над моим аватаром
+      // экран, открытый по данным из кеша, обновляем свежими — на месте, без анимации
+      refreshGroupsList(); refreshFriendsList(); refreshNotifications();
+      if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
     });
     openAppFromShortcut();
   }
@@ -4586,6 +4647,115 @@
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
     if (target === 'settings') showSettingsScreen();
     else if (target === 'messenger' || APPS[target]) showApp(target);
+  }
+
+  /* ═══════ КЕШ НА УСТРОЙСТВЕ ═══════
+     Чтобы экраны открывались сразу, а не после ответа сервера, на устройстве хранятся:
+     — снимок данных приложения (группы, друзья, желания, воспоминания, уведомления);
+     — переписки по чатам и профили людей;
+     — фото, голосовые и кружки из чатов (в Cache Storage — подписанные ссылки каждый раз новые,
+       поэтому обычный кеш браузера их не запоминает).
+     Сервер остаётся главным: после показа из кеша данные перечитываются и экран обновляется на месте.
+     При выходе из аккаунта кеш стирается. */
+  const KV = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      try {
+        const rq = indexedDB.open('groupis-cache', 1);
+        rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+        rq.onsuccess = () => res(rq.result);
+        rq.onerror = () => rej(rq.error);
+      } catch (err) { rej(err); }
+    }));
+    const run = (mode, fn) => open().then((db) => new Promise((res, rej) => {
+      const tx = db.transaction('kv', mode);
+      const rq = fn(tx.objectStore('kv'));
+      tx.oncomplete = () => res(rq && rq.result);
+      tx.onerror = tx.onabort = () => rej(tx.error);
+    })).catch((err) => { console.warn('[cache]', err); return undefined; });
+    return {
+      get: (k) => run('readonly', (s) => s.get(k)),
+      set: (k, v) => run('readwrite', (s) => s.put(v, k)),
+      clear: () => run('readwrite', (s) => s.clear()),
+    };
+  })();
+
+  let stateSaveTimer = null;
+  function scheduleStateSave() {
+    if (!currentUser) return;
+    const uid = currentUser.id;
+    clearTimeout(stateSaveTimer);
+    stateSaveTimer = setTimeout(() => {
+      if (!currentUser || currentUser.id !== uid) return;
+      KV.set('state:' + uid, {
+        posts, wishes, groups, friends, notifications, groupMatches, groupInvites, myPhotos,
+        groupStats: [...groupStats], at: Date.now(),
+      });
+    }, 1500);
+  }
+  // Снимок с прошлого запуска — в память, пока сервер ещё не ответил. Заполняем только пустое
+  async function hydrateStateFromCache() {
+    if (!currentUser) return;
+    const uid = currentUser.id;
+    const s = await KV.get('state:' + uid);
+    if (!s || !currentUser || currentUser.id !== uid) return;
+    if (!posts.length && Array.isArray(s.posts)) posts = s.posts;
+    if (!wishes.length && Array.isArray(s.wishes)) wishes = s.wishes;
+    if (!groups.length && Array.isArray(s.groups)) groups = s.groups;
+    if (!friends.length && Array.isArray(s.friends)) friends = s.friends;
+    if (!notifications.length && Array.isArray(s.notifications)) notifications = s.notifications;
+    if (!groupMatches.length && Array.isArray(s.groupMatches)) groupMatches = s.groupMatches;
+    if (!groupInvites.length && Array.isArray(s.groupInvites)) groupInvites = s.groupInvites;
+    if (myPhotos === null && Array.isArray(s.myPhotos)) myPhotos = s.myPhotos;
+    if (!groupStats.size && Array.isArray(s.groupStats)) groupStats = new Map(s.groupStats);
+    updateBadge();
+  }
+
+  /* Медиа из чатов: путь в хранилище → локальная ссылка на файл в памяти */
+  const MEDIA_CACHE = 'groupis-chat-media-v1';
+  const MEDIA_BLOB_MAX = 12 * 1024 * 1024;
+  const mediaBlobUrls = new Map();
+  function mediaCacheKey(path) { return 'https://chat-media.groupis.local/' + encodeURI(path); }
+  async function cachedMediaUrl(path) {
+    if (mediaBlobUrls.has(path)) return mediaBlobUrls.get(path);
+    if (!('caches' in window)) return null;
+    try {
+      const store = await caches.open(MEDIA_CACHE);
+      const res = await store.match(mediaCacheKey(path));
+      if (!res) return null;
+      if (mediaBlobUrls.has(path)) return mediaBlobUrls.get(path);
+      const url = URL.createObjectURL(await res.blob());
+      mediaBlobUrls.set(path, url);
+      return url;
+    } catch { return null; }
+  }
+  async function rememberMediaBlob(path, blob, url) {
+    mediaBlobUrls.set(path, url || URL.createObjectURL(blob));
+    if (!('caches' in window) || blob.size > MEDIA_BLOB_MAX) return;
+    try {
+      const store = await caches.open(MEDIA_CACHE);
+      await store.put(mediaCacheKey(path), new Response(blob, { headers: { 'Content-Type': blob.type || 'application/octet-stream' } }));
+    } catch (err) { console.warn('[media cache]', err); }
+  }
+  // Скачать по подписанной ссылке, запомнить и вернуть локальную ссылку; при ошибке — null
+  async function fetchMediaToCache(path, signedUrl) {
+    try {
+      const res = await fetch(signedUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      await rememberMediaBlob(path, blob);
+      return mediaBlobUrls.get(path);
+    } catch (err) { console.warn('[media cache] fetch:', err); return null; }
+  }
+
+  function clearLocalCaches() {
+    clearTimeout(stateSaveTimer);
+    KV.clear();
+    if ('caches' in window) caches.delete(MEDIA_CACHE).catch(() => {});
+    mediaBlobUrls.forEach((url) => { try { URL.revokeObjectURL(url); } catch {} });
+    mediaBlobUrls.clear();
+    chatHistoryCache.clear();
+    friendProfileCache.clear();
   }
 
   /* ═══════ ГЛОБАЛЬНЫЕ МАССИВЫ ═══════ */
@@ -4606,6 +4776,7 @@
       coords: Array.isArray(r.coords) ? r.coords : null,
       ts: r.ts, time: r.ts ? new Date(r.ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '',
     }));
+    scheduleStateSave();
   }
 
   async function loadWishesFromDB() {
@@ -4617,6 +4788,7 @@
       coords: Array.isArray(r.coords) ? r.coords : null,
       audience: r.audience, groupId: r.group_id, ts: r.ts,
     }));
+    scheduleStateSave();
   }
 
   async function loadGroupsFromDB() {
@@ -4640,6 +4812,7 @@
       wish: (g.wish || '').trim(), wishAt: g.wish_at || null,
       unionWith: g.union_with != null ? String(g.union_with) : null,
     }));
+    scheduleStateSave();
   }
 
   /* ═══════ MATCH МЕЖДУ ГРУППАМИ ═══════
@@ -4656,6 +4829,7 @@
       fromOwner: r.from_owner, toOwner: r.to_owner, status: r.status, createdAt: r.created_at,
       voteState: r.vote_state || 'none', voteStartedBy: r.vote_started_by || null,
     }));
+    scheduleStateSave();
   }
 
   /* ═══════ ПРИГЛАШЕНИЯ В ГРУППУ ═══════
@@ -4672,6 +4846,7 @@
     groupInvites = (data || []).map((r) => ({
       id: String(r.id), groupId: String(r.group_id), fromId: r.from_id, toId: r.to_id, status: r.status,
     }));
+    scheduleStateSave();
   }
   function pendingInvitesOfGroup(gid) {
     return groupInvites.filter((i) => i.status === 'pending' && i.groupId === String(gid));
@@ -4906,7 +5081,8 @@
     if (error) { console.warn('[notifications] load:', error.message); notifications = []; return; }
     notifications = (data || []).map(mapNotificationRow);
     await Promise.all([loadIncomingFriendRequests(), loadGroupMatchesFromDB(), loadGroupInvitesFromDB()]);
-    updateBadge();
+    refreshNotifications();
+    scheduleStateSave();
   }
 
   function mapNotificationRow(n) {
@@ -4970,6 +5146,7 @@
     const { data: profs, error: pErr } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', ids);
     if (pErr) { console.warn('[friends profiles]:', pErr.message); friends = []; return; }
     friends = (profs || []).map((p) => ({ id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }));
+    scheduleStateSave();
   }
 
   /* ═══════ REALTIME ═══════ */
@@ -4982,7 +5159,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => {
         await loadPostsFromDB();
         syncPostMarkers();
-        if (openApp === 'profile' && winTitle.textContent === 'Воспоминания') showPlacesScreen();
+        if (openApp === 'profile' && !win.hidden && winTitle.textContent === 'Воспоминания') quietly(showPlacesScreen);
       }).subscribe();
     rtChannels.push(ch1);
 
@@ -4990,7 +5167,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes' }, async () => {
         await loadWishesFromDB();
         refreshWishClouds();
-        if (openApp === 'profile' && winTitle.textContent === 'Желания' && !win.querySelector('.modal-backdrop')) showWishesScreen();
+        if (openApp === 'profile' && !win.hidden && winTitle.textContent === 'Желания' && !win.querySelector('.modal-backdrop')) quietly(showWishesScreen);
       }).subscribe();
     rtChannels.push(ch2);
 
@@ -5015,7 +5192,7 @@
           // Наш запрос приняли — обновляем список друзей и их маркеры на карте
           loadFriendsFromDB().then(() => {
             loadUserLocations();
-            if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
+            refreshFriendsList();
           });
         }
         if (['group_match', 'group_match_accept', 'match_vote', 'match_vote_result'].includes(n.type)) {
@@ -5031,28 +5208,17 @@
     rtChannels.push(ch4);
 
     const ch5 = supabaseClient.channel('rt:dm')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages' }, (payload) => {
-        if (!currentUser) return;
-        const r = payload.new;
-        if (r.from_id !== currentUser.id && r.to_id !== currentUser.id) return;
-        onIncomingChatRow(normDmRow(r));
-      }).subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_messages' }, (payload) => handleChatRealtime(payload, 'dm', normDmRow)).subscribe();
     rtChannels.push(ch5);
 
     // Групповые чаты: RLS пропускает только сообщения групп, где мы участники
     const chGroupMsg = supabaseClient.channel('rt:group_messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages' }, (payload) => {
-        if (!currentUser) return;
-        onIncomingChatRow(normGroupRow(payload.new));
-      }).subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_messages' }, (payload) => handleChatRealtime(payload, 'group', normGroupRow)).subscribe();
     rtChannels.push(chGroupMsg);
 
     // Совместные чаты групп после match
     const chMatchMsg = supabaseClient.channel('rt:match_messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_messages' }, (payload) => {
-        if (!currentUser) return;
-        onIncomingChatRow(normMatchRow(payload.new));
-      }).subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_messages' }, (payload) => handleChatRealtime(payload, 'match', normMatchRow)).subscribe();
     rtChannels.push(chMatchMsg);
 
     // Голоса в совместном чате — счётчик обновляется у всех сразу
@@ -5075,7 +5241,7 @@
     const chFriends = supabaseClient.channel('rt:friendships')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, async () => {
         await refreshFriendsAndMap();
-        if (openApp === 'friends' && winTitle.textContent === 'Друзья') showApp('friends');
+        refreshFriendsList();
       }).subscribe();
     rtChannels.push(chFriends);
 
@@ -6588,7 +6754,6 @@
   }
   function closePopup() { if (!openPopupMarker || !map2gis) { openPopupMarker = null; return; } try { openPopupMarker.destroy(); } catch {} openPopupMarker = null; }
   function jumpToPostInFeed(postId) {
-    showApp('profile'); showPlacesScreen();
     placesView = 'feed'; savePlacesView('feed'); showPlacesScreen();
     requestAnimationFrame(() => {
       const idx = posts.findIndex((x) => x.id === postId);
@@ -6817,8 +6982,8 @@
   // После изменения желания перерисовать открытый экран: список желаний или карточку группы
   function rerenderWishContext() {
     if ((openApp !== 'profile' && openApp !== 'groups') || win.hidden) return;
-    if (winTitle.textContent === 'Желания') showWishesScreen();
-    else if (groupDetailsId) reopenGroupDetails();
+    if (winTitle.textContent === 'Желания') quietly(showWishesScreen);
+    else if (groupDetailsId) quietly(reopenGroupDetails);
   }
 
   function showNewWishScreen(editingId = null) {
@@ -6931,30 +7096,28 @@
   }
 
   /* ═══════ ДРУЗЬЯ ═══════ */
+  let friendsListShown = '';
+  function friendsListHtml() {
+    const html = APPS.friends.render();
+    friendsListShown = html;
+    return html;
+  }
   function showFriendsScreen() {
     setScreen(() => {
       winTitle.textContent = 'Друзья';
       winBody.scrollTop = 0;
-      const rowsHtml = friends.length
-        ? `<ul class="rows">${friends.map((f) => `
-            <li class="person-card is-link" data-view-profile="${escapeHtml(f.id)}" data-profile-back="friends" role="button" tabindex="0">
-              ${avatarCircleHtml(f, 40)}
-              <div class="person-main">
-                <div class="person-name">${escapeHtml(f.name)}</div>
-                <div class="person-handle">${escapeHtml(f.handle)}</div>
-              </div>
-              <button class="btn" type="button" data-open-dm="${escapeHtml(f.id)}">Чат</button>
-              <button class="btn" type="button" data-remove-friend="${escapeHtml(f.id)}">Удалить</button>
-            </li>`).join('')}</ul>`
-        : `<div class="empty-msg">Пока нет друзей.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы найти человека по @username.</div>`;
-      winBody.innerHTML = `
-        <div class="sub-toolbar">
-          <span class="sub-toolbar-title">Список друзей</span>
-          <span class="sub-toolbar-spacer"></span>
-          <button class="icon-btn" type="button" data-action="add-friend" aria-label="Найти друга"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg></button>
-        </div>
-        ${rowsHtml}`;
+      winBody.innerHTML = friendsListHtml();
     }, () => closeApp());
+  }
+  // Список друзей изменился (приняли запрос, удалили) — обновляем на месте, только если он открыт и стал другим
+  function refreshFriendsList() {
+    if (openApp !== 'friends' || win.hidden || winTitle.textContent !== 'Друзья' || !winBody.querySelector('[data-action="add-friend"]')) return;
+    const prev = friendsListShown;
+    const html = APPS.friends.render();
+    if (html === prev) return;
+    winBody.classList.remove(...SCREEN_ANIM);
+    friendsListShown = html;
+    winBody.innerHTML = html;
   }
 
   function showAddFriendScreen() {
@@ -7031,6 +7194,7 @@
     const prev = groupsListShown;
     const html = groupsListHtml();
     if (html === prev) return;
+    winBody.classList.remove(...SCREEN_ANIM);
     winBody.innerHTML = html;
     bindGroupSwipe();
   }
@@ -7573,8 +7737,8 @@
         <span class="sub-toolbar-title">Мои чаты</span>
         <span class="sub-toolbar-spacer"></span>
       </div>
-      <div class="chats-list" id="chats-list">
-        <div class="empty-msg">Загружаем чаты…</div>
+      <div class="chats-list" id="chats-list" ${chatsListShown ? 'data-filled="1"' : ''}>
+        ${chatsListShown || '<div class="empty-msg">Загружаем чаты…</div>'}
       </div>`;
 
     win.hidden = false;
@@ -7604,13 +7768,23 @@
     }
   }
 
+  /* Список чатов запоминаем: при повторном открытии он показывается сразу, без «Загружаем…»,
+     а после загрузки заменяется, только если что-то изменилось */
+  let chatsListShown = '';
   async function renderChatsList() {
     const listEl = winBody.querySelector('#chats-list');
     if (!listEl) return;
+    const put = (html) => {
+      if (listEl.dataset.filled && html === chatsListShown) return;
+      if (listEl.dataset.filled) winBody.classList.remove(...SCREEN_ANIM);   // обновление, а не первое появление
+      listEl.innerHTML = html;
+      listEl.dataset.filled = '1';
+      chatsListShown = html;
+    };
     const gs = myGroups();
     const ms = myAcceptedMatches();
     if (!currentUser || (!friends.length && !gs.length && !ms.length)) {
-      listEl.innerHTML = `<div class="empty-msg">Пока нет чатов.<br>Добавьте друзей или создайте группу.</div>`;
+      put(`<div class="empty-msg">Пока нет чатов.<br>Добавьте друзей или создайте группу.</div>`);
       return;
     }
     const myId = currentUser.id;
@@ -7706,7 +7880,7 @@
       });
     }
     items.sort((a, b) => b.ts - a.ts); // свежие диалоги сверху
-    listEl.innerHTML = items.map((x) => x.html).join('');
+    put(items.map((x) => x.html).join(''));
   }
 
   /* ═══════ ТЕХПОДДЕРЖКА ═══════ */
@@ -7770,8 +7944,7 @@
     bodyEl.scrollTop = bodyEl.scrollHeight;
   }
 
-  async function showSupportChatScreen() {
-    await loadSupportMessages();
+  function showSupportChatScreen() {
     setScreen(() => {
       winTitle.textContent = 'Техподдержка';
       winBody.scrollTop = 0;
@@ -7780,6 +7953,12 @@
     }, () => {
       winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
       showSettingsScreen();
+    });
+    // экран открыт сразу с тем, что уже есть; свежая переписка подставляется, если она другая
+    const sign = () => supportMessages.map((m) => m.id).join(',');
+    const before = sign();
+    loadSupportMessages().then(() => {
+      if (sign() !== before && winBody.querySelector('#support-body')) renderSupportChat();
     });
   }
 
@@ -7802,18 +7981,18 @@
   function normDmRow(r) {
     return { id: r.id, fromId: r.from_id, toId: r.to_id, groupId: null, matchId: null, authorName: null,
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned };
   }
   function normGroupRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: r.group_id, matchId: null, authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned };
   }
   // Совместный чат двух групп после match
   function normMatchRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: null, matchId: String(r.match_id), authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned };
   }
 
   function chatPreviewText(m) {
@@ -7838,7 +8017,7 @@
         ? supabaseClient.from('match_messages').select('*').eq('match_id', Number(c.matchId))
         : supabaseClient.from('group_messages').select('*').eq('group_id', c.groupId);
     const { data, error } = await q.order('created_at', { ascending: true }).limit(500);
-    if (error) { console.warn('[chat] load:', error.message); return []; }
+    if (error) { console.warn('[chat] load:', error.message); return null; }
     return (data || []).map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow);
   }
 
@@ -7849,7 +8028,9 @@
 
   function chatMediaHtml(m) {
     // Пока сообщение отправляется — локальный файл, потом — подписанная ссылка из Storage
-    const src = m.localUrl ? `src="${escapeHtml(m.localUrl)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
+    // фото, голосовые и кружки, уже скачанные на устройство, показываются сразу — без заглушки
+    const local = m.localUrl || (m.mediaPath && m.kind !== 'video' && m.kind !== 'file' ? mediaBlobUrls.get(m.mediaPath) : null);
+    const src = local ? `src="${escapeHtml(local)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
     if (m.kind === 'image') return `<img class="chat-photo" ${src} alt="Фото" data-open-photo>`;
     if (m.kind === 'video') return `<video class="chat-video" ${src} controls playsinline preload="metadata"></video>`;
     if (m.kind === 'voice') {
@@ -7921,20 +8102,37 @@
     const author = chat && chat.type !== 'dm' && !mine
       ? `<span class="chat-msg-author">${escapeHtml(m.authorName || 'Участник')}</span>` : '';
     const cls = ['chat-msg', mine ? 'me' : 'them', isMedia ? 'has-media' : '',
-      m.kind === 'circle' ? 'is-circle' : '', m.pending ? 'is-pending' : ''].join(' ');
+      m.kind === 'circle' ? 'is-circle' : '', m.pending ? 'is-pending' : '',
+      chat && chat.selected && chat.selected.has(String(m.id)) ? 'is-selected' : ''].join(' ');
     const body = isMedia
       ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
       : escapeHtml(m.content);
-    const time = m.pending ? 'отправка…' : fmtTime(m.createdAt);
+    const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + fmtTime(m.createdAt);
     return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}">${author}${body}<span class="chat-msg-time">${time}</span></div>`;
   }
 
   const mediaUrlCache = new Map(); // путь в Storage → { url, exp }
 
+  function setChatMediaSrc(el, url, fallbackUrl) {
+    // когда медиа загрузится, высота сообщения вырастет — держим ленту внизу
+    el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); }, { once: true });
+    if (el.tagName !== 'IMG') el.addEventListener('error', () => showMediaFallback(el, fallbackUrl || url), { once: true });
+    el.src = url;
+  }
+
+  /* Подставить ссылки в медиа сообщений. Фото, голосовые и кружки сначала ищем на устройстве —
+     тогда они появляются сразу; остальное подписываем на сервере, скачиваем и запоминаем. */
   async function hydrateChatMedia(root) {
     if (!root) return;
-    const els = [...root.querySelectorAll('[data-media-path]')]
-      .filter((el) => el.dataset.mediaPath && !el.getAttribute(el.tagName === 'A' ? 'href' : 'src'));
+    const pending = (el) => el.dataset.mediaPath && !el.getAttribute(el.tagName === 'A' ? 'href' : 'src');
+    const keepable = (el) => el.tagName === 'IMG' || el.tagName === 'AUDIO' || el.classList.contains('chat-circle');
+    let els = [...root.querySelectorAll('[data-media-path]')].filter(pending);
+    if (!els.length) return;
+    await Promise.all(els.filter(keepable).map(async (el) => {
+      const url = await cachedMediaUrl(el.dataset.mediaPath);
+      if (url && pending(el)) setChatMediaSrc(el, url);
+    }));
+    els = els.filter((el) => el.isConnected && pending(el));
     if (!els.length) return;
     const now = Date.now();
     const need = [...new Set(els.map((el) => el.dataset.mediaPath))].filter((p) => {
@@ -7949,13 +8147,12 @@
       }
     }
     for (const el of els) {
-      const cached = mediaUrlCache.get(el.dataset.mediaPath);
-      if (!cached) continue;
+      const path = el.dataset.mediaPath;
+      const cached = mediaUrlCache.get(path);
+      if (!cached || !pending(el)) continue;
       if (el.tagName === 'A') { el.href = cached.url; continue; }   // карточка файла
-      // когда медиа загрузится, высота сообщения вырастет — держим ленту внизу
-      el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); }, { once: true });
-      if (el.tagName !== 'IMG') el.addEventListener('error', () => showMediaFallback(el, cached.url), { once: true });
-      el.src = cached.url;
+      if (!keepable(el)) { setChatMediaSrc(el, cached.url); continue; }
+      fetchMediaToCache(path, cached.url).then((url) => { if (pending(el)) setChatMediaSrc(el, url || cached.url, cached.url); });
     }
   }
 
@@ -7979,6 +8176,7 @@
       <div class="support-chat chat-view" style="height:100%">
         <div class="support-chat-head">${escapeHtml(chat.headTitle)}</div>
         ${chat.type === 'match' ? '<div class="match-vote" id="match-vote"></div>' : ''}
+        <div class="chat-pin" id="chat-pin" role="button" tabindex="0" hidden></div>
         <div class="support-chat-body" id="chat-view-body">${rows}</div>
         <div class="chat-rec-preview" id="chat-rec-preview" hidden><video playsinline muted></video><span class="chat-rec-ring"></span></div>
         <form class="support-chat-form chat-composer" id="chat-composer">
@@ -7997,6 +8195,12 @@
           <button type="button" class="btn" data-chat-rec-cancel>Отмена</button>
           <button type="button" class="btn btn-primary" data-chat-rec-send>Отправить</button>
         </div>
+        <div class="chat-selbar" id="chat-selbar" hidden>
+          <button type="button" class="btn" data-sel-cancel>Отмена</button>
+          <span class="chat-sel-count" id="chat-sel-count"></span>
+          <button type="button" class="btn" data-sel-forward>Переслать</button>
+          <button type="button" class="btn btn-danger" data-sel-delete>Удалить</button>
+        </div>
       </div>`;
     const body = winBody.querySelector('#chat-view-body');
     chat.stick = true;
@@ -8008,6 +8212,8 @@
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
     winBody.querySelector('#chat-file').addEventListener('change', onChatFilesPicked);
     if (chat.type === 'match') refreshMatchVotePanel();
+    syncChatPinBar();
+    syncChatSelectionUi();
   }
 
   /* ── Голосование в совместном чате ── */
@@ -8179,7 +8385,10 @@
       }
       const { data, error } = await insertChatRow(c, { kind, content, mediaPath, duration, fileName, fileSize });
       if (error) throw error;
+      // своё фото, голосовое или кружок сразу остаётся на устройстве — при следующем открытии чата не скачивается
+      if (blob && ['image', 'voice', 'circle'].includes(kind)) rememberMediaBlob(mediaPath, blob, localUrl);
       if (data) { data.localUrl = localUrl; finalizeChatMessage(c, tmp.id, data); }
+      saveChatCache(c);
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       console.warn('[chat] send:', msg);
@@ -8225,11 +8434,13 @@
         m.localUrl = tmp.localUrl;
         c.messages[c.messages.indexOf(tmp)] = m;
         replaceChatBubble(tmp.id, m);
+        saveChatCache(c);
         return;
       }
     }
     c.messages.push(m);
     appendChatBubble(m);
+    saveChatCache(c);
   }
 
   function sendChatText() {
@@ -8404,15 +8615,304 @@
     else video.pause();
   }
 
+  /* ── Сообщения: кеш переписки, закрепление, выбор, удаление, пересылка ── */
+  const chatHistoryCache = new Map();   // ключ чата → сообщения (последние 200)
+  function chatKey(c) { return c.type === 'dm' ? 'dm:' + c.peerId : c.type === 'match' ? 'match:' + c.matchId : 'group:' + c.groupId; }
+  function saveChatCache(c) {
+    if (!currentUser || !c) return;
+    const list = c.messages.filter((m) => !m.pending).slice(-200).map(({ localUrl, pending, ...m }) => m);
+    const key = chatKey(c);
+    chatHistoryCache.set(key, list);
+    KV.set(`chat:${currentUser.id}:${key}`, list);
+  }
+  function chatMsgById(id) { return chat ? chat.messages.find((x) => String(x.id) === String(id)) || null : null; }
+  function isMyMsg(m) { return !!m && !!currentUser && String(m.fromId) === String(currentUser.id); }
+  const chatSqlHint = (error) => /function|schema cache|could not find|pinned/i.test(error.message || '')
+    ? '\n\nВыполните supabase_chat_actions.sql в Supabase.' : '';
+
+  function rerenderChatBody() {
+    const body = winBody.querySelector('#chat-view-body');
+    if (!body || !chat) return;
+    const stick = chat.stick !== false;
+    body.innerHTML = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : `<div class="empty-msg">Начните диалог.</div>`;
+    hydrateChatMedia(body);
+    if (stick) scrollChatToBottom();
+    syncChatPinBar();
+    syncChatSelectionUi();
+  }
+
+  // События realtime по сообщениям: новое, изменённое (закрепили / открепили) и удалённое
+  function handleChatRealtime(payload, kind, norm) {
+    if (!currentUser) return;
+    if (payload.eventType === 'DELETE') {
+      const id = payload.old && payload.old.id;
+      if (id != null) removeChatMessagesLocal(kind, [id]);
+      return;
+    }
+    const r = payload.new;
+    if (!r) return;
+    if (kind === 'dm' && r.from_id !== currentUser.id && r.to_id !== currentUser.id) return;
+    const m = norm(r);
+    if (payload.eventType !== 'UPDATE') { onIncomingChatRow(m); return; }
+    const c = chat;
+    if (!c || c.type !== kind) return;
+    const idx = c.messages.findIndex((x) => String(x.id) === String(m.id));
+    if (idx === -1) return;
+    const old = c.messages[idx];
+    if (old.pinned === m.pinned && old.content === m.content) return;
+    c.messages[idx] = { ...m, localUrl: old.localUrl };
+    c.pinIdx = null;
+    replaceChatBubble(m.id, c.messages[idx]);
+    syncChatPinBar();
+    saveChatCache(c);
+  }
+
+  function removeChatMessagesLocal(kind, ids) {
+    const c = chat;
+    if (!c || c.type !== kind) return;
+    const gone = new Set(ids.map(String));
+    if (!c.messages.some((m) => gone.has(String(m.id)))) return;
+    c.messages = c.messages.filter((m) => !gone.has(String(m.id)));
+    gone.forEach((id) => { const el = chatBubbleEl(id); if (el) el.remove(); c.selected.delete(id); });
+    if (!c.selected.size) c.selecting = false;
+    c.pinIdx = null;
+    const body = winBody.querySelector('#chat-view-body');
+    if (body && !c.messages.length) body.innerHTML = `<div class="empty-msg">Начните диалог.</div>`;
+    syncChatPinBar();
+    syncChatSelectionUi();
+    saveChatCache(c);
+  }
+
+  /* Закреплённое — полоса над лентой. Если закреплено несколько, нажатие листает их от нового к старому */
+  function pinnedMessages() { return chat ? chat.messages.filter((m) => m.pinned && !m.pending) : []; }
+  function syncChatPinBar() {
+    const el = winBody.querySelector('#chat-pin');
+    if (!el || !chat) return;
+    const pins = pinnedMessages();
+    if (!pins.length) { el.hidden = true; el.innerHTML = ''; return; }
+    chat.pinIdx = Math.min(chat.pinIdx == null ? pins.length - 1 : chat.pinIdx, pins.length - 1);
+    const m = pins[chat.pinIdx];
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="chat-pin-main">
+        <span class="chat-pin-cap">Закреплено${pins.length > 1 ? ` · ${chat.pinIdx + 1} из ${pins.length}` : ''}</span>
+        <span class="chat-pin-text">${escapeHtml(chatPreviewText(m) || 'Сообщение')}</span>
+      </div>
+      <button type="button" class="chat-pin-x" data-pin-off="${escapeHtml(m.id)}" aria-label="Открепить" title="Открепить">×</button>`;
+  }
+  function jumpToPinned() {
+    const pins = pinnedMessages();
+    if (!pins.length) return;
+    const idx = Math.min(chat.pinIdx == null ? pins.length - 1 : chat.pinIdx, pins.length - 1);
+    const el = chatBubbleEl(pins[idx].id);
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+      el.classList.remove('is-flash'); void el.offsetWidth; el.classList.add('is-flash');
+    }
+    chat.pinIdx = (idx - 1 + pins.length) % pins.length;
+    syncChatPinBar();
+  }
+  async function setChatMessagePinned(id, pin) {
+    const c = chat, m = chatMsgById(id);
+    if (!c || !m || m.pending) return;
+    const apply = (value) => {
+      m.pinned = value; c.pinIdx = null;
+      if (chat !== c) return;
+      replaceChatBubble(m.id, m); syncChatPinBar(); syncChatSelectionUi(); saveChatCache(c);
+    };
+    apply(pin);   // сразу на экране, сервер — в фоне
+    const { error } = await supabaseClient.rpc('set_chat_message_pinned', { chat_kind: c.type, msg_id: String(m.id), pin });
+    if (error) {
+      console.warn('[chat pin]', error.message);
+      apply(!pin);
+      alert('Не удалось ' + (pin ? 'закрепить' : 'открепить') + ' сообщение: ' + error.message + chatSqlHint(error));
+    }
+  }
+
+  /* Выбор нескольких сообщений: вместо поля ввода — панель «Переслать / Удалить» */
+  function setChatSelecting(on) {
+    if (!chat) return;
+    chat.selecting = on;
+    if (!on) chat.selected.clear();
+    syncChatSelectionUi();
+  }
+  function toggleChatSelected(id) {
+    if (!chat) return;
+    const key = String(id);
+    if (chat.selected.has(key)) chat.selected.delete(key); else chat.selected.add(key);
+    chat.selecting = chat.selected.size > 0;
+    syncChatSelectionUi();
+  }
+  function syncChatSelectionUi() {
+    const view = winBody.querySelector('.chat-view');
+    if (!view || !chat) return;
+    view.classList.toggle('is-selecting', chat.selecting);
+    view.querySelectorAll('#chat-view-body .chat-msg[data-msg-id]').forEach((el) => el.classList.toggle('is-selected', chat.selected.has(el.dataset.msgId)));
+    const bar = view.querySelector('#chat-selbar'), composer = view.querySelector('#chat-composer');
+    if (bar) bar.hidden = !chat.selecting;
+    if (composer && !chatRec) composer.hidden = chat.selecting;
+    const count = view.querySelector('#chat-sel-count');
+    if (count) count.textContent = `Выбрано: ${chat.selected.size}`;
+    // удалить можно только свои сообщения
+    const del = view.querySelector('[data-sel-delete]');
+    if (del) del.disabled = ![...chat.selected].every((id) => isMyMsg(chatMsgById(id)));
+  }
+
+  // Меню сообщения — по долгому нажатию или правой кнопке мыши
+  function openMsgMenu(id, x, y) {
+    const m = chatMsgById(id);
+    if (!m || m.pending) return;
+    closePostMenus();
+    const pop = document.createElement('div');
+    pop.className = 'popover msg-menu';
+    const item = (act, label, danger = false) =>
+      `<button class="pop-item ${danger ? 'danger' : ''}" type="button" data-msg-act="${act}" data-msg-id="${escapeHtml(m.id)}">${label}</button>`;
+    pop.innerHTML = item('pin', m.pinned ? 'Открепить' : 'Закрепить')
+      + ((m.content || '').trim() ? item('copy', 'Копировать текст') : '')
+      + item('forward', 'Переслать')
+      + item('select', 'Выбрать')
+      + (isMyMsg(m) ? item('delete', 'Удалить', true) : '');
+    winBody.appendChild(pop);
+    const r = winBody.getBoundingClientRect();
+    const left = Math.max(8, Math.min(x - r.left, r.width - pop.offsetWidth - 8));
+    const top = Math.max(8, Math.min(y - r.top, r.height - pop.offsetHeight - 8));
+    pop.style.left = left + 'px';
+    pop.style.top = (top + winBody.scrollTop) + 'px';
+    const onDocDown = (ev) => {
+      if (pop.contains(ev.target)) return;
+      pop.remove();
+      document.removeEventListener('pointerdown', onDocDown, true);
+    };
+    setTimeout(() => document.addEventListener('pointerdown', onDocDown, true), 0);
+  }
+
+  async function deleteChatMessages(ids) {
+    const c = chat;
+    if (!c) return;
+    const list = ids.map(chatMsgById).filter((m) => m && !m.pending && isMyMsg(m));
+    if (!list.length) return;
+    const ok = await confirmModal({
+      title: list.length > 1 ? `Удалить сообщения (${list.length})?` : 'Удалить сообщение?',
+      text: 'Сообщение исчезнет у всех участников чата. Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+    });
+    if (!ok || chat !== c) return;
+    const gone = list.map((m) => String(m.id));
+    removeChatMessagesLocal(c.type, gone);   // сразу с экрана, сервер — в фоне
+    setChatSelecting(false);
+    const { error } = await supabaseClient.rpc('delete_chat_messages', { chat_kind: c.type, ids: gone });
+    if (error) {
+      console.warn('[chat delete]', error.message);
+      alert('Не удалось удалить: ' + error.message + chatSqlHint(error));
+      const fresh = await loadChatHistory(c);
+      if (fresh && chat === c) { c.messages = fresh; rerenderChatBody(); saveChatCache(c); }
+      return;
+    }
+    const paths = list.map((m) => m.mediaPath).filter(Boolean);
+    if (paths.length) supabaseClient.storage.from(CHAT_BUCKET).remove(paths).then(() => {}, () => {});
+  }
+
+  /* Пересылка: копия сообщения в другой чат. Файл копируется в папку того чата — у его участников
+     есть доступ только к ней */
+  function forwardTargets() {
+    const out = [];
+    for (const g of myGroups()) {
+      const ava = g.photo
+        ? `<span class="avatar group-chat-avatar" style="width:36px;height:36px;background-image:url('${safeUrl(g.photo)}')"></span>`
+        : `<span class="avatar group-chat-avatar" style="width:36px;height:36px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+      out.push({ spec: { type: 'group', groupId: g.id }, name: g.name || 'Группа', sub: 'Чат группы', ava });
+    }
+    for (const m of myAcceptedMatches()) {
+      out.push({ spec: { type: 'match', matchId: String(m.id) }, name: matchTitle(m), sub: 'Совместный чат',
+        ava: `<span class="avatar group-chat-avatar match-chat-avatar" style="width:36px;height:36px">${featMarkHtml(m.voteState)}</span>` });
+    }
+    for (const f of friends) {
+      out.push({ spec: { type: 'dm', peerId: f.id }, name: f.name || f.handle || 'Пользователь', sub: f.handle || '', ava: avatarCircleHtml(f, 36) });
+    }
+    return out;
+  }
+  async function forwardMessage(m, target) {
+    let mediaPath = null;
+    if (m.mediaPath) {
+      mediaPath = `${chatMediaFolder(target)}/${currentUser.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt(m.mediaPath) || 'bin'}`;
+      const { error } = await supabaseClient.storage.from(CHAT_BUCKET).copy(m.mediaPath, mediaPath);
+      if (error) throw error;
+      if (mediaBlobUrls.has(m.mediaPath)) mediaBlobUrls.set(mediaPath, mediaBlobUrls.get(m.mediaPath));
+    }
+    const { data, error } = await insertChatRow(target, {
+      kind: m.kind || 'text', content: m.content || '', mediaPath,
+      duration: m.duration, fileName: m.fileName, fileSize: m.fileSize,
+    });
+    if (error) throw error;
+    const list = data && chatHistoryCache.get(chatKey(target));
+    if (list && !list.some((x) => String(x.id) === String(data.id))) list.push(data);
+  }
+  function openForwardPicker(ids) {
+    const c = chat;
+    if (!c) return;
+    const wanted = new Set(ids.map(String));
+    const msgs = c.messages.filter((m) => wanted.has(String(m.id)) && !m.pending);
+    if (!msgs.length) return;
+    const targets = forwardTargets().filter((t) => chatKey(t.spec) !== chatKey(c));
+    if (!targets.length) { alert('Пересылать пока некуда: нет других чатов.'); return; }
+    const back = document.createElement('div');
+    back.className = 'modal-backdrop';
+    back.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3 class="modal-title">${msgs.length > 1 ? `Переслать сообщения (${msgs.length})` : 'Переслать сообщение'}</h3>
+        <ul class="fwd-list">${targets.map((t, i) => `
+          <li class="person-card" data-fwd="${i}" role="checkbox" aria-checked="false" tabindex="0">
+            <span class="person-check"></span>
+            ${t.ava}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(t.name)}</div>
+              <div class="person-handle">${escapeHtml(t.sub)}</div>
+            </div>
+          </li>`).join('')}</ul>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-cancel>Отмена</button>
+          <button type="button" class="btn btn-primary" data-send disabled>Отправить</button>
+        </div>
+      </div>`;
+    win.appendChild(back);
+    const sendBtn = back.querySelector('[data-send]');
+    const chosen = () => [...back.querySelectorAll('[data-fwd][aria-checked="true"]')].map((el) => targets[Number(el.dataset.fwd)]);
+    back.addEventListener('click', async (e) => {
+      if (e.target === back || e.target.closest('[data-cancel]')) { if (!sendBtn.dataset.busy) back.remove(); return; }
+      const row = e.target.closest('[data-fwd]');
+      if (row && !sendBtn.dataset.busy) {
+        row.setAttribute('aria-checked', String(row.getAttribute('aria-checked') !== 'true'));
+        sendBtn.disabled = !chosen().length;
+        return;
+      }
+      if (!e.target.closest('[data-send]') || sendBtn.dataset.busy) return;
+      const list = chosen();
+      if (!list.length) return;
+      sendBtn.dataset.busy = '1'; sendBtn.disabled = true; sendBtn.textContent = 'Отправляем…';
+      let failed = 0, lastError = null;
+      for (const t of list) {
+        for (const m of msgs) {
+          try { await forwardMessage(m, t.spec); }
+          catch (err) { failed++; lastError = err; console.warn('[chat forward]', err); }
+        }
+      }
+      back.remove();
+      if (chat === c) setChatSelecting(false);
+      if (failed) alert(`Не удалось переслать (${failed}): ` + ((lastError && lastError.message) || lastError));
+    });
+  }
+
   /* ── Открытие / закрытие чата ── */
   function leaveChat() {
     if (chatRec) stopChatRecording(true);
     chat = null;
   }
 
+  /* Чат открывается сразу из переписки, сохранённой на устройстве; свежая версия с сервера
+     подтягивается следом и подменяет ленту, только если что-то изменилось */
   async function openChat(spec, backFn) {
     leaveChat();
-    const c = { ...spec, messages: [] };
+    const c = { ...spec, messages: [], selected: new Set(), selecting: false, pinIdx: null };
     if (c.type === 'dm') {
       const peer = friends.find((f) => f.id === c.peerId) || groupMemberProfiles.get(c.peerId);
       c.headTitle = 'Чат с ' + (peer ? peer.name : 'пользователем');
@@ -8427,9 +8927,7 @@
       c.winTitle = g ? g.name : 'Групповой чат';
     }
     chat = c;
-    c.messages = await loadChatHistory(c);
-    if (chat !== c) return; // пока грузили, пользователь ушёл
-    setScreen(() => {
+    const show = () => setScreen(() => {
       winTitle.textContent = c.winTitle;
       winBody.scrollTop = 0;
       winBody.style.display = 'flex'; winBody.style.flexDirection = 'column'; winBody.style.padding = '0';
@@ -8439,6 +8937,27 @@
       winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
       (backFn || showMessengerScreen)();
     });
+    const sign = (list) => list.map((m) => m.id + (m.pinned ? '*' : '')).join(',');
+
+    const key = chatKey(c);
+    let cached = chatHistoryCache.get(key);
+    if (!cached && currentUser) {
+      cached = await KV.get(`chat:${currentUser.id}:${key}`);
+      if (chat !== c) return; // пока читали кеш, пользователь ушёл
+      if (Array.isArray(cached)) chatHistoryCache.set(key, cached); else cached = null;
+    }
+    if (cached) { c.messages = cached.slice(); show(); }
+
+    const fresh = await loadChatHistory(c);
+    if (chat !== c) return; // пока грузили, пользователь ушёл
+    if (!cached) { c.messages = fresh || []; show(); }
+    else if (fresh) {
+      // то, что ещё отправляется, остаётся в конце ленты
+      const sending = c.messages.filter((m) => m.pending);
+      const before = sign(c.messages.filter((m) => !m.pending));
+      if (sign(fresh) !== before) { c.messages = [...fresh, ...sending]; rerenderChatBody(); }
+    }
+    if (fresh) saveChatCache(c);
   }
 
   function showDmScreen(peerId) { return openChat({ type: 'dm', peerId }); }
@@ -8751,8 +9270,20 @@
      navDir — откуда пришли: вперёд (новый экран выезжает справа) или назад (слева). */
   let navDir = 'fwd';
   let screenAnimTimer = null;
+  const SCREEN_ANIM = ['scr-fwd', 'scr-back', 'scr-open', 'scr-fade'];
+  /* Обновление открытого экрана «на месте» — когда пришли новые данные (ответ сервера, realtime),
+     а человек никуда не переходил. Без анимации смены экрана и без сброса прокрутки: иначе экран
+     мигает на каждое событие. Переходы между экранами по-прежнему анимируются. */
+  let quietRender = false;
+  function quietly(fn) {
+    const top = winBody.scrollTop;
+    winBody.classList.remove(...SCREEN_ANIM);
+    quietRender = true;
+    try { fn(); } finally { quietRender = false; }
+    winBody.scrollTop = top;
+  }
   function animateScreen(kind) {
-    if (reduceMotion) return;
+    if (reduceMotion || quietRender) return;
     winBody.classList.remove('scr-fwd', 'scr-back', 'scr-open', 'scr-fade');
     void winBody.offsetWidth;   // перезапуск анимации, если класс тот же
     winBody.classList.add('scr-' + kind);
@@ -8763,7 +9294,7 @@
   // По краю окна пробегает спектр — при открытии окна и смене вкладки
   let sweepTimer = null;
   function playWindowSweep() {
-    if (reduceMotion) return;
+    if (reduceMotion || quietRender) return;
     win.classList.remove('sweep');
     void win.offsetWidth;
     win.classList.add('sweep');
@@ -8928,6 +9459,8 @@
     if (id === 'filters') syncFiltersUi();
     if (id === 'profile') ensureMyPhotos();
     if (id === 'groups') bindGroupSwipe();
+    if (id === 'friends') friendsListShown = APPS.friends.render();
+    if (id === 'notifications') notifListShown = APPS.notifications.render();
     if (id === 'notifications' && currentUser) {
       supabaseClient.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
         .then(() => { notifications = notifications.map((n) => ({ ...n, read: true })); updateBadge(); });
@@ -8958,13 +9491,20 @@
       : 'Других групп пока нет';
   }
 
+  // Уведомления обновляются на месте: без сброса прокрутки и только если список действительно изменился
+  let notifListShown = '';
   function refreshNotifications() {
-    if (openApp === 'notifications') { winBody.innerHTML = APPS.notifications.render(); winBody.scrollTop = 0; }
     updateBadge();
+    if (openApp !== 'notifications' || win.hidden) return;
+    const html = APPS.notifications.render();
+    if (html === notifListShown) return;
+    winBody.classList.remove(...SCREEN_ANIM);
+    notifListShown = html;
+    winBody.innerHTML = html;
   }
 
   function showPlacesScreen() {
-    showApp('profile');
+    if (openApp !== 'profile') showApp('profile');
     setScreen(() => {
       closePostMenus();
       if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
@@ -9152,7 +9692,7 @@
     const { error } = await supabaseClient.from('posts').delete().eq('id', postId);
     if (error) { console.warn('[posts] delete:', error.message); return; }
     await loadPostsFromDB();
-    syncPostMarkers(); closePopup(); showPlacesScreen();
+    syncPostMarkers(); closePopup(); quietly(showPlacesScreen);
   }
 
   /* ═══════ НОВЫЙ ПОСТ ═══════ */
@@ -9360,6 +9900,7 @@
     const rows = await loadProfilePhotos(currentUser.id);
     if (!rows || myPhotos !== null) return;
     myPhotos = rows;
+    scheduleStateSave();
     if (openApp === 'profile' && !win.hidden && winBody.querySelector('[data-action="edit-profile"]')) {
       winBody.innerHTML = APPS.profile.render();
     }
@@ -9381,6 +9922,7 @@
   async function reloadMyPhotos() {
     const rows = await loadProfilePhotos(currentUser.id);
     if (rows) myPhotos = rows;
+    scheduleStateSave();
   }
 
   // Уменьшенная копия главного фото → profiles.avatar (карта, чаты, списки)
@@ -9442,46 +9984,23 @@
   }
   function showUserProfileScreen() { showProfileScreen(); }
 
+  /* Профиль человека показывается сразу из кеша (память или устройство), а с сервера перечитывается
+     следом; экран перерисовывается, только если данные изменились */
+  const friendProfileCache = new Map();   // userId → { p, photos }
   function showFriendProfile(userId, personHint = null, backFn = null) {
     setScreen(() => {
       if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
       if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
       winTitle.textContent = 'Профиль';
-      winBody.innerHTML = `<div class="empty-msg">Загружаем профиль…</div>`;
       winBody.scrollTop = 0;
-      const loadingEl = winBody.firstElementChild;
+      winBody.innerHTML = `<div data-fp-root></div>`;
+      // пока человек не ушёл на другой экран, в окне остаётся элемент с этой меткой
+      const alive = () => !win.hidden && !!winBody.querySelector(`[data-fp-root="${CSS.escape(String(userId))}"], [data-fp-root=""]`);
+      winBody.firstElementChild.dataset.fpRoot = '';
+      let shown = null;
 
-      (async () => {
-        let p = null;
-        const photosReq = loadProfilePhotos(userId);
-        try {
-          const { data, error } = await supabaseClient
-            .from('profiles')
-            .select('id, name, username, bio, avatar')
-            .eq('id', userId)
-            .maybeSingle();
-          if (error) console.warn('[friend profile] load:', error.message);
-          p = data;
-        } catch (err) { console.warn('[friend profile] exception:', err); }
-        const photoRows = await photosReq;
-
-        // Пока грузили, пользователь мог уйти на другой экран — не затираем его
-        if (!loadingEl.isConnected || win.hidden) return;
-
-        if (!p && personHint) {
-          p = {
-            id: personHint.id || userId,
-            name: personHint.name || 'Пользователь',
-            username: (personHint.handle || '@user').replace(/^@/, ''),
-            bio: '',
-            avatar: personHint.avatar || '',
-          };
-        }
-        if (!p) {
-          winBody.innerHTML = `<div class="empty-msg">Профиль не найден</div>`;
-          return;
-        }
-
+      const paint = (p, photoRows, fade) => {
+        if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
         const cfg = userAvatarCfgById.get(userId) || null;
         const use3D = isThreeAvailable() && cfg && typeof cfg === 'object';
         const name = p.name || 'Пользователь';
@@ -9520,7 +10039,7 @@
 
         // Фото + 3D-аватар: ужимаем фото по высоте окна, чтобы аватар был виден без прокрутки
         winBody.innerHTML = `
-          <div class="${avatarBelow ? 'friend-fit' : ''}">
+          <div class="${avatarBelow ? 'friend-fit' : ''}" data-fp-root="${escapeHtml(userId)}">
           ${headHtml}
             <div class="friend-actions">
               <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
@@ -9528,7 +10047,7 @@
             ${avatarBelow}
           </div>
           </div>`;
-        animateScreen('fade');   // профиль догрузился — мягко проявляем вместо «загрузки»
+        if (fade) animateScreen('fade');   // профиль догрузился — мягко проявляем вместо «загрузки»
 
         if (use3D) {
           const canvas = winBody.querySelector('#friend-avatar-canvas');
@@ -9554,6 +10073,53 @@
 
         const chatBtn = winBody.querySelector('#friend-open-chat');
         if (chatBtn) chatBtn.addEventListener('click', () => showDmScreen(userId));
+      };
+      const sign = (p, photos) => JSON.stringify([p.name, p.username, p.bio, p.avatar, (photos || []).map((x) => x.id || x.url),
+        avatarCfgKey(userAvatarCfgById.get(userId) || null)]);
+
+      (async () => {
+        let cached = friendProfileCache.get(userId);
+        if (!cached) {
+          cached = await KV.get('prof:' + userId);
+          if (!alive()) return;
+        }
+        if (cached && cached.p) { paint(cached.p, cached.photos, false); shown = sign(cached.p, cached.photos); }
+        else { cached = null; winBody.innerHTML = `<div class="empty-msg" data-fp-root="">Загружаем профиль…</div>`; }
+
+        let p = null;
+        const photosReq = loadProfilePhotos(userId);
+        try {
+          const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('id, name, username, bio, avatar')
+            .eq('id', userId)
+            .maybeSingle();
+          if (error) console.warn('[friend profile] load:', error.message);
+          p = data;
+        } catch (err) { console.warn('[friend profile] exception:', err); }
+        const photoRows = await photosReq;
+
+        // Пока грузили, пользователь мог уйти на другой экран — не затираем его
+        if (!alive()) return;
+        if (!p && cached) return;   // сеть не ответила — остаётся то, что показано из кеша
+
+        if (!p && personHint) {
+          p = {
+            id: personHint.id || userId,
+            name: personHint.name || 'Пользователь',
+            username: (personHint.handle || '@user').replace(/^@/, ''),
+            bio: '',
+            avatar: personHint.avatar || '',
+          };
+        }
+        if (!p) {
+          winBody.innerHTML = `<div class="empty-msg">Профиль не найден</div>`;
+          return;
+        }
+        const photos = photoRows || (cached && cached.photos) || null;
+        if (sign(p, photos) !== shown) { paint(p, photos, !cached); shown = sign(p, photos); }
+        friendProfileCache.set(userId, { p, photos });
+        KV.set('prof:' + userId, { p, photos });
       })();
     }, () => {
       if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
@@ -9728,6 +10294,27 @@
     }
     if (e.target.closest('[data-flt-done]')) { showMapApp(); return; }
 
+    // ── сообщения чата: меню, закреплённое, выбор нескольких ──
+    const msgAct = e.target.closest('[data-msg-act]');
+    if (msgAct) {
+      const id = msgAct.dataset.msgId, act = msgAct.dataset.msgAct;
+      closePostMenus();
+      const m = chatMsgById(id);
+      if (!m) return;
+      if (act === 'pin') setChatMessagePinned(id, !m.pinned);
+      else if (act === 'copy') { try { await navigator.clipboard.writeText(m.content || ''); } catch (err) { console.warn('[copy]', err); } }
+      else if (act === 'forward') openForwardPicker([id]);
+      else if (act === 'select') toggleChatSelected(id);
+      else if (act === 'delete') deleteChatMessages([id]);
+      return;
+    }
+    const pinOff = e.target.closest('[data-pin-off]');
+    if (pinOff) { setChatMessagePinned(pinOff.dataset.pinOff, false); return; }
+    if (e.target.closest('#chat-pin')) { jumpToPinned(); return; }
+    if (e.target.closest('[data-sel-cancel]')) { setChatSelecting(false); return; }
+    if (e.target.closest('[data-sel-forward]')) { if (chat) openForwardPicker([...chat.selected]); return; }
+    if (e.target.closest('[data-sel-delete]')) { if (chat) deleteChatMessages([...chat.selected]); return; }
+
     // ── чат: вложения, запись, просмотр ──
     if (e.target.closest('[data-chat-attach]')) { const f = winBody.querySelector('#chat-file'); if (f) f.click(); return; }
     const recBtn = e.target.closest('[data-chat-rec]');
@@ -9807,7 +10394,7 @@
       const status = await sendGroupMatch(matchSend.dataset.matchSend, matchSend.dataset.matchTo);
       if (!status) { matchSend.disabled = false; return; }
       if (status === 'accepted') alert('У этой группы уже был запрос к вам — match состоялся! Общий чат создан.');
-      reopenGroupDetails();
+      quietly(reopenGroupDetails);
       return;
     }
     const gmBtn = e.target.closest('[data-gm-accept], [data-gm-decline]');
@@ -9818,7 +10405,7 @@
       gmBtn.closest('.notif-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
       const ok = await respondGroupMatch(matchId, accept);
       if (openApp === 'notifications') refreshNotifications();
-      else if (ok && winBody.querySelector('.match-rows')) reopenGroupDetails();
+      else if (ok && winBody.querySelector('.match-rows')) quietly(reopenGroupDetails);
       if (ok && accept) {
         const doIt = await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже' });
         if (doIt) {
@@ -9890,7 +10477,7 @@
       if (!ok) return;
       const { error } = await supabaseClient.from('wishes').delete().eq('id', id);
       if (error) { alert('Не удалось удалить желание: ' + error.message); return; }
-      await loadWishesFromDB(); refreshWishClouds(); showWishesScreen();
+      await loadWishesFromDB(); refreshWishClouds(); quietly(showWishesScreen);
       return;
     }
     const wMap = e.target.closest('[data-wish-map]');
@@ -9908,8 +10495,12 @@
       const id = delBtn.dataset.groupDelete;
       const ok = await confirmModal({ title: 'Удалить группу?', text: 'Это действие нельзя отменить.', confirmLabel: 'Удалить' });
       if (!ok) return;
-      await supabaseClient.from('groups').delete().eq('id', id);
-      await refreshGroupsWorld(); showGroupsScreen();
+      // группа пропадает из списка сразу, сервер догоняет в фоне
+      groups = groups.filter((g) => String(g.id) !== String(id));
+      refreshGroupsList(); refreshMyMarker();
+      const { error } = await supabaseClient.from('groups').delete().eq('id', id);
+      await refreshGroupsWorld(); refreshGroupsList();
+      if (error) alert('Не удалось удалить группу: ' + error.message);
       return;
     }
 
@@ -9967,7 +10558,7 @@
         return;
       }
       await refreshFriendsAndMap();
-      showFriendsScreen(); return;
+      refreshFriendsList(); return;
     }
 
     const dmBtn = e.target.closest('[data-open-dm]');
@@ -9977,7 +10568,7 @@
     if (viewBtn) {
       placesView = viewBtn.dataset.view === 'grid' ? 'grid' : 'feed';
       savePlacesView(placesView);
-      showPlacesScreen(); return;
+      quietly(showPlacesScreen); winBody.scrollTop = 0; animateScreen('fade'); return;
     }
     if (e.target.closest('[data-action="new-post"]')) { showNewPost(); return; }
 
@@ -10026,6 +10617,48 @@
     }
   });
 
+  /* ── Сообщение в чате: долгое нажатие или правая кнопка — меню; в режиме выбора нажатие отмечает ── */
+  let msgPressTimer = null, msgPressFired = false, msgPressAt = null;
+  const chatMsgAt = (target) => {
+    const el = target.closest && target.closest('#chat-view-body .chat-msg[data-msg-id]');
+    return el && !el.classList.contains('is-pending') ? el : null;
+  };
+  const msgPressDone = () => { msgPressFired = true; setTimeout(() => { msgPressFired = false; }, 700); };
+  winBody.addEventListener('pointerdown', (e) => {
+    clearTimeout(msgPressTimer);
+    const el = chatMsgAt(e.target);
+    if (!el || e.pointerType === 'mouse' || e.target.closest('audio, a')) return;
+    const id = el.dataset.msgId, x = e.clientX, y = e.clientY;
+    msgPressAt = { x, y };
+    msgPressTimer = setTimeout(() => {
+      msgPressDone();
+      if (navigator.vibrate) { try { navigator.vibrate(10); } catch {} }
+      if (chat && chat.selecting) toggleChatSelected(id); else openMsgMenu(id, x, y);
+    }, 480);
+  });
+  winBody.addEventListener('pointermove', (e) => {
+    if (msgPressAt && Math.hypot(e.clientX - msgPressAt.x, e.clientY - msgPressAt.y) > 10) { clearTimeout(msgPressTimer); msgPressAt = null; }
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((type) => winBody.addEventListener(type, () => { clearTimeout(msgPressTimer); msgPressAt = null; }));
+  winBody.addEventListener('contextmenu', (e) => {
+    const el = chatMsgAt(e.target);
+    if (!el) return;
+    e.preventDefault();
+    clearTimeout(msgPressTimer);
+    if (msgPressFired) return;   // меню уже открыто долгим нажатием
+    msgPressDone();
+    if (chat && chat.selecting) toggleChatSelected(el.dataset.msgId); else openMsgMenu(el.dataset.msgId, e.clientX, e.clientY);
+  });
+  // На погружении — раньше остальных обработчиков: в режиме выбора нажатие не открывает фото и файлы
+  winBody.addEventListener('click', (e) => {
+    const el = chatMsgAt(e.target);
+    if (!el) return;
+    if (msgPressFired) { msgPressFired = false; e.preventDefault(); e.stopPropagation(); return; }
+    if (!chat || !chat.selecting) return;
+    e.preventDefault(); e.stopPropagation();
+    toggleChatSelected(el.dataset.msgId);
+  }, true);
+
   /* ═══════ DOCK ═══════ */
   dock.addEventListener('click', (e) => {
     const btn = e.target.closest('.dock-btn'); if (!btn) return;
@@ -10068,7 +10701,18 @@
     authScreen.hidden = false;
     showAuthScene();
     // Карту (второй WebGL и загрузка плиток) запускаем, когда вступление отыграло — чтобы оно не подлагивало
-    renderAuthLogin().then(() => setTimeout(ensureMapStarted, 300));
+    renderAuthLogin().then(startMapWhenAuthIdle);
+  }
+
+  /* Карта под экраном входа стартует, когда карточка стоит на месте: её запуск (второй WebGL,
+     разбор скрипта, плитки) занимает главный поток, и на переходах между шагами это видно как рывки */
+  function startMapWhenAuthIdle() {
+    const tick = () => {
+      if (mapStarted || authScreen.hidden) return;
+      if (authBusy) { setTimeout(tick, 900); return; }
+      ensureMapStarted();
+    };
+    setTimeout(tick, 1400);
   }
 
   // Глобус и логотип проявляются, когда текстура Земли готова — без «пустого» шара и рывков
