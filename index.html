@@ -2158,13 +2158,13 @@
     @media (max-width: 640px) {
       .friend-fit .photo-hero { height: clamp(160px, calc(100dvh - 446px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
     }
-    /* Свой профиль: фото + 7 пунктов меню помещаются в окно целиком */
-    .me-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(150px, calc(min(680px, 100dvh - 116px) - 444px), 380px); }
-    .me-fit.has-bio .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 488px), 380px); }
+    /* Свой профиль: фото + 6 пунктов меню помещаются в окно целиком */
+    .me-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(150px, calc(min(680px, 100dvh - 116px) - 396px), 380px); }
+    .me-fit.has-bio .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 440px), 380px); }
     .me-fit .ph-bio-own { padding: 10px 18px 0; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     @media (max-width: 640px) {
-      .me-fit .photo-hero { height: clamp(150px, calc(100dvh - 510px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
-      .me-fit.has-bio .photo-hero { height: clamp(150px, calc(100dvh - 554px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
+      .me-fit .photo-hero { height: clamp(150px, calc(100dvh - 462px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
+      .me-fit.has-bio .photo-hero { height: clamp(150px, calc(100dvh - 506px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
     }
     .profile-bio.ph-bio { text-align: left; margin: 0; }
     .profile-bio.ph-bio-own { padding: 14px 18px 4px; }
@@ -2963,6 +2963,7 @@
       .dock-item { width: 60px; }
       .dock-btn, .dock-item[data-open="true"] .dock-btn { padding: 0; }
     }
+    @media (max-width: 350px) { .dock-item { width: 54px; } }
     @media (max-height: 480px) and (orientation: landscape) {
       .menubar, .map-tools { top: calc(8px + env(safe-area-inset-top, 0px)); height: 42px; }
       .map-tools #notif-btn, .map-tools #filter-btn, .map-tools #settings-btn { width: 36px; height: 36px; }
@@ -3077,7 +3078,7 @@
   </section>
 
   <!-- Таб-панель: иконки-символы и «жидкая» капсула, которая перетекает к выбранной вкладке.
-       Карта — радар (у открытой вкладки луч вращается), друзья — два пересекающихся круга,
+       Карта — радар (у открытой вкладки луч вращается), группы — три круга, друзья — два пересекающихся круга,
        чаты — облачко со «спутником», профиль — точка-голова и плечи -->
   <nav class="dock-wrap" aria-label="Разделы">
     <ul class="dock" id="dock">
@@ -3094,6 +3095,25 @@
         </button>
       </li>
       <li class="dock-item">
+        <button class="dock-btn" type="button" data-app="messenger" aria-label="Сообщения">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7.5 17.06 4.2 18.6 4.42 13.39A7 7 0 1 1 7.5 17.06Z"/>
+            <circle class="ic-fill" cx="18" cy="17.8" r="2.4"/>
+          </svg>
+          <span class="dock-label">Чаты</span>
+        </button>
+      </li>
+      <li class="dock-item">
+        <button class="dock-btn" type="button" data-app="groups" aria-label="Группы">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6.9" cy="15.9" r="3.4"/>
+            <circle cx="17.1" cy="15.9" r="3.4"/>
+            <circle class="ic-fill" cx="12" cy="7.4" r="3.4"/>
+          </svg>
+          <span class="dock-label">Группы</span>
+        </button>
+      </li>
+      <li class="dock-item">
         <button class="dock-btn" type="button" data-app="friends" aria-label="Друзья">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="9" cy="12" r="5.6"/>
@@ -3101,15 +3121,6 @@
             <path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/>
           </svg>
           <span class="dock-label">Друзья</span>
-        </button>
-      </li>
-      <li class="dock-item">
-        <button class="dock-btn" type="button" data-app="messenger" aria-label="Сообщения">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M7.5 17.06 4.2 18.6 4.42 13.39A7 7 0 1 1 7.5 17.06Z"/>
-            <circle class="ic-fill" cx="18" cy="17.8" r="2.4"/>
-          </svg>
-          <span class="dock-label">Чаты</span>
         </button>
       </li>
       <li class="dock-item">
@@ -4793,7 +4804,7 @@
       await refreshGroupsWorld();
       onMatchesChanged();   // открытый совместный чат: обновить голосование или закрыть, если союз распался
       // Открытый список групп перерисовываем, чтобы он не показывал устаревшее
-      if (openApp === 'profile' && winTitle.textContent === 'Группы') showGroupsScreen();
+      if (openApp === 'groups' && winTitle.textContent === 'Группы') showGroupsScreen();
     }, 300);
   }
 
@@ -5386,7 +5397,7 @@
     if (!chip) return false;
     e.stopPropagation();
     const gid = chip.dataset.mapGroup;
-    showApp('profile');
+    showApp('groups');
     showGroupDetailsScreen(gid, () => closeApp());
     return true;
   }
@@ -6711,7 +6722,7 @@
 
   // После изменения желания перерисовать открытый экран: список желаний или карточку группы
   function rerenderWishContext() {
-    if (openApp !== 'profile' || win.hidden) return;
+    if ((openApp !== 'profile' && openApp !== 'groups') || win.hidden) return;
     if (winTitle.textContent === 'Желания') showWishesScreen();
     else if (groupDetailsId) reopenGroupDetails();
   }
@@ -6906,10 +6917,18 @@
   }
 
   /* ═══════ ГРУППЫ ═══════ */
+  // «Группы» — отдельная вкладка панели: список своих групп
   function showGroupsScreen() {
+    if (openApp !== 'groups') { showApp('groups'); return; }
     setScreen(() => {
       winTitle.textContent = 'Группы';
       winBody.scrollTop = 0;
+      winBody.innerHTML = groupsListHtml();
+      bindGroupSwipe();
+    }, () => closeApp());
+  }
+
+  function groupsListHtml() {
       // В groups теперь все группы (их видно на карте) — здесь только мои
       const mine = myGroups();
       const rowsHtml = mine.length
@@ -6936,15 +6955,13 @@
               </li>`;
           }).join('')}</ul>`
         : `<div class="empty-msg">Пока нет групп.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы создать первую.</div>`;
-      winBody.innerHTML = `
+      return `
         <div class="sub-toolbar">
           <span class="sub-toolbar-title">Мои группы</span>
           <span class="sub-toolbar-spacer"></span>
           <button class="icon-btn" type="button" data-action="create-group" aria-label="Создать группу"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg></button>
         </div>
         ${rowsHtml}`;
-      bindGroupSwipe();
-    }, () => showApp('profile'));
   }
 
   function bindGroupSwipe() {
@@ -8282,6 +8299,7 @@
   /* ═══════ APPS ═══════ */
   const APPS = {
     messenger: { title: 'Сообщения', render: () => `<div class="empty-msg">Загружаем чат…</div>` },
+    groups: { title: 'Группы', render: () => groupsListHtml() },
     friends: {
       title: 'Друзья',
       render: () => {
@@ -8326,7 +8344,6 @@
           <li class="row" data-action="open-avatar" role="button" tabindex="0"><div class="row-main row-name">Мой аватар</div><span class="chev">›</span></li>
           <li class="row" data-action="open-places" role="button" tabindex="0"><div class="row-main row-name">Воспоминания</div><span class="chev">›</span></li>
           <li class="row" data-action="open-wishes" role="button" tabindex="0"><div class="row-main row-name">Желания</div><span class="chev">›</span></li>
-          <li class="row" data-action="open-groups" role="button" tabindex="0"><div class="row-main row-name">Группы</div><span class="chev">›</span></li>
           <li class="row" data-action="edit-profile" role="button" tabindex="0"><div class="row-main row-name">Редактировать профиль</div><span class="chev">›</span></li>
           <li class="row" data-action="open-settings" role="button" tabindex="0"><div class="row-main row-name">Настройки</div><span class="chev">›</span></li>
           <li class="row danger" data-action="logout" role="button" tabindex="0"><div class="row-main row-name">Выйти из аккаунта</div><span class="chev">›</span></li>
@@ -8744,6 +8761,7 @@
     if (id === 'settings') syncSettingsUi();
     if (id === 'filters') syncFiltersUi();
     if (id === 'profile') ensureMyPhotos();
+    if (id === 'groups') bindGroupSwipe();
     if (id === 'notifications' && currentUser) {
       supabaseClient.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false)
         .then(() => { notifications = notifications.map((n) => ({ ...n, read: true })); updateBadge(); });
@@ -9635,7 +9653,7 @@
       if (ok && accept) {
         const doIt = await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже' });
         if (doIt) {
-          if (openApp !== 'messenger' && openApp !== 'profile') showApp('profile');
+          if (openApp !== 'messenger' && openApp !== 'profile' && openApp !== 'groups') showApp('groups');
           await showMatchChatScreen(matchId, null);
         }
       }
