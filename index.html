@@ -2791,7 +2791,21 @@
     }
     .signal-rings.is-group i { background: linear-gradient(90deg, var(--c1), var(--c2), var(--c1)); }
     /* облака желаний: кант-спектр (у групп — аква → синий) */
-    .wish-cloud { --wc-fill: #FFFFFF; --wc-ink: #111114; --wc-edge: #111114; --wc-accent: url(#wcPrism); --wc-cap: var(--c3); }
+    /* спрятанное облако (перекрывало бы другое) и облачко «…» вместо него */
+    .wish-cloud { transition: transform .25s var(--ease), opacity .22s ease, visibility 0s; }
+    .wish-cloud.is-tucked { opacity: 0; visibility: hidden; pointer-events: none; transition: transform .25s var(--ease), opacity .22s ease, visibility 0s linear .22s; }
+    .wish-peek {
+      position: absolute; top: -24px; left: 0; display: none; align-items: center; justify-content: center; gap: 2.5px;
+      width: 30px; height: 18px; border-radius: 10px; pointer-events: auto; cursor: pointer;
+      border: 1.5px solid transparent; background: linear-gradient(var(--win), var(--win)) padding-box, var(--prism) border-box;
+      box-shadow: 0 4px 10px -3px rgba(0, 0, 0, .35);
+      transform: scale(var(--wish-k, 1)); transform-origin: 0 100%;
+      animation: wc-in .4s var(--spring) both;
+    }
+    .wish-anchor.is-left .wish-peek { left: auto; right: 0; transform-origin: 100% 100%; }
+    .wish-peek i { width: 4px; height: 4px; border-radius: 50%; background: var(--ink); opacity: .7; }
+    .wish-anchor.is-tucked .wish-peek { display: flex; }
+    .wish-anchor.is-tucked.is-pair ~ .wish-anchor.is-tucked .wish-peek { top: -44px; }    .wish-cloud { --wc-fill: #FFFFFF; --wc-ink: #111114; --wc-edge: #111114; --wc-accent: url(#wcPrism); --wc-cap: var(--c3); }
     .wish-cloud.is-group { --wc-accent: url(#wcCool); --wc-cap: var(--lime-deep); }
     :root[data-theme="dark"] .wish-cloud { --wc-fill: #141419; --wc-ink: #F3F3F5; --wc-edge: #050507; --wc-cap: var(--c3); }
     :root[data-theme="dark"] .wish-cloud.is-group { --wc-cap: var(--c1); }
@@ -5315,6 +5329,49 @@
     return (asGroupIcon ? [group, personal] : [personal, group]).filter(Boolean);
   }
 
+  /* ── Облака разных людей не налезают друг на друга ──
+     После каждого изменения карты облака раскладываются «жадно»: сначала выбранное нажатием, затем своё,
+     затем остальные — снизу экрана вверх (нижние ближе к зрителю). Облако, которое перекрыло бы уже
+     показанное, прячется, а у плашки остаётся маленькое облачко «…»: нажатие выводит это желание вперёд. */
+  let wishDeclutterRaf = 0, wishDeclutterTimer = 0, pinnedWishCloud = null;
+  function scheduleWishDeclutter() {
+    if (!wishDeclutterRaf) wishDeclutterRaf = requestAnimationFrame(declutterWishes);
+    // повтор после анимации появления: пока облако «вырастает», его размер ещё не окончательный
+    clearTimeout(wishDeclutterTimer);
+    wishDeclutterTimer = setTimeout(() => { if (!wishDeclutterRaf) wishDeclutterRaf = requestAnimationFrame(declutterWishes); }, 650);
+  }
+  function declutterWishes() {
+    wishDeclutterRaf = 0;
+    const mapEl = document.getElementById('map');
+    if (!mapEl) return;
+    if (pinnedWishCloud && !pinnedWishCloud.isConnected) pinnedWishCloud = null;
+    const items = [...mapEl.querySelectorAll('.wish-anchor > .wish-cloud')].map((el) => ({
+      el, r: el.getBoundingClientRect(),
+      rank: el === pinnedWishCloud ? 0 : el.closest('[data-own-marker]') ? 1 : 2,
+    })).filter((it) => it.r.width > 0);
+    items.sort((a, b) => a.rank - b.rank || b.r.bottom - a.r.bottom);
+    const pad = 4, placed = [];
+    const hit = (a, b) => a.left < b.right - pad && b.left < a.right - pad && a.top < b.bottom - pad && b.top < a.bottom - pad;
+    for (const it of items) {
+      const tucked = placed.some((r) => hit(r, it.r));
+      if (!tucked) placed.push(it.r);
+      const anchor = it.el.parentElement;
+      it.el.classList.toggle('is-tucked', tucked);
+      anchor.classList.toggle('is-tucked', tucked);
+      if (tucked && !anchor.querySelector('.wish-peek')) {
+        anchor.insertAdjacentHTML('beforeend', '<span class="wish-peek" role="button" aria-label="Показать желание" title="Показать желание"><i></i><i></i><i></i></span>');
+      }
+    }
+  }
+  // Нажатие на «…» — это желание выходит вперёд, а перекрывающие его прячутся
+  document.getElementById('map').addEventListener('click', (e) => {
+    const peek = e.target.closest('.wish-peek');
+    if (!peek) return;
+    e.stopPropagation();
+    pinnedWishCloud = peek.parentElement.querySelector('.wish-cloud');
+    declutterWishes();
+  }, true);
+
   // Желания изменились: облака на местах, над моей иконкой и над друзьями
   function refreshWishClouds() {
     if (!map2gis) return;
@@ -5437,6 +5494,7 @@
         try { existing.marker.setCoordinates(coords); } catch {}
         existing.location = coords;
         friendMarkerCoords.set(userId, { coords, person });
+        scheduleWishDeclutter();
         return;
       }
       try { existing.marker.destroy(); } catch {}
@@ -5461,6 +5519,7 @@
       personAvatar: person.avatar || '',
     });
     friendMarkerCoords.set(userId, { coords, person });
+    scheduleWishDeclutter();
   }
 
   async function applyUserLocationChange(payload) {
@@ -5560,7 +5619,8 @@
         const k = Math.max(0.7, Math.min(1, 0.7 + (map2gis.getZoom() - 11) * 0.075));
         mapEl.style.setProperty('--wish-k', k.toFixed(3));
       };
-      map2gis.on('zoom', () => { if (!wishScaleRaf) wishScaleRaf = requestAnimationFrame(syncWishScale); });
+      map2gis.on('zoom', () => { if (!wishScaleRaf) wishScaleRaf = requestAnimationFrame(syncWishScale); scheduleWishDeclutter(); });
+      map2gis.on('moveend', scheduleWishDeclutter);
       syncWishScale();
 
       syncPostMarkers(); syncWishMarkers(); startGeolocation();
@@ -6264,7 +6324,7 @@
     const key = [profile.name, profile.avatar, avatarCfgKey(avatarConfig), wishCloudsKey(clouds)].join('§');
     // Ничего не поменялось — только двигаем маркер, не пересоздавая 3D-аватар
     if (userLocationMarker && key === userMarkerKey) {
-      try { userLocationMarker.setCoordinates(coords); return; } catch {}
+      try { userLocationMarker.setCoordinates(coords); scheduleWishDeclutter(); return; } catch {}
     }
     userMarkerKey = key;
     if (userLocationMarker) {
@@ -6274,6 +6334,7 @@
     const use3D = isThreeAvailable();
     const wrap = document.createElement('div');
     wrap.className = 'user-avatar-wrap';
+    wrap.dataset.ownMarker = '1';
     const nameInitial = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
     const displayName = (profile.name || '').trim();
     let label = displayName || 'Я';
@@ -6309,6 +6370,7 @@
       const dot = document.createElement('div'); dot.className = 'user-dot-marker'; wrap.appendChild(dot);
     }
     userLocationMarker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html: wrap, anchor: use3D ? [0.5, 0.85] : [0.5, 0.5], preventMapInteractions: true });
+    scheduleWishDeclutter();
   }
 
   // Перерисовать свой маркер (например, создали группу или поменяли её желание)
@@ -6496,6 +6558,7 @@
       const marker = new mapgl.HtmlMarker(map2gis, { coordinates: w.coords, html: el, anchor: [0.5, 0.5], preventMapInteractions: true });
       wishMarkers.set(w.id, { marker, key });
     }
+    scheduleWishDeclutter();
   }
 
   const ICON_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>`;
