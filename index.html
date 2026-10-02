@@ -3904,7 +3904,7 @@
     posts = []; wishes = []; groups = []; notifications = []; friends = [];
     leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = [];
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
-    groupMatches = []; groupMatchOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
+    groupMatches = []; groupMatchOutcome.clear(); groupInvites = []; groupInviteOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
     groupStats = new Map();
     avatarConfig = defaultAvatarFor('male'); avatarConfigReady = false;
     syncPostMarkers(); syncWishMarkers(); updateBadge();
@@ -4607,6 +4607,44 @@
     }));
   }
 
+  /* ═══════ ПРИГЛАШЕНИЯ В ГРУППУ ═══════
+     Лидер отмечает людей — им приходит приглашение; участником человек становится, когда примет его.
+     Пока в группе только лидер, на карте её нет: она появляется, когда участников двое и больше.
+     RLS отдаёт только приглашения, которые отправил я или которые отправили мне. */
+  let groupInvites = [];
+  const groupInviteOutcome = new Map(); // id приглашения → 'accepted' | 'declined' (ответ дан в этой сессии)
+
+  async function loadGroupInvitesFromDB() {
+    if (!currentUser) { groupInvites = []; return; }
+    const { data, error } = await supabaseClient.from('group_invites').select('*');
+    if (error) { console.warn('[group_invites] load:', error.message); return; }
+    groupInvites = (data || []).map((r) => ({
+      id: String(r.id), groupId: String(r.group_id), fromId: r.from_id, toId: r.to_id, status: r.status,
+    }));
+  }
+  function pendingInvitesOfGroup(gid) {
+    return groupInvites.filter((i) => i.status === 'pending' && i.groupId === String(gid));
+  }
+  function pendingIncomingInvite(id) {
+    const myId = currentUser && currentUser.id;
+    return groupInvites.some((i) => i.id === String(id) && i.status === 'pending' && i.toId === myId);
+  }
+  // Группа видна на карте, когда в ней кроме лидера есть хотя бы один участник
+  function groupOnMap(g) { return !!g && (g.members || []).length >= 1; }
+
+  async function respondGroupInvite(inviteId, accept) {
+    const { error } = await supabaseClient.rpc(accept ? 'accept_group_invite' : 'decline_group_invite', { invite_id: Number(inviteId) });
+    if (error) {
+      console.error('[group invite respond]', error);
+      alert('Не удалось ответить на приглашение: ' + error.message);
+      return false;
+    }
+    groupInviteOutcome.set(String(inviteId), accept ? 'accepted' : 'declined');
+    notifications = notifications.map((n) => n.requestId === String(inviteId) && n.type === 'group' ? { ...n, read: true } : n);
+    if (accept) await refreshGroupsWorld(); else await loadGroupInvitesFromDB();
+    return true;
+  }
+
   /* ═══════ СОЮЗ ГРУПП И ГОЛОСОВАНИЕ ═══════
      Закреплённый союз (≥ 50% «за»): участники двух групп видят на карте только друг друга,
      а сами группы скрыты от остальных. Распавшийся союз (≥ 50% «против»): группы больше
@@ -4634,6 +4672,7 @@
   function groupHiddenForMe(g) {
     const myId = currentUser && currentUser.id;
     if (!g || isGroupParticipant(g, myId)) return false;
+    if (!groupOnMap(g)) return true;                         // в группе пока только лидер
     const u = myUnion();
     if (u) return String(g.id) !== String(u.partner.id);   // в союзе видим только партнёра
     if (unionPartner(g)) return true;                        // чужой закреплённый союз скрыт от всех
@@ -4791,7 +4830,7 @@
 
   /* Перечитать группы, match и связанные с ними маркеры на карте */
   async function refreshGroupsWorld() {
-    await Promise.all([loadGroupsFromDB(), loadGroupMatchesFromDB(), loadGroupStats()]);
+    await Promise.all([loadGroupsFromDB(), loadGroupMatchesFromDB(), loadGroupStats(), loadGroupInvitesFromDB()]);
     await loadGroupMemberProfiles();
     await loadUserLocations();
     refreshMyMarker();
@@ -4803,8 +4842,8 @@
     groupsWorldTimer = setTimeout(async () => {
       await refreshGroupsWorld();
       onMatchesChanged();   // открытый совместный чат: обновить голосование или закрыть, если союз распался
-      // Открытый список групп перерисовываем, чтобы он не показывал устаревшее
-      if (openApp === 'groups' && winTitle.textContent === 'Группы') showGroupsScreen();
+      // Открытый список групп обновляем на месте, чтобы он не показывал устаревшее
+      refreshGroupsList();
     }, 300);
   }
 
@@ -4815,7 +4854,7 @@
       .order('created_at', { ascending: false }).limit(100);
     if (error) { console.warn('[notifications] load:', error.message); notifications = []; return; }
     notifications = (data || []).map(mapNotificationRow);
-    await Promise.all([loadIncomingFriendRequests(), loadGroupMatchesFromDB()]);
+    await Promise.all([loadIncomingFriendRequests(), loadGroupMatchesFromDB(), loadGroupInvitesFromDB()]);
     updateBadge();
   }
 
@@ -4917,6 +4956,10 @@
         const n = mapNotificationRow(payload.new);
         notifications.unshift(n);
         if (n.type === 'friend_request' && n.requestId) pendingIncomingRequests.add(n.requestId);
+        if (n.type === 'group') {
+          // приглашение в группу или ответ на него — нужны свежие приглашения, чтобы показать кнопки
+          loadGroupInvitesFromDB().then(() => { if (openApp === 'notifications') refreshNotifications(); refreshGroupsList(); });
+        }
         if (n.type === 'friend_accept') {
           // Наш запрос приняли — обновляем список друзей и их маркеры на карте
           loadFriendsFromDB().then(() => {
@@ -5314,7 +5357,7 @@
   // Группы человека с желанием, которые я вижу: облако группы висит над её лидером
   function wishGroupsOf(userId) {
     const myId = currentUser && currentUser.id;
-    return groupsOwnedBy(userId).filter((g) => g.wish && (isGroupParticipant(g, myId) || (!groupHiddenForMe(g) && groupPassesFilters(g))));
+    return groupsOwnedBy(userId).filter((g) => g.wish && groupOnMap(g) && (isGroupParticipant(g, myId) || (!groupHiddenForMe(g) && groupPassesFilters(g))));
   }
 
   /* Облака для маркера человека: личное желание и желание его группы.
@@ -6928,7 +6971,26 @@
     }, () => closeApp());
   }
 
+  /* Обновить открытый список групп на месте: без анимации и только если что-то изменилось.
+     Данные о группах приходят несколько раз подряд (ответ сервера, события realtime) —
+     перерисовка с анимацией на каждое из них выглядела как мигание списка. */
+  let groupsListShown = '';
+  function refreshGroupsList() {
+    if (openApp !== 'groups' || win.hidden || winTitle.textContent !== 'Группы' || !winBody.querySelector('[data-action="create-group"]')) return;
+    const prev = groupsListShown;
+    const html = groupsListHtml();
+    if (html === prev) return;
+    winBody.innerHTML = html;
+    bindGroupSwipe();
+  }
+
   function groupsListHtml() {
+    const html = groupsListMarkup();
+    groupsListShown = html;
+    return html;
+  }
+
+  function groupsListMarkup() {
       // В groups теперь все группы (их видно на карте) — здесь только мои
       const mine = myGroups();
       const rowsHtml = mine.length
@@ -6938,6 +7000,8 @@
               ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
               : `<span class="group-avatar">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
             const isOwner = g.ownerId === (currentUser && currentUser.id);
+            const invited = isOwner ? pendingInvitesOfGroup(g.id).length : 0;
+            const waiting = (invited ? ` · приглашено: ${invited}` : '') + (groupOnMap(g) ? '' : ' · пока не на карте');
             return `
               <li class="group-row" data-group-row="${escapeHtml(g.id)}">
                 <div class="group-actions">
@@ -6948,7 +7012,7 @@
                   ${av}
                   <div class="group-main">
                     <div class="group-name">${escapeHtml(g.name)}</div>
-                    <div class="group-sub">${escapeHtml(membersLabel(membersCount))}${isOwner ? ' · вы лидер' : ''}${g.wish ? ' · ☁ ' + escapeHtml(g.wish) : ''}</div>
+                    <div class="group-sub">${escapeHtml(membersLabel(membersCount))}${isOwner ? ' · вы лидер' : ''}${waiting}${g.wish ? ' · ☁ ' + escapeHtml(g.wish) : ''}</div>
                   </div>
                   <span class="chev">›</span>
                 </div>
@@ -7000,11 +7064,12 @@
       winTitle.textContent = editing ? 'Настройки группы' : 'Новая группа';
       winBody.scrollTop = 0;
       let groupPhoto = editing && editing.photo ? editing.photo : '';
-      let selectedIds = new Set((editing && editing.members ? editing.members : []).map((m) => m.id));
-
       // В списке — друзья плюс текущие участники группы, которые не в друзьях:
       // иначе при сохранении они бы пропадали из группы
       const existingMembers = editing && editing.members ? editing.members : [];
+      // Кому приглашение уже отправлено и ждёт ответа — они тоже отмечены
+      const invitedIds = new Set(editing ? pendingInvitesOfGroup(editingId).map((i) => i.toId) : []);
+      let selectedIds = new Set([...existingMembers.map((m) => m.id), ...invitedIds]);
       const friendIdSet = new Set(friends.map((f) => f.id));
       const known = [
         ...friends,
@@ -7017,7 +7082,7 @@
               ${avatarCircleHtml(p, 36)}
               <div class="person-main">
                 <div class="person-name">${escapeHtml(p.name)}</div>
-                <div class="person-handle">${escapeHtml(p.handle || '')}${friendIdSet.has(p.id) ? '' : ' · участник, не в друзьях'}</div>
+                <div class="person-handle">${escapeHtml(p.handle || '')}${invitedIds.has(p.id) ? ' · приглашение отправлено' : friendIdSet.has(p.id) ? '' : ' · участник, не в друзьях'}</div>
               </div>
             </li>`).join('')
         : `<div class="empty-msg">Сначала добавьте друзей.</div>`;
@@ -7034,7 +7099,7 @@
           </div>
           <label class="edit-field"><span class="edit-label">Название группы</span><input class="edit-input" type="text" id="group-name" maxlength="60" value="${editing ? escapeHtml(editing.name) : ''}" placeholder="Например, «Прогулки по выходным»"></label>
           <div class="edit-field"><span class="edit-label">Участники</span><ul class="people-picker" id="group-people">${peopleHtml}</ul></div>
-          <p class="edit-hint group-map-hint">Группу сразу видно на карте всем: над вашим аватаром вместо имени появится её иконка. Геопозиции участников откроются другой группе после match.</p>
+          <p class="edit-hint group-map-hint">Отмеченным людям придёт приглашение — в группу они вступят, когда примут его. На карте группа появится, когда в ней будет хотя бы двое: над вашим аватаром вместо имени появится её иконка. Геопозиции участников откроются другой группе после match.</p>
           <div class="edit-actions">
             <button type="button" class="btn" id="group-cancel">Отмена</button>
             ${editing ? `<button type="button" class="btn btn-danger" id="group-delete">Удалить группу</button>` : ''}
@@ -7094,22 +7159,28 @@
 
         const gid = editing ? editingId : 'g' + Date.now() + Math.random().toString(36).slice(2, 6);
 
-        // Меняем состав только по разнице: удаляем тех, с кого сняли галочку,
-        // добавляем новых. Остальные участники не трогаются.
-        const existingIds = new Set(existingMembers.map((m) => m.id));
-        const removedIds = [...existingIds].filter((id) => !selectedIds.has(id));
-        const added = members.filter((m) => !existingIds.has(m.id));
+        // Меняем состав только по разнице: удаляем участников и отзываем приглашения у тех,
+        // с кого сняли галочку; новым отмеченным отправляем приглашение. Остальные не трогаются.
+        const memberIds = new Set(existingMembers.map((m) => m.id));
+        const removedIds = [...memberIds].filter((id) => !selectedIds.has(id));
+        const cancelledIds = [...invitedIds].filter((id) => !selectedIds.has(id));
+        const added = members.filter((m) => !memberIds.has(m.id) && !invitedIds.has(m.id));
 
-        // Группа появляется в списке сразу, а на сервер сохраняется в фоне
-        const localMembers = members.map((m) => ({ id: m.id, name: m.name, handle: m.handle || '', avatar: m.avatar || '' }));
+        // Группа появляется в списке сразу, а на сервер сохраняется в фоне.
+        // Новые отмеченные участниками ещё не стали — они числятся приглашёнными
+        const localMembers = existingMembers.filter((m) => selectedIds.has(m.id));
         if (editing) groups = groups.map((g) => (g.id === editingId ? { ...g, name, photo: groupPhoto, members: localMembers } : g));
         else groups = [{ id: gid, ownerId: currentUser.id, name, photo: groupPhoto, visibility: 'public', members: localMembers, wish: '', wishAt: null, unionWith: null }, ...groups];
+        groupInvites = [
+          ...groupInvites.filter((i) => !(i.groupId === String(gid) && cancelledIds.includes(i.toId))),
+          ...added.map((m) => ({ id: 'tmp-' + gid + '-' + m.id, groupId: String(gid), fromId: currentUser.id, toId: m.id, status: 'pending' })),
+        ];
         showGroupsScreen();
         refreshMyMarker();
         const failed = async (what, error) => {
           console.warn('[groups] ' + what + ':', error.message);
           await refreshGroupsWorld();
-          if (openApp === 'groups' && winTitle.textContent === 'Группы') showGroupsScreen();
+          refreshGroupsList();
           alert((editing ? 'Не удалось сохранить группу: ' : 'Не удалось создать группу: ') + error.message);
         };
 
@@ -7128,31 +7199,25 @@
           if (error) { await failed('insert', error); return; }
         }
 
-        if (added.length) {
-          const rows = added.map((m) => ({
-            group_id: gid, user_id: m.id, name: m.name,
-            username: (m.handle || '').replace(/^@/, ''), avatar: m.avatar || '',
-          }));
-          const { error } = await supabaseClient.from('group_members').insert(rows);
-          if (error) console.warn('[group_members] insert:', error.message);
+        if (cancelledIds.length) {
+          const { error } = await supabaseClient.from('group_invites').delete()
+            .eq('group_id', gid).eq('status', 'pending').in('to_id', cancelledIds);
+          if (error) console.warn('[group_invites] cancel:', error.message);
+        }
 
-          // Уведомляем только новых участников, а не всех при каждом сохранении
-          const notifs = added
-            .filter((m) => m.id !== currentUser.id)
-            .map((m) => ({
-              user_id: m.id,
-              type: 'group',
-              title: 'Новая группа',
-              text: `Вас добавили в группу «${name}»`,
-            }));
-          if (notifs.length) {
-            const { error: nErr } = await supabaseClient.from('notifications').insert(notifs);
-            if (nErr) console.warn('[notifications] group insert:', nErr.message);
-          }
+        // Новым отмеченным — приглашение: в группу они вступят, когда примут его
+        let inviteError = null;
+        if (added.length) {
+          const { error } = await supabaseClient.rpc('send_group_invites', { gid: String(gid), user_ids: added.map((m) => m.id) });
+          if (error) { console.warn('[rpc send_group_invites]', error.message); inviteError = error; }
         }
 
         await refreshGroupsWorld();
-        if (openApp === 'groups' && winTitle.textContent === 'Группы') showGroupsScreen();
+        refreshGroupsList();
+        if (inviteError) {
+          alert('Группа сохранена, но приглашения не отправлены: ' + inviteError.message
+            + '\n\nЕсли приглашения ещё не настроены, выполните supabase_group_invites.sql в Supabase.');
+        }
       });
     }, () => showGroupsScreen());
   }
@@ -7285,6 +7350,20 @@
             ${isMe ? '' : '<span class="chev">›</span>'}
           </li>`;
       }).join('');
+      // Лидер видит, кому отправлено приглашение и кто ещё не ответил
+      const invitedHtml = g.ownerId === myId ? pendingInvitesOfGroup(g.id).map((inv) => {
+        const p = personById(inv.toId) || { name: 'Пользователь', avatar: '' };
+        return `
+          <li class="person-card">
+            ${avatarCircleHtml(p, 40)}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(p.name || 'Пользователь')}</div>
+              <div class="person-handle">⏳ Приглашение отправлено</div>
+            </div>
+          </li>`;
+      }).join('') : '';
+      const mapNote = groupOnMap(g) ? ''
+        : `<div class="match-hint">Группа пока не видна на карте: она появится, когда в ней будет хотя бы двое.</div>`;
 
       // Есть желание — превью облака над иконкой группы и кнопки «Изменить» / «Удалить» для участников
       const wishHtml = g.wish
@@ -7312,7 +7391,7 @@
           </div>
           <div><div class="user-profile-section-title">Желание группы</div>${wishHtml}</div>
           <div><div class="user-profile-section-title">Match</div>${isMember ? ownGroupMatchesHtml(g) : groupMatchSectionHtml(g)}</div>
-          <div><div class="user-profile-section-title">Участники</div><ul class="rows">${peopleHtml}</ul></div>
+          <div><div class="user-profile-section-title">Участники</div>${isMember ? mapNote : ''}<ul class="rows">${peopleHtml}${invitedHtml}</ul></div>
           <div class="edit-actions">
             <button type="button" class="btn" data-action="back-to-groups">Назад</button>
             ${isMember ? `<button type="button" class="btn btn-primary" data-open-group-chat="${escapeHtml(g.id)}">Открыть чат группы</button>` : ''}
@@ -8381,7 +8460,7 @@
                 <div class="row-main">
                   <div class="row-name">${escapeHtml(n.title || '')}</div>
                   <div class="row-sub">${escapeHtml(n.text || '')}</div>
-                  ${friendRequestActionsHtml(n)}${groupMatchActionsHtml(n)}
+                  ${friendRequestActionsHtml(n)}${groupMatchActionsHtml(n)}${groupInviteActionsHtml(n)}
                 </div>
                 <span class="row-time">${escapeHtml(n.time || '')}</span>
               </li>`).join('')}
@@ -8558,8 +8637,21 @@
       <button class="btn" type="button" data-fr-decline="${id}">Отклонить</button>
     </div>`;
   }
+  // Приглашение в группу: уведомление типа «group» с номером приглашения
+  function groupInviteActionsHtml(n) {
+    if (n.type !== 'group' || !n.requestId) return '';
+    const outcome = groupInviteOutcome.get(n.requestId);
+    if (outcome === 'accepted') return `<div class="notif-status">Вы вступили в группу</div>`;
+    if (outcome === 'declined') return `<div class="notif-status">Приглашение отклонено</div>`;
+    if (!pendingIncomingInvite(n.requestId)) return `<div class="notif-status">Приглашение уже обработано</div>`;
+    const id = escapeHtml(n.requestId);
+    return `<div class="notif-actions">
+      <button class="btn btn-primary" type="button" data-gi-accept="${id}">Вступить</button>
+      <button class="btn" type="button" data-gi-decline="${id}">Отклонить</button>
+    </div>`;
+  }
   function groupMatchActionsHtml(n) {
-    if (!n.requestId) return '';
+    if (!n.requestId || n.type === 'group') return '';
     const live = groupMatches.find((x) => x.id === n.requestId && x.status === 'accepted');
     const openBtn = `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(n.requestId)}">Открыть чат</button></div>`;
     // Голосование и match: кнопка чата — только пока союз жив (распавшийся чат удалён)
@@ -9676,6 +9768,18 @@
           await showMatchChatScreen(matchId, null);
         }
       }
+      return;
+    }
+
+    // ── приглашение в группу: вступить / отклонить ──
+    const giBtn = e.target.closest('[data-gi-accept], [data-gi-decline]');
+    if (giBtn) {
+      e.stopPropagation();
+      const accept = giBtn.hasAttribute('data-gi-accept');
+      const inviteId = accept ? giBtn.dataset.giAccept : giBtn.dataset.giDecline;
+      giBtn.closest('.notif-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      await respondGroupInvite(inviteId, accept);
+      refreshNotifications();
       return;
     }
 
