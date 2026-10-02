@@ -262,10 +262,9 @@
        Контур строит JS под размер текста; кончик хвостика — точка привязки (.wish-anchor) над иконкой.
        --wish-k — масштаб от приближения карты, кончик при этом остаётся на месте. */
     .wish-anchor { position: absolute; left: 50%; top: 5px; width: 0; height: 0; z-index: 1; pointer-events: none; }
-    .wish-anchor.is-right { margin-left: 8px; }
-    .wish-anchor.is-left { margin-left: -8px; }
-    .wish-anchor.is-pair.is-right { margin-left: 13px; }
-    .wish-anchor.is-pair.is-left { margin-left: -13px; }
+    /* кончик хвостика — у бокового края плашки (справа или слева), чуть выше середины: хвост огибает иконку */
+    .wish-anchor.is-right { left: calc(100% + 1px); top: 10px; }
+    .wish-anchor.is-left { left: -1px; top: 10px; }
     .wish-cloud {
       --wc-fill: #FFFFFF; --wc-ink: #121514; --wc-edge: #121514; --wc-accent: var(--you); --wc-cap: var(--you-deep);
       position: absolute; pointer-events: auto; cursor: pointer;
@@ -295,13 +294,13 @@
     /* Желание с местом: облако над точкой на карте */
     .wish-place { position: relative; width: 14px; height: 14px; pointer-events: auto; cursor: pointer; }
     .wish-place-dot { position: absolute; inset: 0; border-radius: 50%; background: var(--you); box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0, 0, 0, .35); }
-    .wish-place .wish-anchor { top: 2px; margin-left: 0; }
+    .wish-place .wish-anchor { left: calc(100% + 2px); top: 4px; }
 
     /* ── Превью облака в экранах желаний: так его видно на карте ── */
     .wish-preview { --wish-k: 1; display: flex; justify-content: center; padding: 8px 12px 4px; }
     .wp-stage { position: relative; flex: none; }
     .wp-stage .wish-cloud { cursor: default; }
-    .wp-stage .wp-pill { position: absolute; transform: translateX(-50%); z-index: 2; pointer-events: none; white-space: nowrap; }
+    .wp-stage .wp-pill { position: absolute; transform: translateX(-100%); z-index: 2; pointer-events: none; white-space: nowrap; }
     .wish-meta { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin-top: 2px; }
     .wish-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
     .wa-btn {
@@ -5145,7 +5144,7 @@
     // хвостик — снизу, ближе к стороне иконки: одна «ячейка» контура отдаётся под его основание
     let ti = 0, best = Infinity;
     for (let i = 0; i <= S; i++) {
-      const d = Math.abs(P[i][0] - dir * a * (pair ? 0.68 : 0.42));
+      const d = Math.abs(P[i][0] - dir * a * (pair ? 0.55 : 0.42));
       if (P[i][1] > 0 && d < best) { best = d; ti = i; }
     }
     const at = (u) => {
@@ -5177,12 +5176,13 @@
       while (da < -Math.PI) da += 2 * Math.PI;
       for (let j = 0; j <= 8; j++) add(cx + r * Math.cos(a0 + da * j / 8), cy + r * Math.sin(a0 + da * j / 8));
     }
-    // хвостик: изогнутый «рожок» к иконке
+    // хвостик: «рожок» спускается сбоку от плашки и загибается к её краю — кончик касается плашки снаружи,
+    // не заходя на аватар и имя
     const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
-    const T = [M[0] + dir * (pair ? 22 : 15), M[1] + 25];
+    const T = [M[0] + dir * 13, M[1] + 27];
     const outer = dir < 0 ? A : B;
-    const cOut = [outer[0] + dir * 2, M[1] + 21];
-    const cIn = [M[0] + dir * 6, M[1] + 13];
+    const cOut = [outer[0] + dir * 1, M[1] + 24];
+    const cIn = [M[0] + dir * 4, M[1] + 14];
     const c1 = dir < 0 ? cOut : cIn, c2 = dir < 0 ? cIn : cOut;
     d += `Q${f(c1)} ${f(T)}Q${f(c2)} ${f(B)}Z`;
     [A, B, T, c1, c2].forEach((p) => add(p[0], p[1]));
@@ -5947,9 +5947,9 @@
      pillW — примерная ширина плашки, чтобы она не вылезала за край. */
   function wishPreviewHtml({ text, tone, caption = '', pillHtml, pillW }) {
     const { html, g } = wishCloud({ text, caption, tone, side: 'right' });
-    const pillX = g.tipX - 8;      // облако правее центра плашки, как над иконкой
-    const pillTop = g.tipY - 5;    // кончик хвостика уходит под плашку
-    const shift = Math.max(0, Math.round(pillW / 2 - pillX));
+    const pillX = g.tipX - 1;      // правый край плашки: хвостик огибает её сбоку, как на карте
+    const pillTop = g.tipY - 10;
+    const shift = Math.max(0, Math.round(pillW - pillX));
     return `<div class="wish-preview"><div class="wp-stage" style="width:${g.w}px;height:${Math.ceil(pillTop + 32)}px;margin-left:${shift}px">
         <span class="wish-anchor" style="left:${g.tipX.toFixed(1)}px;top:${g.tipY.toFixed(1)}px;margin:0">${html}</span>
         ${pillHtml.replace('class="', `style="left:${pillX.toFixed(1)}px;top:${pillTop.toFixed(1)}px" class="wp-pill `)}
