@@ -2890,6 +2890,57 @@
     .auth-card .btn-ghost { color: #CABDFF; }
     .auth-avatar-preview { background: linear-gradient(145deg, #4FE3EE, #8A6CFF); }
 
+    /* ── Фильтры: две спокойные карточки и нижняя строка с итогом ── */
+    .flt { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 4px 14px 16px; }
+    .flt-card { display: grid; gap: 16px; padding: 18px; border-radius: 24px; background: var(--field); }
+    .flt-head { display: flex; align-items: center; gap: 12px; }
+    .flt-head-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+    .flt-title { font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+    .flt-sub { font-size: 12.5px; color: var(--ink-soft); }
+    .flt-card.is-off .flt-age-body { display: none; }
+    .flt-age-body { display: grid; gap: 12px; animation: scr-rise .35s var(--ease) both; }
+    .flt-big { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-display); font-weight: 600; font-size: 34px; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .flt-big small { font: 500 10.5px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft); }
+    .flt-range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer; --p: 0%; }
+    .flt-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--prism) 0 / var(--p) 100% no-repeat, var(--win-line); }
+    .flt-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--prism) 0 / var(--p) 100% no-repeat, var(--win-line); }
+    .flt-range::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; margin-top: -9px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .32), 0 0 0 .5px rgba(0, 0, 0, .08); transition: transform .3s var(--spring); }
+    .flt-range::-moz-range-thumb { width: 24px; height: 24px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .32), 0 0 0 .5px rgba(0, 0, 0, .08); }
+    .flt-range:active::-webkit-slider-thumb { transform: scale(1.15); }
+    .flt-range:focus-visible { outline: none; }
+    .flt-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 2px 8px rgba(0, 0, 0, .32), 0 0 0 4px rgba(var(--you-rgb), .3); }
+    .flt-spread { display: flex; align-items: center; gap: 6px; }
+    .flt-spread-label { flex: 1; font: 500 10.5px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft); }
+    .flt-chip {
+      min-width: 44px; padding: 7px 10px; border: 0; border-radius: 999px; cursor: pointer;
+      background: var(--win); color: var(--ink-soft); font: 700 12.5px "Manrope", system-ui, sans-serif; font-variant-numeric: tabular-nums;
+      transition: background .2s, color .2s, transform .4s var(--spring);
+    }
+    .flt-chip:active { transform: scale(.9); transition-duration: .08s; }
+    .flt-chip[aria-pressed="true"] { background: var(--act); color: var(--act-ink); }
+    .flt-comp { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .flt-opt {
+      display: grid; justify-items: center; gap: 8px; padding: 14px 2px 12px; border: 0; border-radius: 18px; cursor: pointer;
+      background: transparent; color: var(--ink-soft); font: 700 12px "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      transition: background .25s, color .2s, box-shadow .25s, transform .4s var(--spring);
+    }
+    .flt-opt svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .flt-opt:hover { color: var(--ink); }
+    .flt-opt:active { transform: scale(.93); transition-duration: .08s; }
+    .flt-opt[aria-pressed="true"] { background: var(--win); color: var(--ink); box-shadow: 0 6px 16px -8px var(--glass-shadow), inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--win-line); }
+    .flt-opt[aria-pressed="true"] svg { stroke: url(#prismIcon); }
+    .flt-warn { padding: 0 6px; font-size: 12px; color: var(--hot); }
+    .flt-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 14px 4px 0; }
+    .flt-count { flex: 1; min-width: 0; font: 500 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+    .flt-foot .btn-ghost { background: transparent; color: var(--ink-soft); padding: 11px 10px; }
+    .flt-foot .btn-ghost:hover { color: var(--ink); text-decoration: none; }
+    @media (max-width: 420px) {
+      .flt-foot { flex-wrap: wrap; }
+      .flt-count { flex-basis: 100%; padding: 0 2px 4px; }
+      .flt-foot .btn-primary { flex: 1; }
+      .flt-big { font-size: 30px; }
+    }
+
     /* ── 3D-аватар: сцена редактора, образцы, маркер на карте ── */
     .avatar-editor { gap: 18px; grid-template-columns: minmax(0, 1fr); }
     .avatar-stage {
@@ -8471,37 +8522,41 @@
       title: 'Фильтры',
       render: () => {
         const f = mapFilters;
-        const compOpt = (key, emoji) =>
-          `<button type="button" class="seg-opt" data-flt-comp="${key}" aria-pressed="${f.comp === key}"><span class="seg-emoji">${emoji}</span>${COMP_LABELS[key]}</button>`;
+        // Знаки состава — тонкой линией, как остальные иконки: любой, смешанный, парни, девушки
+        const COMP_ICON = {
+          all: '<path d="M7.5 9a3 3 0 1 0 0 6c2 0 3-1.5 4.5-3s2.5-3 4.5-3a3 3 0 1 1 0 6c-2 0-3-1.5-4.5-3S9.5 9 7.5 9z"/>',
+          mixed: '<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/>',
+          male: '<circle cx="10" cy="14" r="5"/><path d="M13.6 10.4 19 5M14.5 5H19v4.5"/>',
+          female: '<circle cx="12" cy="9" r="5"/><path d="M12 14v7M9 18h6"/>',
+        };
+        const compOpt = (key, label) =>
+          `<button type="button" class="flt-opt" data-flt-comp="${key}" aria-pressed="${f.comp === key}" aria-label="${COMP_LABELS[key]}" title="${COMP_LABELS[key]}"><svg viewBox="0 0 24 24" aria-hidden="true">${COMP_ICON[key]}</svg><span>${label}</span></button>`;
+        const spreadOpt = (n) =>
+          `<button type="button" class="flt-chip" data-flt-spread="${n}" aria-pressed="${f.spread === n}">±${n}</button>`;
         return `
-          <div class="filters">
-            <div class="filter-note">Фильтры скрывают на карте чужие группы, которые не подходят. Ваши группы, друзья и группы с match видны всегда.</div>
-            ${groupStatsFailed ? `<div class="filter-note" style="color:#C0392B">Сводка по группам недоступна — выполните supabase_group_filters.sql в Supabase.</div>` : ''}
-            <div class="filter-block ${f.ageOn ? '' : 'is-off'}" id="flt-age-block">
-              <div class="filter-head">
-                <span class="filter-title">Средний возраст группы</span>
+          <div class="flt">
+            <section class="flt-card ${f.ageOn ? '' : 'is-off'}" id="flt-age-block">
+              <div class="flt-head">
+                <div class="flt-head-main"><div class="flt-title">Возраст</div><div class="flt-sub" id="flt-age-sub"></div></div>
                 <button class="switch" type="button" role="switch" data-flt-age-toggle aria-checked="${!!f.ageOn}" aria-label="Фильтр по возрасту"></button>
               </div>
-              <div class="filter-range">
-                <input type="range" id="flt-age" min="14" max="70" value="${f.age}" aria-label="Средний возраст">
-                <span class="filter-val" id="flt-age-val"></span>
+              <div class="flt-age-body">
+                <div class="flt-big" id="flt-age-val"></div>
+                <input type="range" class="flt-range" id="flt-age" min="14" max="70" value="${f.age}" aria-label="Средний возраст">
+                <div class="flt-spread"><span class="flt-spread-label">Разброс</span>${[0, 2, 5, 10].map(spreadOpt).join('')}</div>
               </div>
-              <div class="filter-range">
-                <input type="range" id="flt-spread" min="0" max="10" value="${f.spread}" aria-label="Допустимое отклонение">
-                <span class="filter-val" id="flt-spread-val"></span>
+            </section>
+            <section class="flt-card">
+              <div class="flt-title">Состав</div>
+              <div class="flt-comp" id="flt-comp">
+                ${compOpt('all', 'Любой')}${compOpt('mixed', 'Микс')}${compOpt('male', 'Парни')}${compOpt('female', 'Девушки')}
               </div>
-              <div class="filter-sub" id="flt-age-sub"></div>
-            </div>
-            <div class="filter-block">
-              <div class="filter-head"><span class="filter-title">Состав группы</span></div>
-              <div class="seg" id="flt-comp">
-                ${compOpt('all', '🌍')}${compOpt('mixed', '👫')}${compOpt('male', '👨')}${compOpt('female', '👩')}
-              </div>
-            </div>
-            <div class="filter-sub" id="flt-count"></div>
-            <div class="filter-actions">
-              <button type="button" class="btn" data-flt-reset>Сбросить</button>
-              <button type="button" class="btn btn-primary" data-flt-done>Показать на карте</button>
+            </section>
+            ${groupStatsFailed ? `<div class="flt-warn">Сводка по группам недоступна — выполните supabase_group_filters.sql в Supabase.</div>` : ''}
+            <div class="flt-foot">
+              <span class="flt-count" id="flt-count"></span>
+              <button type="button" class="btn btn-ghost" data-flt-reset>Сбросить</button>
+              <button type="button" class="btn btn-primary" data-flt-done>Показать</button>
             </div>
           </div>`;
       }
@@ -8886,19 +8941,20 @@
     if (openApp !== 'filters') return;
     const f = mapFilters;
     const q = (s) => winBody.querySelector(s);
-    if (!q('#flt-age')) return;
+    const ageEl = q('#flt-age');
+    if (!ageEl) return;
     q('#flt-age-block').classList.toggle('is-off', !f.ageOn);
-    q('#flt-age-val').textContent = `${f.age} лет`;
-    q('#flt-spread-val').textContent = `± ${f.spread}`;
-    q('#flt-age-sub').textContent = f.spread
-      ? `Группы со средним возрастом от ${f.age - f.spread} до ${f.age + f.spread} лет`
-      : `Группы со средним возрастом ${f.age} лет`;
+    q('#flt-age-sub').textContent = f.ageOn ? 'Средний возраст группы' : 'Любой';
+    q('#flt-age-val').innerHTML = `${f.spread ? `${f.age - f.spread}–${f.age + f.spread}` : f.age}<small>лет</small>`;
+    // заливка дорожки ползунка — до бегунка
+    ageEl.style.setProperty('--p', ((f.age - ageEl.min) / (ageEl.max - ageEl.min) * 100).toFixed(1) + '%');
+    winBody.querySelectorAll('[data-flt-spread]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.fltSpread) === f.spread)));
     winBody.querySelectorAll('[data-flt-comp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fltComp === f.comp)));
     const myId = currentUser && currentUser.id;
     const others = groups.filter((g) => !isGroupParticipant(g, myId) && !groupHiddenForMe(g));
     const passed = others.filter(groupPassesFilters).length;
     q('#flt-count').textContent = others.length
-      ? `Подходит групп: ${passed} из ${others.length}`
+      ? `Подходит ${passed} из ${others.length}`
       : 'Других групп пока нет';
   }
 
@@ -9663,6 +9719,8 @@
     }
     const compBtn = e.target.closest('[data-flt-comp]');
     if (compBtn) { mapFilters.comp = compBtn.dataset.fltComp; syncFiltersUi(); applyMapFilters(); return; }
+    const spreadBtn = e.target.closest('[data-flt-spread]');
+    if (spreadBtn) { mapFilters.spread = Number(spreadBtn.dataset.fltSpread); syncFiltersUi(); applyMapFilters(); return; }
     if (e.target.closest('[data-flt-reset]')) {
       mapFilters = { ...DEFAULT_FILTERS };
       winBody.innerHTML = APPS.filters.render(); syncFiltersUi(); applyMapFilters();
