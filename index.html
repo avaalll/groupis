@@ -7,7 +7,7 @@
   <meta name="description" content="Groupis — карта с друзьями, группами и мессенджером">
 
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#E9EBE6" id="meta-theme-color">
+  <meta name="theme-color" content="#EDECE9" id="meta-theme-color">
   <meta name="color-scheme" content="light dark">
   <script>
     /* Тема до первой отрисовки, чтобы не мигало: выбор из настроек (auto / light / dark), «авто» — как в системе */
@@ -31,7 +31,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <!-- Manrope — текст, Unbounded — заголовки, JetBrains Mono — мелкие подписи «как на дисплее» -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap">
 
   <style>
     /* Палитра Groupis «Сигнал»: сигнальный красно-оранжевый (--you) + сонарная мята (--lime)
@@ -2430,6 +2431,480 @@
       .auth-card { padding: 18px 16px 14px; border-radius: 22px; }
       .auth-card .auth-title { font-size: 18px; }
     }
+
+    /* ═══════════════════ ДИЗАЙН «ПРИЗМА» ═══════════════════
+       Основа — чистые нейтральные: графит в тёмной теме, фарфор в светлой. Цвет один — «спектр»:
+       луч света, разложенный призмой (аква → синий → фиолетовый → орхидея). Он появляется там,
+       где что-то происходит: активная вкладка, переключатели, своё место на карте, облака желаний,
+       тонкое кольцо-всплеск из точки каждого нажатия. Главные кнопки — «чернильные»: чёрные
+       на светлом, белые на тёмном. Блок стоит последним и переопределяет прежние темы. */
+    @property --sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+    :root {
+      color-scheme: light;
+      --c1: #00B3C7; --c2: #3D6BFF; --c3: #7B4DFF; --c4: #E0479E;
+      --prism: linear-gradient(115deg, var(--c1) 0%, var(--c2) 34%, var(--c3) 66%, var(--c4) 100%);
+      --prism-conic: conic-gradient(from 210deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1));
+      --prism-glow: -10px 10px 26px -12px var(--c1), 10px 10px 26px -12px var(--c4), 0 14px 26px -14px var(--c3);
+      --prism-ink: #FFFFFF;
+      --act: #111114; --act-ink: #FFFFFF;
+      --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+      --land: #EDECE9;
+      --you: #6B4DFF; --you-rgb: 107, 77, 255; --you-2: #00B3C7; --you-deep: #6B4DFF; --you-soft: #B9A9FF;
+      --lime: #00B3C7; --lime-rgb: 0, 179, 199; --lime-deep: #00899A; --lime-ink: #002A30;
+      --hot: #F03E6E;
+      --glass: rgba(251, 251, 250, .8); --glass-edge: rgba(17, 17, 20, .07); --glass-shadow: rgba(22, 22, 34, .16);
+      --bar: rgba(251, 251, 250, .8);
+      --ink: #111114; --ink-soft: #6D6D77;
+      --win: #FBFBFA; --win-2: #F3F2F0; --win-line: rgba(17, 17, 20, .08);
+      --row-hover: rgba(17, 17, 20, .045); --field: rgba(17, 17, 20, .05);
+      --tip: rgba(17, 17, 20, .92); --tip-ink: #F3F3F5;
+      --rim: rgba(255, 255, 255, .95);          /* световой кант по верхнему краю поверхностей */
+      --me-card: rgba(255, 255, 255, .12);      /* карточка файла в своём сообщении */
+      --ease: cubic-bezier(.16, 1, .3, 1);
+      --spring: cubic-bezier(.34, 1.56, .64, 1);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --c1: #4FE3EE; --c2: #7C9CFF; --c3: #A98CFF; --c4: #FF8FD8;
+      --prism-ink: #0B0B0E;
+      --act: #F3F3F5; --act-ink: #0B0B0E;
+      --land: #0B0B0E;
+      --you: #9A80FF; --you-rgb: 154, 128, 255; --you-2: #4FE3EE; --you-deep: #8A6CFF; --you-soft: #CABDFF;
+      --lime: #4FE3EE; --lime-rgb: 79, 227, 238; --lime-deep: #22B5C2; --lime-ink: #04191C;
+      --hot: #FF5C85;
+      --glass: rgba(22, 22, 27, .8); --glass-edge: rgba(255, 255, 255, .08); --glass-shadow: rgba(0, 0, 0, .55);
+      --bar: rgba(22, 22, 27, .8);
+      --ink: #F3F3F5; --ink-soft: #8C8C97;
+      --win: #121216; --win-2: #18181D; --win-line: rgba(255, 255, 255, .075);
+      --row-hover: rgba(255, 255, 255, .05); --field: rgba(255, 255, 255, .06);
+      --tip: rgba(243, 243, 245, .94); --tip-ink: #0B0B0E;
+      --rim: rgba(255, 255, 255, .07);
+      --me-card: rgba(0, 0, 0, .07);
+    }
+    body { background: var(--land); }
+
+    /* ── Шрифты: заголовки — Unbounded, мелкие подписи — моноширинные, «как на дисплее» ── */
+    .win-title, .ph-name, .profile-name, .user-profile-name, .modal-title, .auth-title, .auth-step-title {
+      font-family: var(--font-display); font-weight: 600; letter-spacing: -0.015em;
+    }
+    .win-title { font-size: 15px; }
+    .ph-name { font-size: 22px; letter-spacing: -0.02em; }
+    .profile-name, .user-profile-name { font-size: 19px; }
+    .modal-title { font-size: 15px; }
+    .sub-toolbar-title, .wish-section-title, .user-profile-section-title, .avatar-group-title, .edit-label, .auth-label, .auth-eyebrow {
+      font-family: var(--font-mono); font-weight: 500; font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+    }
+    .sub-toolbar-title, .wish-section-title, .user-profile-section-title, .avatar-group-title, .edit-label { color: var(--ink-soft); }
+    .sub-toolbar-title::before, .wish-section-title::before, .user-profile-section-title::before {
+      content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 9px 1px 0; border-radius: 2px;
+      background: var(--prism); vertical-align: middle;
+    }
+    .row-time, .chat-row .chat-time, .chat-msg .chat-msg-time, .mv-count { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .02em; }
+
+    /* ── Окно: раскрывается из нажатой кнопки, по краю пробегает спектр; сверху — тонкий световой штрих ── */
+    .window {
+      border-radius: 30px; background: var(--win); border: 1px solid var(--win-line);
+      box-shadow: 0 40px 100px -24px rgba(8, 8, 14, .5), inset 0 1px 0 var(--rim);
+      transform: translateY(36px) scale(.9);
+      transition: opacity .3s ease, transform .64s var(--ease);
+    }
+    .window:not(.is-open) { transition: opacity .22s ease, transform .3s cubic-bezier(.5, 0, .75, 0); }
+    .window.is-open { transform: none; }
+    .window::before {
+      content: ""; position: absolute; inset: 0; z-index: 6; pointer-events: none; border-radius: inherit;
+      padding: 2px; opacity: 0;
+      background: conic-gradient(from var(--sweep), transparent 0turn, var(--c1) .07turn, var(--c2) .17turn, var(--c3) .27turn, var(--c4) .37turn, transparent .48turn, transparent 1turn);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+    }
+    .window.sweep::before { animation: edge-sweep 1.35s cubic-bezier(.3, .6, .3, 1) .06s both; }
+    @keyframes edge-sweep {
+      0% { opacity: 0; --sweep: -40deg; }
+      14% { opacity: 1; }
+      72% { opacity: 1; }
+      100% { opacity: 0; --sweep: 330deg; }
+    }
+    .window::after {
+      content: ""; position: absolute; top: 0; left: 20%; right: 20%; height: 1px; z-index: 6; pointer-events: none;
+      background: var(--prism); opacity: .7;
+      -webkit-mask: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent);
+              mask: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent);
+    }
+    .win-head { height: 60px; }
+    .win-back { width: 40px; height: 40px; border-radius: 50%; background: var(--field); color: var(--ink); }
+    .win-back:hover { background: var(--row-hover); color: var(--ink); }
+    .win-back svg { width: 20px; height: 20px; }
+    /* заголовок «расшифровывается»: буквы перебираются и встают на место (текст в DOM при этом не меняется) */
+    .win-title { position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .win-title.is-scrambling { color: transparent; }
+    .win-title.is-scrambling::after {
+      content: attr(data-scramble); position: absolute; inset: 0; color: var(--ink);
+      white-space: nowrap; overflow: hidden;
+    }
+
+    /* ── Смена экранов: вперёд — справа, назад — слева, открытие — снизу; строки списков — лесенкой ── */
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) > * { animation: scr-in .5s var(--ease) both; }
+    .win-body.scr-back > * { animation-name: scr-in-back; }
+    .win-body.scr-open > * { animation-name: scr-rise; }
+    .win-body.scr-fade > * { animation: fade-in .35s ease both; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > * { animation: row-in .55s var(--ease) both; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(2) { animation-delay: .03s; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(3) { animation-delay: .06s; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(4) { animation-delay: .09s; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(5) { animation-delay: .12s; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(6) { animation-delay: .15s; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(7) { animation-delay: .18s; }
+    .win-body:is(.scr-fwd, .scr-back, .scr-open) :is(.rows, .wish-list, .chats-list) > :nth-child(n+8) { animation-delay: .21s; }
+    @keyframes scr-in { from { opacity: 0; transform: translateX(28px); } }
+    @keyframes scr-in-back { from { opacity: 0; transform: translateX(-28px); } }
+    @keyframes scr-rise { from { opacity: 0; transform: translateY(16px); } }
+    @keyframes row-in { from { opacity: 0; transform: translateY(12px); } }
+    @keyframes fade-in { from { opacity: 0; } }
+
+    /* ── Списки ── */
+    .rows { padding: 4px 10px 12px; }
+    .row { padding: 13px 14px; border-radius: 18px; transition: background .2s, transform .4s var(--spring); }
+    .row-name { font-weight: 650; }
+    .row.danger .row-name { color: var(--hot); }
+    .person-card, .chat-row { border-radius: 18px; transition: background .2s, transform .4s var(--spring); }
+    .person-card.is-link:hover { background: var(--row-hover); }
+    .row[data-action]:active, .person-card.is-link:active, .chat-row:active { transform: scale(.975); transition-duration: .08s; }
+    .chev {
+      flex: none; width: 8px; height: 8px; margin-right: 5px; font-size: 0; color: var(--ink); opacity: .4;
+      border-top: 1.7px solid currentColor; border-right: 1.7px solid currentColor; transform: rotate(45deg);
+    }
+
+    /* ── Кнопки: капсулы; главная — «чернильная» со спектральным свечением снизу ── */
+    .btn {
+      border-radius: 999px; padding: 11px 18px; font-weight: 700; font-size: 13.5px; letter-spacing: -.005em;
+      background: var(--field); color: var(--ink);
+      transition: background .2s, transform .4s var(--spring), box-shadow .3s, filter .2s;
+    }
+    .btn:hover { background: var(--row-hover); }
+    .btn:active { transform: scale(.94); transition-duration: .08s; }
+    .btn-primary, .friend-add-btn, #install-btn, .wa-btn.primary { background: var(--act); color: var(--act-ink); box-shadow: var(--prism-glow); }
+    .btn-primary:hover, .friend-add-btn:hover, #install-btn:hover, .wa-btn.primary:hover { background: var(--act); filter: brightness(1.15); }
+    :root[data-theme="dark"] .btn-primary:hover, :root[data-theme="dark"] .wa-btn.primary:hover { filter: brightness(.92); }
+    .friend-add-btn { border-radius: 999px; padding: 8px 15px; transition: transform .4s var(--spring), filter .2s; }
+    .friend-add-btn:active { transform: scale(.94); }
+    .friend-add-btn[disabled] { background: var(--field); color: var(--ink-soft); box-shadow: none; }
+    .btn-danger, .btn-danger:hover { background: var(--hot); color: #fff; box-shadow: none; }
+    .btn-ghost { color: var(--ink); }
+    .wa-btn.danger, .wa-icon.danger { color: var(--hot); }
+    .icon-btn {
+      position: relative; width: 40px; height: 40px; border-radius: 50%;
+      background: var(--act); color: var(--act-ink); box-shadow: var(--prism-glow);
+      transition: transform .45s var(--spring);
+    }
+    .icon-btn svg { display: none; }
+    .icon-btn::before, .icon-btn::after {
+      content: ""; position: absolute; left: 50%; top: 50%; width: 15px; height: 2px; margin: -1px 0 0 -7.5px;
+      border-radius: 2px; background: currentColor; transition: transform .45s var(--spring);
+    }
+    .icon-btn::after { transform: rotate(90deg); }
+    .icon-btn:hover::before { transform: rotate(90deg); }
+    .icon-btn:hover::after { transform: rotate(180deg); }
+    .icon-btn:active { transform: scale(.86); }
+
+    /* ── Поля и переключатели ── */
+    .edit-input, .edit-textarea, .username-wrap, .support-chat-input { border-radius: 16px; background: var(--field); border: 1.5px solid transparent; }
+    .support-chat-input { border-radius: 999px; }
+    .edit-input:focus, .edit-textarea:focus, .username-wrap:focus-within, .support-chat-input:focus {
+      background: var(--win); border-color: var(--ink); box-shadow: 0 0 0 4px rgba(var(--you-rgb), .14);
+    }
+    .edit-input.is-invalid, .username-wrap:has(.edit-input.is-invalid) { border-color: var(--hot); box-shadow: 0 0 0 4px rgba(240, 62, 110, .16); }
+    .edit-hint.is-invalid { color: var(--hot); }
+    .switch { width: 48px; height: 28px; border-radius: 999px; background: var(--field); box-shadow: inset 0 0 0 1px var(--win-line); }
+    .switch::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--prism); opacity: 0; transition: opacity .3s ease; }
+    .switch::after { top: 3px; left: 3px; width: 22px; height: 22px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .28); transition: transform .5s var(--spring); }
+    .switch[aria-checked="true"], :root[data-theme="dark"] .switch[aria-checked="true"] { background: var(--field); }
+    .switch[aria-checked="true"]::before { opacity: 1; }
+    .switch[aria-checked="true"]::after, :root[data-theme="dark"] .switch[aria-checked="true"]::after { transform: translateX(20px); background: #fff; }
+    .seg-opt { border-radius: 18px; }
+    .seg-opt[aria-pressed="true"] { border-color: var(--ink); background: var(--field); }
+    .theme-opt[aria-pressed="true"] svg { stroke: url(#prismIcon); color: var(--ink); }
+    .theme-opt[aria-pressed="true"] svg .fill { fill: url(#prismIcon); }
+    .person-card[aria-checked="true"] .person-check { background: var(--act); border-color: var(--act); }
+    .person-card[aria-checked="true"] .person-check::after { color: var(--act-ink); }
+    .avatar-pill[aria-pressed="true"] { background: var(--act); color: var(--act-ink); }
+    .avatar-swatch[aria-pressed="true"] { border-color: var(--ink); }
+    .view-btn[aria-pressed="true"] { color: var(--ink); }
+
+    /* ── Чаты: свои сообщения — «чернилами», новые появляются с пружинкой ── */
+    .chat-msg.me { background: var(--act); color: var(--act-ink); }
+    .chat-msg.me .chat-msg-author { color: var(--act-ink); opacity: .7; }
+    .chat-msg.me .chat-file, .chat-msg.me .chat-media-fallback { background: var(--me-card); }
+    .chat-msg-author { color: var(--you); }
+    .chat-msg.is-new { animation: bubble-in .45s var(--spring) both; }
+    .chat-msg.me.is-new { transform-origin: 100% 100%; }
+    .chat-msg.them.is-new { transform-origin: 0 100%; }
+    @keyframes bubble-in { from { opacity: 0; transform: translateY(10px) scale(.86); } }
+    .support-chat-send, .support-chat-send:hover { background: var(--act); color: var(--act-ink); filter: none; }
+    .chat-composer .support-chat-send { box-shadow: var(--prism-glow); }
+    .chat-tool { color: var(--ink); }
+
+    /* ── Мелкие акценты ── */
+    .notif-icon { border-radius: 16px; }
+    .notif-unread::before { background: var(--prism); box-shadow: 0 0 0 2px var(--win); }
+    .pg-badge, .post-thumb.cover-badge::after { background: var(--act); color: var(--act-ink); }
+    .pg-item.is-main { box-shadow: inset 0 0 0 2px var(--ink); }
+    .group-action-btn.settings { background: #6D6D77; }
+    .group-action-btn.danger { background: var(--hot); }
+    .feat-mark .fa { fill: var(--c3); }
+    .feat-mark .fb { fill: var(--c1); }
+    /* пустой экран — тонкое вращающееся спектральное кольцо */
+    .empty-msg::before, .notif-empty::before {
+      width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 50%;
+      background: var(--prism-conic);
+      -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.2px), #000 calc(100% - 1.6px));
+              mask: radial-gradient(closest-side, transparent calc(100% - 2.2px), #000 calc(100% - 1.6px));
+      animation: orb-spin 8s linear infinite; opacity: .95;
+    }
+    @keyframes orb-spin { to { transform: rotate(1turn); } }
+
+    /* ── Окна поверх: подтверждения, меню, затемнение ── */
+    .scrim { background: rgba(12, 12, 18, .26); }
+    :root[data-theme="dark"] .scrim { background: rgba(0, 0, 0, .5); }
+    .modal-backdrop { background: rgba(8, 8, 12, .42); animation: fade-in .25s ease both; }
+    .modal { border-radius: 28px; box-shadow: 0 40px 90px -20px rgba(0, 0, 0, .5), inset 0 1px 0 var(--rim); animation: modal-in .5s var(--spring) both; }
+    .popover { border-radius: 18px; box-shadow: 0 24px 50px -16px rgba(0, 0, 0, .35), inset 0 1px 0 var(--rim); animation: modal-in .35s var(--spring) both; transform-origin: 100% 0; }
+    .popover .pop-item.danger { color: var(--hot); }
+    .popover .pop-item.danger:hover { background: rgba(240, 62, 110, .1); }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(14px) scale(.94); } }
+
+    /* ── Панель вкладок: стеклянный «остров», капсула перетекает к выбранной вкладке ── */
+    .dock-wrap { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); padding: 0 12px; }
+    .dock, :root[data-theme="dark"] .dock {
+      position: relative; gap: 0; padding: 5px; align-items: stretch;
+      border-radius: 28px; background: var(--glass); border: 1px solid var(--glass-edge);
+      -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%);
+      box-shadow: 0 22px 48px -18px var(--glass-shadow), inset 0 1px 0 var(--rim);
+    }
+    .dock-item { position: relative; z-index: 1; width: 72px; height: auto; }
+    .dock-btn, .dock-item[data-open="true"] .dock-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      width: 100%; height: 54px; min-width: 0; padding: 0; border-radius: 22px;
+      background: transparent; color: var(--ink-soft);
+      transition: color .3s ease, transform .45s var(--spring);
+    }
+    .dock-btn:hover { color: var(--ink); }
+    .dock-item[data-open="true"] .dock-btn { color: var(--ink); }
+    .dock-item[data-open="true"] .dock-btn::after { content: none; }
+    .dock-btn svg { width: 23px; height: 23px; overflow: visible; }
+    .dock-btn .ic-fill, .map-tools .ic-fill, .geo-btn .ic-fill { fill: currentColor; stroke: none; }
+    .dock-item[data-open="true"] .dock-btn svg { stroke: url(#prismIcon); }
+    .dock-item[data-open="true"] .dock-btn .ic-fill { fill: url(#prismIcon); }
+    .dock-label, .dock-item[data-open="true"] .dock-label {
+      max-width: none; opacity: 1; margin: 0; overflow: visible;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .01em; line-height: 1;
+    }
+    /* радар «Карты»: у открытой вкладки луч вращается */
+    .dock-btn .ic-sweep { transform-box: view-box; transform-origin: 12px 12px; }
+    .dock-item[data-open="true"] .ic-sweep { animation: radar-sweep 3.4s linear infinite; }
+    @keyframes radar-sweep { to { transform: rotate(1turn); } }
+    .dock-btn.is-tapped svg { animation: tab-tap .55s var(--spring); }
+    @keyframes tab-tap { 30% { transform: scale(.76) rotate(-8deg); } 65% { transform: scale(1.12); } }
+    /* «жидкая» капсула: передний край догоняет вкладку раньше заднего — на ходу она вытягивается */
+    .dock-pill {
+      position: absolute; top: 5px; bottom: 5px; left: 5px; right: auto; z-index: 0; list-style: none;
+      border-radius: 22px; background: var(--field);
+      box-shadow: inset 0 0 0 1px var(--win-line), inset 0 1px 0 var(--rim);
+      transition: left var(--tl, .45s) var(--el, var(--ease)), right var(--tr, .45s) var(--er, var(--ease)), opacity .25s ease, transform .4s var(--spring);
+    }
+    .dock-pill::after {
+      content: ""; position: absolute; left: 50%; bottom: 3px; width: 18px; height: 2.5px; margin-left: -9px;
+      border-radius: 3px; background: var(--prism); box-shadow: 0 0 12px rgba(var(--you-rgb), .55);
+    }
+    .dock-pill.is-hidden { opacity: 0; transform: scale(.6); }
+    .dock-pill:not(.is-ready) { transition: none; }
+
+    /* ── Логотип и инструменты карты: две стеклянные капсулы сверху ── */
+    .menubar {
+      height: 48px; padding: 0 6px 0 4px; border-radius: 999px;
+      background: var(--glass); border: 1px solid var(--glass-edge);
+      box-shadow: 0 16px 36px -14px var(--glass-shadow), inset 0 1px 0 var(--rim);
+    }
+    .brand-wordmark .wm-shadow { fill: var(--c2); opacity: .32; }
+    :root[data-theme="dark"] .brand-wordmark .wm-shadow { fill: var(--c1); opacity: .6; }
+    .map-tools {
+      position: fixed; z-index: 19; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+      display: flex; align-items: center; gap: 2px; height: 48px; padding: 0 4px;
+      border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-edge);
+      -webkit-backdrop-filter: blur(20px) saturate(170%); backdrop-filter: blur(20px) saturate(170%);
+      box-shadow: 0 16px 36px -14px var(--glass-shadow), inset 0 1px 0 var(--rim);
+      transition: opacity .25s ease, transform .35s var(--ease);
+    }
+    .map-tools #notif-btn, .map-tools #filter-btn, .map-tools #settings-btn {
+      position: relative; top: auto; right: auto; bottom: auto; left: auto;
+      width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: var(--ink);
+      box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+      transition: background .2s, color .2s, transform .4s var(--spring);
+    }
+    .map-tools #notif-btn:hover, .map-tools #filter-btn:hover, .map-tools #settings-btn:hover { background: var(--field); color: var(--ink); transform: none; }
+    .map-tools #notif-btn:active, .map-tools #filter-btn:active, .map-tools #settings-btn:active { transform: scale(.84); transition-duration: .08s; }
+    .map-tools #notif-btn.is-active, .map-tools #filter-btn.is-active, .map-tools #settings-btn.is-active { background: var(--act); color: var(--act-ink); box-shadow: none; }
+    .map-tools svg, .geo-btn svg { width: 21px; height: 21px; }
+    .map-tools svg { transition: transform .5s var(--spring); }
+    .map-tools #settings-btn:hover svg { transform: rotate(60deg); }
+    #notif-btn .badge {
+      top: 2px; right: 1px; min-width: 18px; height: 18px; line-height: 18px; padding: 0 5px; border-radius: 9px;
+      background: var(--prism); color: var(--prism-ink); font-weight: 800; box-shadow: 0 0 0 2px var(--win);
+    }
+    #filter-btn .filter-dot { top: 8px; right: 8px; width: 8px; height: 8px; background: var(--prism); box-shadow: 0 0 0 2px var(--win); }
+    body.app-window .map-tools { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+    body.app-window .map-tools #notif-btn, body.app-window .map-tools #filter-btn, body.app-window .map-tools #settings-btn { display: grid !important; }
+    body.auth-locked .map-tools { display: none; }
+    .geo-btn {
+      width: 50px; height: 50px; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-edge); color: var(--ink);
+      box-shadow: 0 16px 36px -14px var(--glass-shadow), inset 0 1px 0 var(--rim);
+    }
+    .geo-btn:hover { color: var(--ink); }
+    .geo-btn.is-active { background: var(--glass); color: var(--ink); border-color: var(--glass-edge); box-shadow: 0 16px 36px -14px var(--glass-shadow), inset 0 1px 0 var(--rim); }
+    .geo-btn.is-active svg { stroke: url(#prismIcon); }
+    .geo-btn.is-active .ic-fill { fill: url(#prismIcon); }
+
+    /* ── Маркеры на карте ── */
+    .user-badge-inner { background: var(--win); border: 1px solid var(--win-line); box-shadow: 0 10px 22px -8px rgba(10, 10, 16, .38); }
+    .user-badge::after { background: var(--win); }
+    .user-badge-avatar { background-color: var(--you); }
+    .user-badge-status, .user-badge-status[aria-hidden] { background: var(--c1); }
+    .user-dot-marker { background: var(--you); box-shadow: 0 0 0 4px rgba(var(--you-rgb), .25), 0 2px 6px rgba(0, 0, 0, .35); }
+    .user-badge-inner.is-friend-group { background: #0D3C45; border-color: rgba(var(--lime-rgb), .5); }
+    .user-badge-inner.is-friend-group .user-badge-group { color: #A5F1F7; }
+    .user-dot-marker.is-friend-group { background: #0D8A98 !important; }
+    .user-badge-inner.is-group { background: #131318; border-color: rgba(var(--you-rgb), .55); }
+    .user-badge-inner.is-group .user-badge-group { color: #CABDFF; }
+    .user-dot-marker.is-group { background: #131318 !important; }
+    .map-group-chip { background: #131318; border-color: rgba(var(--lime-rgb), .45); box-shadow: 0 10px 22px -8px rgba(0, 0, 0, .45); }
+    .map-group-ava { background: linear-gradient(145deg, var(--c1), var(--c3)); }
+    .map-group-count { color: #A5F1F7; background: rgba(255, 255, 255, .1); }
+    .user-badge.is-leader::after { background: #131318; border-color: rgba(var(--lime-rgb), .45); }
+    .user-dot-marker.is-leader { background: #131318 !important; box-shadow: 0 0 0 2px var(--c1), 0 2px 6px rgba(0, 0, 0, .35); }
+    /* кольца под маркером — спектральные (у групп — холодная часть спектра) */
+    .signal-rings i {
+      border: 0; background: var(--prism-conic);
+      -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.4px), #000 calc(100% - 1.6px));
+              mask: radial-gradient(closest-side, transparent calc(100% - 2.4px), #000 calc(100% - 1.6px));
+    }
+    .signal-rings.is-group i { background: linear-gradient(90deg, var(--c1), var(--c2), var(--c1)); }
+    /* облака желаний: кант-спектр (у групп — аква → синий) */
+    .wish-cloud { --wc-fill: #FFFFFF; --wc-ink: #111114; --wc-edge: #111114; --wc-accent: url(#wcPrism); --wc-cap: var(--c3); }
+    .wish-cloud.is-group { --wc-accent: url(#wcCool); --wc-cap: var(--lime-deep); }
+    :root[data-theme="dark"] .wish-cloud { --wc-fill: #141419; --wc-ink: #F3F3F5; --wc-edge: #050507; --wc-cap: var(--c3); }
+    :root[data-theme="dark"] .wish-cloud.is-group { --wc-cap: var(--c1); }
+    .wish-place-dot { background: var(--prism); }
+    /* воспоминания — белые «полароиды» */
+    .memory-card, :root[data-theme="dark"] .memory-card { background: #FFFFFF; }
+    .memory-card::after, :root[data-theme="dark"] .memory-card::after { background: rgba(17, 17, 20, .14); }
+    .memory-card .mc-img.no-photo { background: #EEEDEA; color: #6D6D77; }
+    .memory-marker::after, :root[data-theme="dark"] .memory-marker::after { background: #111114; }
+    .memory-more, :root[data-theme="dark"] .memory-more { background: #111114; }
+
+    /* ── Появление интерфейса после входа: капсулы съезжаются к краям ── */
+    body.chrome-enter .menubar { animation: chrome-down .8s var(--ease) .05s both; }
+    body.chrome-enter .map-tools { animation: chrome-down .8s var(--ease) .14s both; }
+    body.chrome-enter .dock-wrap { animation: chrome-up .9s var(--spring) .2s both; }
+    body.chrome-enter .geo-btn { animation: chrome-pop .7s var(--spring) .38s both; }
+    @keyframes chrome-down { from { opacity: 0; transform: translateY(-22px) scale(.96); } }
+    @keyframes chrome-up { from { opacity: 0; transform: translateY(40px) scale(.94); } }
+    @keyframes chrome-pop { from { opacity: 0; transform: scale(.4); } }
+
+    /* ── Всплеск при нажатии: тонкое спектральное кольцо расходится из точки касания ── */
+    .tap-layer { position: fixed; inset: 0; z-index: 400; pointer-events: none; overflow: hidden; contain: strict; }
+    .tap-ring {
+      position: absolute; width: 78px; height: 78px; margin: -39px 0 0 -39px; border-radius: 50%;
+      background: conic-gradient(from 210deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1));
+      -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 4.2px), #000 calc(100% - 3.2px), #000 calc(100% - .6px), transparent 100%);
+              mask: radial-gradient(closest-side, transparent calc(100% - 4.2px), #000 calc(100% - 3.2px), #000 calc(100% - .6px), transparent 100%);
+      animation: tap-ring .62s cubic-bezier(.2, .8, .25, 1) forwards;
+    }
+    @keyframes tap-ring {
+      0% { transform: scale(.1); opacity: 1; }
+      45% { opacity: .95; }
+      100% { transform: scale(1); opacity: 0; }
+    }
+
+    /* ── Экран входа: космос всегда тёмный, спектр — пастельный ── */
+    .auth-screen {
+      --c1: #4FE3EE; --c2: #7C9CFF; --c3: #A98CFF; --c4: #FF8FD8;
+      --prism: linear-gradient(115deg, #4FE3EE 0%, #7C9CFF 34%, #A98CFF 66%, #FF8FD8 100%);
+      --prism-glow: -12px 12px 28px -14px #4FE3EE, 12px 12px 28px -14px #FF8FD8, 0 16px 30px -16px #A98CFF;
+      background:
+        radial-gradient(60vmax 50vmax at var(--gx, 50%) var(--gy, 45%), rgba(124, 156, 255, .10), transparent 62%),
+        radial-gradient(70vmax 55vmax at 0% 0%, rgba(169, 140, 255, .10), transparent 60%),
+        radial-gradient(70vmax 55vmax at 100% 100%, rgba(79, 227, 238, .07), transparent 60%),
+        #07070A;
+    }
+    .auth-card {
+      background: rgba(13, 13, 17, .94); border: 1px solid rgba(255, 255, 255, .08); border-radius: 26px; color: #F3F3F5;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .06);
+    }
+    .auth-title, .auth-step-title { color: #F3F3F5; }
+    .auth-card .auth-title { font-size: 18px; }
+    .auth-card .auth-step-title { font-size: 15px; }
+    .auth-sub, .auth-step-sub, .auth-hint, .auth-divider, .auth-label { color: #8C8C97; }
+    .auth-label { padding-left: 4px; }
+    .auth-eyebrow { background: var(--prism); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .auth-input, .auth-card .edit-input, .auth-card .edit-textarea, .auth-card .username-wrap {
+      background: rgba(255, 255, 255, .06); border: 1.5px solid transparent; border-radius: 16px; color: #F3F3F5;
+    }
+    .auth-input::placeholder { color: #5E5E68; }
+    .auth-input:focus, .auth-card .edit-input:focus, .auth-card .edit-textarea:focus, .auth-card .username-wrap:focus-within {
+      background: rgba(255, 255, 255, .08); border-color: rgba(243, 243, 245, .85); box-shadow: 0 0 0 4px rgba(169, 140, 255, .22);
+    }
+    .auth-card .username-prefix { color: #8C8C97; }
+    .auth-btn {
+      border-radius: 999px; background: #F3F3F5; color: #0B0B0E; font-weight: 800; letter-spacing: -.005em;
+      box-shadow: var(--prism-glow); transition: transform .4s var(--spring), box-shadow .3s ease, filter .2s;
+    }
+    .auth-btn:hover { filter: none; box-shadow: -14px 14px 34px -12px #4FE3EE, 14px 14px 34px -12px #FF8FD8, 0 18px 34px -14px #A98CFF; }
+    .auth-btn:active { transform: scale(.95); }
+    .auth-link, .auth-link:hover {
+      background: var(--prism); -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-decoration-color: rgba(169, 140, 255, .7);
+    }
+    .auth-step-dot { background: rgba(255, 255, 255, .14); }
+    .auth-step-dot.active { background: var(--prism); }
+    .auth-step-dot.done { background: rgba(255, 255, 255, .42); }
+    .gender-opt { border-radius: 18px; border-color: rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .04); }
+    .gender-opt[aria-pressed="true"] { border-color: #A98CFF; background: rgba(169, 140, 255, .12); }
+    .auth-age-row input[type="range"] { accent-color: #A98CFF; }
+    .auth-card .btn { background: rgba(255, 255, 255, .08); color: #F3F3F5; box-shadow: none; }
+    .auth-card .btn-ghost { color: #CABDFF; }
+    .auth-avatar-preview { background: linear-gradient(145deg, #4FE3EE, #8A6CFF); }
+
+    /* ── Телефоны ── */
+    @media (max-width: 640px) {
+      .menubar { height: 46px; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px)); }
+      .map-tools { height: 46px; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); padding: 0 3px; gap: 0; }
+      .map-tools #notif-btn, .map-tools #filter-btn, .map-tools #settings-btn { width: 39px; height: 39px; }
+      .geo-btn { width: 48px; height: 48px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+      .dock-wrap { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+      .dock, :root[data-theme="dark"] .dock { border-radius: 26px; }
+      .dock-item { width: 66px; }
+      .dock-btn, .dock-item[data-open="true"] .dock-btn { height: 48px; gap: 3px; border-radius: 20px; padding: 0; }
+      .dock-btn svg { width: 22px; height: 22px; }
+      .dock-pill { border-radius: 20px; }
+      .dock-label, .dock-item[data-open="true"] .dock-label { font-size: 10px; }
+      .window { border-radius: 28px; }
+      .win-title { font-size: 14.5px; }
+      .ph-name { font-size: 20px; }
+    }
+    @media (max-width: 380px) {
+      .dock-item { width: 60px; }
+      .dock-btn, .dock-item[data-open="true"] .dock-btn { padding: 0; }
+    }
+    @media (max-height: 480px) and (orientation: landscape) {
+      .menubar, .map-tools { top: calc(8px + env(safe-area-inset-top, 0px)); height: 42px; }
+      .map-tools #notif-btn, .map-tools #filter-btn, .map-tools #settings-btn { width: 36px; height: 36px; }
+      .dock-btn, .dock-item[data-open="true"] .dock-btn { height: 40px; }
+      .dock-label { display: none; }
+      .dock-pill::after { bottom: 2px; }
+    }
   </style>
 </head>
 <body class="auth-locked">
@@ -2447,48 +2922,72 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <clipPath id="featClipA"><circle cx="17" cy="22" r="11"/></clipPath>
+      <!-- «Спектр» для иконок (координаты иконки 24×24) и облаков желаний; цвета — из темы -->
+      <linearGradient id="prismIcon" gradientUnits="userSpaceOnUse" x1="3" y1="3" x2="21" y2="21">
+        <stop offset="0" style="stop-color: var(--c1)"/>
+        <stop offset=".38" style="stop-color: var(--c2)"/>
+        <stop offset=".7" style="stop-color: var(--c3)"/>
+        <stop offset="1" style="stop-color: var(--c4)"/>
+      </linearGradient>
+      <linearGradient id="wcPrism" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" style="stop-color: var(--c1)"/>
+        <stop offset=".38" style="stop-color: var(--c2)"/>
+        <stop offset=".7" style="stop-color: var(--c3)"/>
+        <stop offset="1" style="stop-color: var(--c4)"/>
+      </linearGradient>
+      <linearGradient id="wcCool" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" style="stop-color: var(--c1)"/>
+        <stop offset="1" style="stop-color: var(--c2)"/>
+      </linearGradient>
     </defs>
   </svg>
 
   <!-- Затемнение карты под открытым окном; клик по нему закрывает окно -->
   <div id="scrim" class="scrim" aria-hidden="true"></div>
 
+  <!-- Иконки: тонкая линия + одна «заливка» (ic-fill), которая у активного элемента окрашивается спектром -->
   <button id="geo-btn" class="geo-btn round-btn" type="button" aria-label="Показать моё местоположение" title="Моё местоположение">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M3 11 21 3l-8 18-2-8-8-2z"/>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="6.25"/>
+      <path d="M12 2.75v3M12 18.25v3M2.75 12h3M18.25 12h3"/>
+      <circle class="ic-fill" cx="12" cy="12" r="2"/>
     </svg>
   </button>
 
-  <button id="notif-btn" class="round-btn" type="button" aria-label="Уведомления" title="Уведомления">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M6 8.5a6 6 0 0 1 12 0c0 6.5 2.5 8.5 2.5 8.5h-17S6 15 6 8.5"/>
-      <path d="M10.2 20.5a2 2 0 0 0 3.6 0"/>
-    </svg>
-    <span class="badge" id="notif-badge" hidden>0</span>
-  </button>
+  <!-- Инструменты карты — одна капсула справа сверху -->
+  <div class="map-tools" id="map-tools">
+    <button id="notif-btn" class="round-btn" type="button" aria-label="Уведомления" title="Уведомления">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6.75 16.25V11a5.25 5.25 0 0 1 10.5 0v5.25"/>
+        <path d="M4.75 16.25h14.5"/>
+        <circle class="ic-fill" cx="12" cy="19.4" r="1.45"/>
+      </svg>
+      <span class="badge" id="notif-badge" hidden>0</span>
+    </button>
 
-  <button id="filter-btn" class="round-btn" type="button" aria-label="Фильтры групп" title="Фильтры">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/>
-      <circle cx="15" cy="7" r="2.2"/>
-      <circle cx="9" cy="17" r="2.2"/>
-    </svg>
-    <span class="filter-dot" id="filter-dot" hidden></span>
-  </button>
+    <button id="filter-btn" class="round-btn" type="button" aria-label="Фильтры групп" title="Фильтры">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 8h3.6M11.4 8H20M4 16h9.6M17.4 16H20"/>
+        <circle cx="9.5" cy="8" r="1.9"/>
+        <circle cx="15.5" cy="16" r="1.9"/>
+      </svg>
+      <span class="filter-dot" id="filter-dot" hidden></span>
+    </button>
 
-  <button id="settings-btn" class="round-btn" type="button" aria-label="Настройки" title="Настройки">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/>
-      <circle cx="12" cy="12" r="3"/>
-    </svg>
-  </button>
+    <button id="settings-btn" class="round-btn" type="button" aria-label="Настройки" title="Настройки">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3.5 19.36 7.75v8.5L12 20.5l-7.36-4.25v-8.5z"/>
+        <circle cx="12" cy="12" r="2.9"/>
+      </svg>
+    </button>
+  </div>
 
   <!-- Плавающая «таблетка» с логотипом -->
   <header class="menubar">
     <strong class="brand"><span class="brand-wordmark" role="img" aria-label="Groupis"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="-60 -885 5078 1185"><g transform="scale(1 -1)">
     <defs><mask id="wmiCut" maskUnits="userSpaceOnUse" x="1261" y="-571" width="1279" height="1713"><rect x="1261" y="-571" width="1279" height="1713" fill="#fff"/><path d="M1901.0 -11.4 L1731.8 94.1 A319.8 319.8 0 1 0 2070.2 94.1 Z" fill="#000" stroke="#000" stroke-width="225.5" stroke-linejoin="round"/></mask>
       <linearGradient id="wmiPin" gradientUnits="userSpaceOnUse" x1="0" y1="628" x2="0" y2="0">
-        <stop offset="0" stop-color="#FF8A5C"/><stop offset="1" stop-color="#E8401A"/>
+        <stop offset="0" stop-color="#B57BFF"/><stop offset=".5" stop-color="#5B7CFF"/><stop offset="1" stop-color="#22D3EE"/>
       </linearGradient>
     </defs>
     <g class="wm-text" fill="currentColor"><path transform="translate(0 0)" d="M838 325Q835 257 810.5 195.5Q786 134 739.5 86.0Q693 38 623.5 11.0Q554 -16 462 -16Q374 -16 297.0 9.5Q220 35 161.5 85.0Q103 135 70.5 208.0Q38 281 38 375Q38 469 71.0 542.0Q104 615 163.5 665.0Q223 715 301.5 740.5Q380 766 473 766Q597 766 687.0 728.0Q777 690 832.0 624.0Q887 558 903 471H694Q684 509 653.5 536.5Q623 564 577.5 578.5Q532 593 474 593Q404 593 353.0 568.5Q302 544 274.0 495.5Q246 447 246 375Q246 302 276.0 252.0Q306 202 361.5 177.0Q417 152 492 152Q565 152 621.0 172.5Q677 193 710.5 233.0Q744 273 749 329ZM512 242V388H910V0H763L734 297L773 242Z"/><path transform="translate(964 0)" d="M29 571H237L271 367V0H67V379ZM539 580V406Q509 412 482.5 414.5Q456 417 434 417Q390 417 353.0 399.5Q316 382 293.5 342.0Q271 302 271 235L232 283Q240 345 256.0 399.5Q272 454 299.5 496.5Q327 539 368.0 563.5Q409 588 468 588Q485 588 503.0 586.0Q521 584 539 580Z"/><path transform="translate(2297 0)" d="M302 -16Q222 -16 165.5 17.0Q109 50 79.0 110.5Q49 171 49 252V571H253V281Q253 218 284.0 184.0Q315 150 373 150Q416 150 445.0 167.5Q474 185 490.0 218.0Q506 251 506 297L569 264Q558 173 519.5 110.5Q481 48 425.0 16.0Q369 -16 302 -16ZM543 0 506 229V571H710V197L747 0Z"/><path transform="translate(3074 0)" d="M56 571H261V407L252 383V223L261 176V-165H56ZM196 285Q209 378 250.5 445.5Q292 513 356.0 550.5Q420 588 501 588Q585 588 648.5 550.0Q712 512 747.5 444.0Q783 376 783 285Q783 196 747.5 127.5Q712 59 648.5 21.5Q585 -16 501 -16Q420 -16 356.0 21.5Q292 59 251.0 127.0Q210 195 196 285ZM577 285Q577 328 559.5 361.0Q542 394 510.5 413.0Q479 432 439 432Q398 432 361.0 413.0Q324 394 296.0 361.0Q268 328 253 285Q268 243 296.0 210.0Q324 177 361.0 158.5Q398 140 439 140Q479 140 510.5 158.5Q542 177 559.5 210.0Q577 243 577 285Z"/><path transform="translate(3889 0)" d="M56 580 159 560 261 580V0H56ZM158 627Q105 627 72.0 653.5Q39 680 39 726Q39 771 72.0 798.0Q105 825 158 825Q213 825 245.5 798.0Q278 771 278 726Q278 680 245.5 653.5Q213 627 158 627Z"/><path transform="translate(4210 0)" d="M718 186Q718 120 678.0 75.0Q638 30 564.0 7.0Q490 -16 386 -16Q279 -16 198.5 10.0Q118 36 73.0 83.0Q28 130 25 192H232Q239 169 259.5 152.5Q280 136 314.0 127.5Q348 119 395 119Q456 119 487.5 131.0Q519 143 519 167Q519 186 495.0 195.5Q471 205 413 210L312 218Q211 225 151.5 248.5Q92 272 66.0 309.5Q40 347 40 395Q40 460 80.5 502.5Q121 545 193.5 566.5Q266 588 363 588Q459 588 534.0 563.0Q609 538 654.0 493.5Q699 449 706 389H499Q494 408 477.0 423.5Q460 439 430.0 449.0Q400 459 353 459Q298 459 269.5 447.0Q241 435 241 413Q241 396 258.5 386.0Q276 376 324 372L457 362Q556 356 613.0 333.5Q670 311 694.0 274.0Q718 237 718 186Z"/></g>
@@ -2510,7 +3009,7 @@
     <div class="win-head">
       <button id="win-back" class="win-back" type="button" aria-label="Назад">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" d="M15.4 4.6 8 12l7.4 7.4 1.4-1.4L10.8 12l6-6z"/>
+          <path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
       <h2 id="win-title" class="win-title"></h2>
@@ -2519,42 +3018,47 @@
     <div id="win-body" class="win-body"></div>
   </section>
 
-  <!-- Таб-панель: линейные иконки, активная вкладка раскрывается в лаймовую «таблетку» с подписью -->
+  <!-- Таб-панель: иконки-символы и «жидкая» капсула, которая перетекает к выбранной вкладке.
+       Карта — радар (у открытой вкладки луч вращается), друзья — два пересекающихся круга,
+       чаты — облачко со «спутником», профиль — точка-голова и плечи -->
   <nav class="dock-wrap" aria-label="Разделы">
     <ul class="dock" id="dock">
+      <li class="dock-pill is-hidden" aria-hidden="true"></li>
       <li class="dock-item">
         <button class="dock-btn" type="button" data-app="map" aria-label="Карта">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 21.5s-7-6.1-7-11.7a7 7 0 0 1 14 0c0 5.6-7 11.7-7 11.7z"/>
-            <circle cx="12" cy="9.8" r="2.6"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.75"/>
+            <path class="ic-sweep" d="M12 12 18.2 5.8"/>
+            <circle class="ic-fill" cx="12" cy="12" r="2.1"/>
+            <circle class="ic-fill" cx="15.7" cy="15.4" r="1.3"/>
           </svg>
           <span class="dock-label">Карта</span>
         </button>
       </li>
       <li class="dock-item">
         <button class="dock-btn" type="button" data-app="friends" aria-label="Друзья">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="9" cy="8" r="3.6"/>
-            <path d="M2.5 20v-.6A5.4 5.4 0 0 1 7.9 14h2.2a5.4 5.4 0 0 1 5.4 5.4v.6"/>
-            <path d="M16 4.6a3.6 3.6 0 0 1 0 6.8M18.5 14.2a5.4 5.4 0 0 1 3 4.8v1"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="12" r="5.6"/>
+            <circle cx="15" cy="12" r="5.6"/>
+            <path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/>
           </svg>
           <span class="dock-label">Друзья</span>
         </button>
       </li>
       <li class="dock-item">
         <button class="dock-btn" type="button" data-app="messenger" aria-label="Сообщения">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20.5 11.6c0 4.5-3.8 8-8.5 8a9.3 9.3 0 0 1-3.6-.7L3.5 20l1.3-3.7a7.6 7.6 0 0 1-1.3-4.7c0-4.4 3.8-8 8.5-8s8.5 3.6 8.5 8z"/>
-            <path d="M8.5 11.6h.01M12 11.6h.01M15.5 11.6h.01" stroke-width="2.6"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7.5 17.06 4.2 18.6 4.42 13.39A7 7 0 1 1 7.5 17.06Z"/>
+            <circle class="ic-fill" cx="18" cy="17.8" r="2.4"/>
           </svg>
           <span class="dock-label">Чаты</span>
         </button>
       </li>
       <li class="dock-item">
         <button class="dock-btn" type="button" data-app="profile" aria-label="Профиль">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="8.2" r="4"/>
-            <path d="M4.5 21v-.4a6.6 6.6 0 0 1 6.6-6.6h1.8a6.6 6.6 0 0 1 6.6 6.6v.4"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle class="ic-fill" cx="12" cy="8.6" r="3.5"/>
+            <path d="M5.25 19.5c1.15-3.3 3.8-5 6.75-5s5.6 1.7 6.75 5"/>
           </svg>
           <span class="dock-label">Профиль</span>
         </button>
@@ -2648,10 +3152,10 @@
       ctx.save();
       ctx.translate(64, 64);
       ctx.rotate(Math.PI / 4);
-      ctx.strokeStyle = '#E4EAFF';
+      ctx.strokeStyle = '#F5F6FF';
       ctx.lineWidth = 7;
       ctx.lineCap = 'round';
-      ctx.shadowColor = '#FF7A50';
+      ctx.shadowColor = '#9D86FF';
       ctx.shadowBlur = 14;
       const arm = 22;
       ctx.beginPath();
@@ -2695,7 +3199,7 @@
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       geo.setIndex(idx);
       geo.setDrawRange(0, 0);
-      const mat = new THREE.MeshBasicMaterial({ color: 0xFFE3D8, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false });
+      const mat = new THREE.MeshBasicMaterial({ color: 0xDCE2FF, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.userData.dashCount = n;
       earth.add(mesh);
@@ -3092,21 +3596,25 @@
       camera.lookAt(0, 0, 0);
       camera.userData.h = h;
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-      const key = new THREE.DirectionalLight(0xC9FFF1, 1.1);
+      // Свет «призмы»: холодный белый основной и два цветных контровых — фиолетовый и аква
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const key = new THREE.DirectionalLight(0xDCE4FF, 1.1);
       key.position.set(5, 3, 5);
       scene.add(key);
-      const rim = new THREE.DirectionalLight(0xFF6A3D, 0.5);
+      const rim = new THREE.DirectionalLight(0xA77BFF, 0.7);
       rim.position.set(-5, -3, -3);
       scene.add(rim);
+      const rim2 = new THREE.DirectionalLight(0x45D9E8, 0.45);
+      rim2.position.set(4, -4, -2);
+      scene.add(rim2);
 
-      const fallbackMat = new THREE.MeshPhongMaterial({ color: 0x10241F, emissive: 0x1B6B5C, emissiveIntensity: 0.35, shininess: 8 });
+      const fallbackMat = new THREE.MeshPhongMaterial({ color: 0x12131C, emissive: 0x2A2F6B, emissiveIntensity: 0.35, shininess: 8 });
       earth = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), fallbackMat);
       scene.add(earth);
 
       glow = new THREE.Mesh(
         new THREE.SphereGeometry(1.08, 48, 48),
-        new THREE.MeshBasicMaterial({ color: 0x3EE6C1, transparent: true, opacity: 0.08, side: THREE.BackSide })
+        new THREE.MeshBasicMaterial({ color: 0x8C7CFF, transparent: true, opacity: 0.09, side: THREE.BackSide })
       );
       scene.add(glow);
 
@@ -3134,7 +3642,7 @@
           if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
           tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
           earth.material = new THREE.MeshPhongMaterial({
-            map: tex, color: 0x9FE3D2, emissive: 0x0B2620, emissiveIntensity: 0.55, shininess: 6, specular: 0x1F4A42,
+            map: tex, color: 0xC2C8F2, emissive: 0x10122A, emissiveIntensity: 0.55, shininess: 6, specular: 0x343A70,
           });
           compile();
           if (!running) renderer.render(scene, camera);
@@ -3523,6 +4031,7 @@
         } catch {}
       }
       await nextFrames();
+      playChromeEnter();                           // капсулы интерфейса съезжаются к краям, пока экран входа тает
       authScreen.classList.add('is-leaving');
       await wait(motion ? 1050 : 0);
     } catch (err) {
@@ -3910,6 +4419,7 @@
   async function enterAppAfterLogin() {
     document.body.classList.remove('auth-locked');
     ensureMapStarted();
+    if (openApp === null) showMapApp();   // на карте активна вкладка «Карта» — капсула панели встаёт на место
     // Данные грузятся по сети, пока камера летит к Земле (это не нагружает анимацию)
     const loading = Promise.all([
       loadPostsFromDB(),
@@ -4538,7 +5048,7 @@
 
     // Цвет плашки: друг из общей группы — зелёная, не друг — коричневая, просто друг — обычная
     const tone = isFriend ? (groupLabel ? 'is-friend-group' : '') : 'is-group';
-    const dotColor = { '': 'var(--you)', 'is-friend-group': '#0A6E5A', 'is-group': '#0E1412' }[tone];
+    const dotColor = { '': 'var(--you)', 'is-friend-group': '#0D8A98', 'is-group': '#131318' }[tone];
 
     const bottom = imgUrl
       ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
@@ -5055,9 +5565,10 @@
   /* ═══════ 3D-АВАТАР ═══════ */
   const AVATAR_KEY = 'avatar.3d.v1';
   const AVATAR_SKINS = { light:{base:0xF1C9A5}, tan:{base:0xD9A276}, brown:{base:0xA66A44}, dark:{base:0x6B3E27} };
-  const AVATAR_CLOTHES = { rust:{body:0x8A4A2F,legs:0x3F2C24}, olive:{body:0x4A6B33,legs:0x2A1E16}, amber:{body:0xD9A84A,legs:0x3F2C24}, dark:{body:0x3F2C24,legs:0x1F1611} };
+  // Одежда: первые три — в цветах «Призмы» (графит, ирис, лёд), дальше прежние
+  const AVATAR_CLOTHES = { ink:{body:0x2A2A33,legs:0x15151A}, iris:{body:0x6E58E0,legs:0x22203A}, ice:{body:0x3FB5C9,legs:0x1D2440}, rust:{body:0x8A4A2F,legs:0x3F2C24}, olive:{body:0x4A6B33,legs:0x2A1E16}, amber:{body:0xD9A84A,legs:0x3F2C24}, dark:{body:0x3F2C24,legs:0x1F1611} };
   const AVATAR_HAIRS = { none:{color:null,style:'none'}, short:{color:0x3F2C24,style:'short'}, long:{color:0x5C3A24,style:'long'}, blond:{color:0xD9A84A,style:'short'}, ginger:{color:0xB85C2B,style:'long'} };
-  const DEFAULT_AVATAR = { skin:'tan', clothes:'rust', hair:'short' };
+  const DEFAULT_AVATAR = { skin:'tan', clothes:'ink', hair:'short' };
 
   function loadAvatarConfig() {
     try { const raw = localStorage.getItem(AVATAR_KEY); if (!raw) return { ...DEFAULT_AVATAR }; return { ...DEFAULT_AVATAR, ...JSON.parse(raw) }; }
@@ -5068,7 +5579,7 @@
 
   function buildAvatarGroup(THREE, cfg) {
     const skin = AVATAR_SKINS[cfg.skin] || AVATAR_SKINS.tan;
-    const clothes = AVATAR_CLOTHES[cfg.clothes] || AVATAR_CLOTHES.rust;
+    const clothes = AVATAR_CLOTHES[cfg.clothes] || AVATAR_CLOTHES.ink;
     const hair = AVATAR_HAIRS[cfg.hair] || AVATAR_HAIRS.short;
     const group = new THREE.Group();
     const skinMat = new THREE.MeshStandardMaterial({ color: skin.base, roughness: 0.55 });
@@ -5124,7 +5635,7 @@
       camera.position.set(0, 1.5, 3.6); camera.lookAt(0, 1.0, 0);
       scene.add(new THREE.AmbientLight(0xffffff, 0.7));
       const key = new THREE.DirectionalLight(0xffd9b3, 1.15); key.position.set(3, 5, 3); key.castShadow = true; scene.add(key);
-      const fill = new THREE.DirectionalLight(0x9FE3D2, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
+      const fill = new THREE.DirectionalLight(0xB9C6FF, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
       const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
       shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.001; scene.add(shadow);
       const group = buildAvatarGroup(THREE, cfg); scene.add(group);
@@ -6264,9 +6775,14 @@
 
     win.hidden = false;
     const wr = win.getBoundingClientRect();
-    const ox = wr.width / 2;
+    // окно растёт из вкладки «Чаты» на панели
+    const chatsBtn = dock.querySelector('[data-app="messenger"]');
+    const cb = chatsBtn ? chatsBtn.getBoundingClientRect() : null;
+    const ox = cb && cb.width ? cb.left + cb.width / 2 - wr.left : wr.width / 2;
     win.style.transformOrigin = `${ox}px ${wr.height + 60}px`;
     requestAnimationFrame(() => win.classList.add('is-open'));
+    animateScreen(navDir === 'back' ? 'back' : 'open');
+    if (navDir !== 'back') playWindowSweep();
 
     resetScreenStack();
     openApp = 'messenger';
@@ -6360,7 +6876,7 @@
       const last = lastByGroup.get(String(g.id));
       const avatar = g.photo
         ? `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background-image:url('${safeUrl(g.photo)}')"></span>`
-        : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, #34D6B2, #0E8C72)">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+        : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
       items.push({
         ts: last ? Date.parse(last.createdAt) : 0,
         html: rowHtml({ attr: `data-open-group-chat="${escapeHtml(g.id)}"`, avatar, name: g.name || 'Группа', preview: previewOf(last, 'Групповой чат', true), last }),
@@ -6576,7 +7092,7 @@
     if (['ppt', 'pptx', 'odp', 'key'].includes(ext)) return 'linear-gradient(#FFA94D,#D9661F)';
     if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'linear-gradient(#B08BFF,#6A43C9)';
     if (['txt', 'md', 'json', 'xml'].includes(ext)) return 'linear-gradient(#9AA6C8,#69706C)';
-    return 'linear-gradient(145deg, #34D6B2, #0E8C72)';
+    return 'linear-gradient(145deg, var(--c1), var(--c3))';
   }
 
   // Скачать файл под его настоящим именем (в хранилище он лежит под служебным)
@@ -6777,6 +7293,7 @@
     const empty = body.querySelector('.empty-msg');
     if (empty) empty.remove();
     body.insertAdjacentHTML('beforeend', chatBubbleHtml(m));
+    if (body.lastElementChild) body.lastElementChild.classList.add('is-new');   // новое сообщение «выпрыгивает»
     hydrateChatMedia(body);
     scrollChatToBottom();
   }
@@ -7337,21 +7854,22 @@
     friend_accept:  `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>`,
     group_match:    `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
     group_match_accept: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
-    match_vote:        `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#15131F" d="M5 3h14v12H5zM8 7h8v2H8zm0 3h5v2H8zM3 17h18v4H3z"/></svg>`,
+    match_vote:        `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M5 3h14v12H5zM8 7h8v2H8zm0 3h5v2H8zM3 17h18v4H3z"/></svg>`,
     match_vote_result: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
     group:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
   };
+  // Значки уведомлений — оттенки одного спектра; match — весь спектр целиком
   const NOTIF_COLOR = {
-    message: 'linear-gradient(145deg, var(--you-2), var(--you-deep))',
-    geo:     'linear-gradient(145deg, #34D6B2, #0E8C72)',
-    system:  'linear-gradient(#D9A84A, #A0761F)',
-    group:   'linear-gradient(145deg, #34D6B2, #0E8C72)',
-    friend_request: 'linear-gradient(#7ED8FF, #2C7BC4)',
-    friend_accept:  'linear-gradient(#6df27c, #0bbf3f)',
-    group_match:        'linear-gradient(135deg, var(--you) 0 50%, var(--lime) 50% 100%)',
-    group_match_accept: 'linear-gradient(#FF8FB1, #C4285E)',
-    match_vote:         'linear-gradient(145deg, #34D6B2, #0E8C72)',
-    match_vote_result:  'linear-gradient(145deg, var(--you-2), var(--you-deep))',
+    message: 'linear-gradient(145deg, var(--c1), var(--c3))',
+    geo:     'linear-gradient(145deg, var(--c1), var(--c2))',
+    system:  'linear-gradient(145deg, #3A3A44, #16161B)',
+    group:   'linear-gradient(145deg, var(--c2), var(--c3))',
+    friend_request: 'linear-gradient(145deg, var(--c1), var(--c2))',
+    friend_accept:  'linear-gradient(145deg, var(--c1), #23C48E)',
+    group_match:        'var(--prism)',
+    group_match_accept: 'linear-gradient(145deg, var(--c3), var(--c4))',
+    match_vote:         'linear-gradient(145deg, var(--c1), var(--c3))',
+    match_vote_result:  'linear-gradient(145deg, var(--c2), var(--c4))',
   };
   function friendRequestActionsHtml(n) {
     if (n.type !== 'friend_request' || !n.requestId) return '';
@@ -7406,14 +7924,137 @@
   let userProfileAvatarCleanup = null;
 
   function savePlacesView(v) { try { localStorage.setItem('places.view.v1', v); } catch {} }
-  function setScreen(renderFn, backFn) { currentBackHandler = (typeof backFn === 'function') ? backFn : null; renderFn(); }
-  function goBack() { if (typeof currentBackHandler === 'function') { const b = currentBackHandler; currentBackHandler = null; b(); } else closeApp(); }
+
+  /* ── Движение между экранами ──
+     navDir — откуда пришли: вперёд (новый экран выезжает справа) или назад (слева). */
+  let navDir = 'fwd';
+  let screenAnimTimer = null;
+  function animateScreen(kind) {
+    if (reduceMotion) return;
+    winBody.classList.remove('scr-fwd', 'scr-back', 'scr-open', 'scr-fade');
+    void winBody.offsetWidth;   // перезапуск анимации, если класс тот же
+    winBody.classList.add('scr-' + kind);
+    clearTimeout(screenAnimTimer);
+    // снимаем класс, чтобы перерисовки по realtime не анимировались заново
+    screenAnimTimer = setTimeout(() => winBody.classList.remove('scr-fwd', 'scr-back', 'scr-open', 'scr-fade'), 700);
+  }
+  // По краю окна пробегает спектр — при открытии окна и смене вкладки
+  let sweepTimer = null;
+  function playWindowSweep() {
+    if (reduceMotion) return;
+    win.classList.remove('sweep');
+    void win.offsetWidth;
+    win.classList.add('sweep');
+    clearTimeout(sweepTimer);
+    sweepTimer = setTimeout(() => win.classList.remove('sweep'), 1500);
+  }
+  function setScreen(renderFn, backFn) {
+    currentBackHandler = (typeof backFn === 'function') ? backFn : null;
+    renderFn();
+    animateScreen(navDir === 'back' ? 'back' : 'fwd');
+  }
+  function goBack() {
+    if (typeof currentBackHandler === 'function') {
+      const b = currentBackHandler;
+      currentBackHandler = null;
+      navDir = 'back';
+      try { b(); } finally { navDir = 'fwd'; }
+    } else closeApp();
+  }
   function resetScreenStack() { currentBackHandler = null; }
   function setDots() {
     items.forEach((li) => { li.dataset.open = String(li.querySelector('.dock-btn').dataset.app === openApp); });
     const nBtn = document.getElementById('notif-btn'); if (nBtn) nBtn.classList.toggle('is-active', openApp === 'notifications');
     const sBtn = document.getElementById('settings-btn'); if (sBtn) sBtn.classList.toggle('is-active', openApp === 'settings');
     const fBtn = document.getElementById('filter-btn'); if (fBtn) fBtn.classList.toggle('is-active', openApp === 'filters');
+    moveDockPill();
+  }
+
+  /* ── «Жидкая» капсула вкладок ──
+     Передний край догоняет новую вкладку быстрее заднего: на ходу капсула вытягивается,
+     а у цели сжимается обратно с лёгкой пружиной — как капля. */
+  const dockPill = dock.querySelector('.dock-pill');
+  let dockPillLeft = null;
+  function moveDockPill() {
+    if (!dockPill) return;
+    const li = items.find((x) => x.dataset.open === 'true');
+    if (!li || !li.offsetWidth) { dockPill.classList.add('is-hidden'); return; }
+    const left = li.offsetLeft;
+    const right = dock.clientWidth - li.offsetLeft - li.offsetWidth;
+    if (dockPillLeft !== null && left !== dockPillLeft) {
+      const toRight = left > dockPillLeft;
+      const lead = 'cubic-bezier(.3, 1.35, .5, 1)', trail = 'cubic-bezier(.6, 0, .2, 1)';
+      dockPill.style.setProperty('--tl', toRight ? '.5s' : '.34s');
+      dockPill.style.setProperty('--tr', toRight ? '.34s' : '.5s');
+      dockPill.style.setProperty('--el', toRight ? trail : lead);
+      dockPill.style.setProperty('--er', toRight ? lead : trail);
+    }
+    dockPill.style.left = left + 'px';
+    dockPill.style.right = right + 'px';
+    dockPill.classList.remove('is-hidden');
+    if (dockPillLeft === null) requestAnimationFrame(() => requestAnimationFrame(() => dockPill.classList.add('is-ready')));
+    dockPillLeft = left;
+  }
+  addEventListener('resize', () => {
+    if (!dockPill) return;
+    dockPill.classList.remove('is-ready');
+    dockPillLeft = null;
+    moveDockPill();
+  });
+
+  /* ── Всплеск при нажатии: из точки касания расходится тонкое спектральное кольцо ── */
+  const tapLayer = document.createElement('div');
+  tapLayer.className = 'tap-layer';
+  tapLayer.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(tapLayer);
+  const TAP_TARGETS = 'button, a[href], [role="button"], [data-action], .row, .person-card, .chat-row, .seg-opt, .switch, .user-avatar-wrap, .wish-cloud, .wish-place, .map-group-chip, .grid-cell, .pg-item';
+  document.addEventListener('pointerdown', (e) => {
+    if (reduceMotion || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const t = e.target.closest && e.target.closest(TAP_TARGETS);
+    if (!t || t.disabled) return;
+    const ring = document.createElement('span');
+    ring.className = 'tap-ring';
+    ring.style.left = e.clientX + 'px';
+    ring.style.top = e.clientY + 'px';
+    tapLayer.appendChild(ring);
+    ring.addEventListener('animationend', () => ring.remove(), { once: true });
+    setTimeout(() => ring.remove(), 1200);   // на случай, если анимация не запустилась
+  }, { passive: true, capture: true });
+
+  /* ── Заголовок окна «расшифровывается»: буквы перебираются и встают на место ──
+     Перебор рисуется поверх (::after по data-scramble) — сам текст заголовка не меняется,
+     поэтому проверки вида winTitle.textContent === '…' продолжают работать. */
+  const SCRAMBLE_CHARS = 'абвгдежзиклмнопрстуфхцчшэюя0123456789';
+  let scrambleRaf = 0, scrambleLast = '';
+  function scrambleTitle() {
+    const target = winTitle.textContent;
+    if (reduceMotion || target === scrambleLast || win.hidden) { scrambleLast = target; return; }
+    scrambleLast = target;
+    cancelAnimationFrame(scrambleRaf);
+    const start = performance.now(), dur = 360 + Math.min(240, target.length * 14);
+    winTitle.classList.add('is-scrambling');
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      const fixed = Math.floor(t * t * target.length);
+      let s = target.slice(0, fixed);
+      for (let i = fixed; i < target.length; i++) {
+        s += /\s/.test(target[i]) ? target[i] : SCRAMBLE_CHARS[(Math.random() * SCRAMBLE_CHARS.length) | 0];
+      }
+      winTitle.dataset.scramble = s;
+      if (t < 1) scrambleRaf = requestAnimationFrame(step);
+      else { winTitle.classList.remove('is-scrambling'); delete winTitle.dataset.scramble; }
+    };
+    scrambleRaf = requestAnimationFrame(step);
+  }
+  new MutationObserver(scrambleTitle).observe(winTitle, { childList: true, characterData: true, subtree: true });
+
+  // Интерфейс «съезжается» к краям — после входа и при запуске с уже открытой сессией
+  function playChromeEnter() {
+    if (reduceMotion) return;
+    document.body.classList.remove('chrome-enter');
+    void document.body.offsetWidth;
+    document.body.classList.add('chrome-enter');
+    setTimeout(() => document.body.classList.remove('chrome-enter'), 1600);
   }
 
   function showMapApp() {
@@ -7423,8 +8064,8 @@
     if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
     if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
     winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
-    win.classList.remove('is-open');
-    closeTimer = setTimeout(() => { win.hidden = true; }, reduceMotion ? 0 : 230);
+    win.classList.remove('is-open', 'sweep');
+    closeTimer = setTimeout(() => { win.hidden = true; }, reduceMotion ? 0 : 300);
     resetScreenStack();
     openApp = 'map';
     document.body.classList.remove('app-window');
@@ -7449,8 +8090,12 @@
     const wr = win.getBoundingClientRect();
     const br = fromBtn ? fromBtn.getBoundingClientRect() : null;
     const ox = br ? br.left + br.width / 2 - wr.left : wr.width / 2;
-    win.style.transformOrigin = `${ox}px ${wr.height + 60}px`;
+    // окно растёт из нажатой кнопки: по горизонтали — от неё, по вертикали — снизу (из панели) или сверху
+    const oy = br ? (br.top > wr.top + wr.height / 2 ? wr.height + 60 : -40) : wr.height + 60;
+    win.style.transformOrigin = `${ox}px ${oy}px`;
     requestAnimationFrame(() => win.classList.add('is-open'));
+    animateScreen(navDir === 'back' ? 'back' : 'open');
+    if (navDir !== 'back') playWindowSweep();
     resetScreenStack();
     openApp = id;
     document.body.classList.remove('app-map');
@@ -7815,7 +8460,7 @@
     camera.position.set(0, 1.5, 4); camera.lookAt(0, 1.0, 0);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     const key = new THREE.DirectionalLight(0xffd9b3, 1.2); key.position.set(3, 5, 3); key.castShadow = true; scene.add(key);
-    const fill = new THREE.DirectionalLight(0x9FE3D2, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
+    const fill = new THREE.DirectionalLight(0xB9C6FF, 0.45); fill.position.set(-3, 3, -2); scene.add(fill);
     const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
     shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.001; scene.add(shadow);
     let group = buildAvatarGroup(THREE, avatarConfig); scene.add(group);
@@ -8026,6 +8671,7 @@
             ${avatarBelow}
           </div>
           </div>`;
+        animateScreen('fade');   // профиль догрузился — мягко проявляем вместо «загрузки»
 
         if (use3D) {
           const canvas = winBody.querySelector('#friend-avatar-canvas');
@@ -8494,7 +9140,16 @@
   dock.addEventListener('click', (e) => {
     const btn = e.target.closest('.dock-btn'); if (!btn) return;
     const id = btn.dataset.app;
+    // иконка «пружинит», а телефон отвечает лёгким щелчком (где есть вибро)
+    btn.classList.remove('is-tapped');
+    void btn.offsetWidth;
+    btn.classList.add('is-tapped');
+    if (openApp !== id && navigator.vibrate) { try { navigator.vibrate(8); } catch {} }
     if (openApp === id && id !== 'map') closeApp(); else showApp(id, btn);
+  });
+  dock.addEventListener('animationend', (e) => {
+    const btn = e.target.closest && e.target.closest('.dock-btn');
+    if (btn && e.animationName === 'tab-tap') btn.classList.remove('is-tapped');
   });
 
   document.getElementById('win-back').addEventListener('click', goBack);
@@ -8515,6 +9170,7 @@
       authScreen.hidden = true;
       ensureMapStarted();
       showMapApp();
+      playChromeEnter();
       await enterAppAfterLogin();
       return;
     }
