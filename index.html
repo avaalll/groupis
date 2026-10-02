@@ -3051,6 +3051,7 @@
     .msg-menu { z-index: 8; min-width: 190px; transform-origin: 0 0; }
     .fwd-list { list-style: none; margin: 4px -8px 14px; padding: 0; max-height: min(46vh, 320px); overflow: auto; }
     .fwd-list .person-card { padding: 8px 10px; cursor: pointer; }
+    .del-actions { flex-wrap: wrap; }
 
     /* ── Кнопка «моё место» — в правом нижнем углу, на одной линии с панелью вкладок ── */
     .geo-btn { right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
@@ -4611,6 +4612,7 @@
     // Данные грузятся по сети, пока камера летит к Земле (это не нагружает анимацию)
     const loading = Promise.all([
       loadMyAvatarConfig(),
+      loadHiddenMessages(),
       loadPostsFromDB(),
       loadWishesFromDB(),
       loadGroupsFromDB(),
@@ -4756,6 +4758,7 @@
     mediaBlobUrls.clear();
     chatHistoryCache.clear();
     friendProfileCache.clear();
+    Object.values(hiddenMsgs).forEach((set) => set.clear());
   }
 
   /* ═══════ ГЛОБАЛЬНЫЕ МАССИВЫ ═══════ */
@@ -7800,6 +7803,7 @@
         if (error) console.warn('[match chat] list:', error.message);
         else for (const r of (data || [])) {
           const m = normMatchRow(r);
+          if (isHiddenMsg('match', m.id)) continue;
           if (!lastByMatch.has(m.matchId)) lastByMatch.set(m.matchId, m);
         }
       } catch (err) { console.warn('[match chat] list exception:', err); }
@@ -7811,6 +7815,7 @@
       if (!error) {
         for (const r of (data || [])) {
           const m = normDmRow(r);
+          if (isHiddenMsg('dm', m.id)) continue;
           const peer = m.fromId === myId ? m.toId : m.fromId;
           if (friendIds.includes(peer) && !lastByPeer.has(peer)) lastByPeer.set(peer, m);
         }
@@ -7824,6 +7829,7 @@
         if (error) console.warn('[group chat] list:', error.message);
         else for (const r of (data || [])) {
           const m = normGroupRow(r);
+          if (isHiddenMsg('group', m.id)) continue;
           if (!lastByGroup.has(String(m.groupId))) lastByGroup.set(String(m.groupId), m);
         }
       } catch (err) { console.warn('[group chat] list exception:', err); }
@@ -8018,7 +8024,8 @@
         : supabaseClient.from('group_messages').select('*').eq('group_id', c.groupId);
     const { data, error } = await q.order('created_at', { ascending: true }).limit(500);
     if (error) { console.warn('[chat] load:', error.message); return null; }
-    return (data || []).map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow);
+    return (data || []).map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow)
+      .filter((m) => !isHiddenMsg(c.type, m.id));
   }
 
   function fmtDuration(sec) {
@@ -8625,6 +8632,40 @@
     chatHistoryCache.set(key, list);
     KV.set(`chat:${currentUser.id}:${key}`, list);
   }
+  /* «Удалить у меня»: сообщение остаётся у остальных, а у меня скрыто. Список скрытых хранится
+     на устройстве и, если выполнен supabase_chat_actions.sql, на сервере — тогда он общий для всех моих устройств */
+  const hiddenMsgs = { dm: new Set(), group: new Set(), match: new Set() };
+  const hiddenStoreKey = () => 'chat.hidden.v1:' + (currentUser ? currentUser.id : 'guest');
+  function isHiddenMsg(kind, id) { return !!hiddenMsgs[kind] && hiddenMsgs[kind].has(String(id)); }
+  function saveHiddenLocal() {
+    try {
+      localStorage.setItem(hiddenStoreKey(), JSON.stringify({ dm: [...hiddenMsgs.dm], group: [...hiddenMsgs.group], match: [...hiddenMsgs.match] }));
+    } catch {}
+  }
+  async function loadHiddenMessages() {
+    if (!currentUser) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(hiddenStoreKey()) || '{}');
+      for (const kind of Object.keys(hiddenMsgs)) (saved[kind] || []).forEach((id) => hiddenMsgs[kind].add(String(id)));
+    } catch {}
+    const { data, error } = await supabaseClient.from('chat_hidden_messages').select('chat_kind, msg_id').eq('user_id', currentUser.id);
+    if (error) { console.warn('[chat hidden] load:', error.message); return; }
+    for (const r of (data || [])) if (hiddenMsgs[r.chat_kind]) hiddenMsgs[r.chat_kind].add(String(r.msg_id));
+    saveHiddenLocal();
+  }
+  async function hideChatMessagesForMe(c, list) {
+    const ids = list.map((m) => String(m.id));
+    ids.forEach((id) => hiddenMsgs[c.type].add(id));
+    saveHiddenLocal();
+    removeChatMessagesLocal(c.type, ids);
+    setChatSelecting(false);
+    const { error } = await supabaseClient.from('chat_hidden_messages').upsert(
+      ids.map((id) => ({ user_id: currentUser.id, chat_kind: c.type, msg_id: id })),
+      { onConflict: 'user_id,chat_kind,msg_id', ignoreDuplicates: true });
+    // без таблицы на сервере сообщение остаётся скрытым на этом устройстве
+    if (error) console.warn('[chat hidden] save:', error.message);
+  }
+
   function chatMsgById(id) { return chat ? chat.messages.find((x) => String(x.id) === String(id)) || null : null; }
   function isMyMsg(m) { return !!m && !!currentUser && String(m.fromId) === String(currentUser.id); }
   const chatSqlHint = (error) => /function|schema cache|could not find|pinned/i.test(error.message || '')
@@ -8753,9 +8794,8 @@
     if (composer && !chatRec) composer.hidden = chat.selecting;
     const count = view.querySelector('#chat-sel-count');
     if (count) count.textContent = `Выбрано: ${chat.selected.size}`;
-    // удалить можно только свои сообщения
     const del = view.querySelector('[data-sel-delete]');
-    if (del) del.disabled = ![...chat.selected].every((id) => isMyMsg(chatMsgById(id)));
+    if (del) del.disabled = !chat.selected.size;
   }
 
   // Меню сообщения — по долгому нажатию или правой кнопке мыши
@@ -8771,7 +8811,7 @@
       + ((m.content || '').trim() ? item('copy', 'Копировать текст') : '')
       + item('forward', 'Переслать')
       + item('select', 'Выбрать')
-      + (isMyMsg(m) ? item('delete', 'Удалить', true) : '');
+      + item('delete', 'Удалить', true);
     winBody.appendChild(pop);
     const r = winBody.getBoundingClientRect();
     const left = Math.max(8, Math.min(x - r.left, r.width - pop.offsetWidth - 8));
@@ -8786,17 +8826,41 @@
     setTimeout(() => document.addEventListener('pointerdown', onDocDown, true), 0);
   }
 
+  // Окно удаления: «У меня» — скрыть только у себя, «У всех» — удалить из чата (только свои сообщения)
+  function deleteChoiceModal({ count, canAll }) {
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'modal-backdrop';
+      back.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+          <h3 class="modal-title">${count > 1 ? `Удалить сообщения (${count})?` : 'Удалить сообщение?'}</h3>
+          <p class="modal-text">${canAll
+            ? '«У меня» — сообщение исчезнет только у вас, у остальных останется. «У всех» — исчезнет у всех участников чата, вернуть его нельзя.'
+            : 'Сообщение исчезнет только у вас, у остальных участников оно останется. Удалить у всех можно только свои сообщения.'}</p>
+          <div class="modal-actions del-actions">
+            <button type="button" class="btn" data-pick="">Отмена</button>
+            <button type="button" class="btn ${canAll ? '' : 'btn-danger'}" data-pick="me">У меня</button>
+            ${canAll ? '<button type="button" class="btn btn-danger" data-pick="all">У всех</button>' : ''}
+          </div>
+        </div>`;
+      win.appendChild(back);
+      back.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-pick]');
+        if (!btn && e.target !== back) return;
+        back.remove();
+        resolve(btn ? btn.dataset.pick || null : null);
+      });
+    });
+  }
+
   async function deleteChatMessages(ids) {
     const c = chat;
     if (!c) return;
-    const list = ids.map(chatMsgById).filter((m) => m && !m.pending && isMyMsg(m));
+    const list = ids.map(chatMsgById).filter((m) => m && !m.pending);
     if (!list.length) return;
-    const ok = await confirmModal({
-      title: list.length > 1 ? `Удалить сообщения (${list.length})?` : 'Удалить сообщение?',
-      text: 'Сообщение исчезнет у всех участников чата. Это действие нельзя отменить.',
-      confirmLabel: 'Удалить',
-    });
-    if (!ok || chat !== c) return;
+    const pick = await deleteChoiceModal({ count: list.length, canAll: list.every(isMyMsg) });
+    if (!pick || chat !== c) return;
+    if (pick === 'me') { await hideChatMessagesForMe(c, list); return; }
     const gone = list.map((m) => String(m.id));
     removeChatMessagesLocal(c.type, gone);   // сразу с экрана, сервер — в фоне
     setChatSelecting(false);
@@ -8946,7 +9010,7 @@
       if (chat !== c) return; // пока читали кеш, пользователь ушёл
       if (Array.isArray(cached)) chatHistoryCache.set(key, cached); else cached = null;
     }
-    if (cached) { c.messages = cached.slice(); show(); }
+    if (cached) { c.messages = cached.filter((m) => !isHiddenMsg(c.type, m.id)); show(); }
 
     const fresh = await loadChatHistory(c);
     if (chat !== c) return; // пока грузили, пользователь ушёл
