@@ -3402,7 +3402,50 @@
       rimLight.color.set(schemeColor('--a3', '#A77BFF'));
       rimLight2.color.set(schemeColor('--a1', '#45D9E8'));
       glow.material.color.set(schemeColor('--a2', '#8C7CFF'));
+      tintEarth();
       if (!running && renderer) renderer.render(scene, camera);
+    }
+
+    /* Сама планета — в цвете схемы. У «Призмы» текстура как есть (сине-фиолетовая); для остальных схем
+       берётся её чёрно-белая копия, а оттенок задают цвет материала, его свечение и основной свет. */
+    const EARTH_LOOK = {
+      prism: { gray: false, color: 0xC2C8F2, emissive: 0x10122A, specular: 0x343A70, key: 0xDCE4FF },
+      acid:  { gray: true,  color: 0xD2F56E, emissive: 0x0C1603, specular: 0x4A6A14, key: 0xF2FFD0 },
+      ember: { gray: true,  color: 0xFF9A66, emissive: 0x200A04, specular: 0x703418, key: 0xFFE4D0 },
+      frost: { gray: true,  color: 0xA8D8FF, emissive: 0x06142A, specular: 0x2C5C90, key: 0xE4F4FF },
+    };
+    let earthTex = null, earthTexGray = null, keyLight = null;
+    function grayTexture(tex) {
+      const img = tex.image;
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth || img.width; c.height = img.naturalHeight || img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, c.width, c.height), px = data.data;
+      for (let i = 0; i < px.length; i += 4) {
+        // яркость с запасом: после умножения на цвет схемы суша не должна стать темнее, чем в «Призме»
+        const l = Math.min(255, (px[i] * 0.3 + px[i + 1] * 0.5 + px[i + 2] * 0.2) * 1.5);
+        px[i] = px[i + 1] = px[i + 2] = l;
+      }
+      ctx.putImageData(data, 0, 0);
+      const out = new THREE.CanvasTexture(c);
+      if (THREE.SRGBColorSpace) out.colorSpace = THREE.SRGBColorSpace;
+      out.anisotropy = tex.anisotropy;
+      return out;
+    }
+    function tintEarth() {
+      if (!earth) return;
+      const look = EARTH_LOOK[document.documentElement.getAttribute('data-palette')] || EARTH_LOOK.prism;
+      if (keyLight) keyLight.color.setHex(look.key);
+      const m = earth.material;
+      if (!earthTex) { m.emissive.setHex(look.gray ? look.emissive : 0x2A2F6B); return; }   // текстура ещё не загружена
+      let map = earthTex;
+      if (look.gray) {
+        try { map = earthTexGray || (earthTexGray = grayTexture(earthTex)); }
+        catch (err) { console.warn('[globe] tint:', err); map = earthTex; }
+      }
+      if (m.map !== map) { m.map = map; m.needsUpdate = true; }
+      m.color.setHex(look.color); m.emissive.setHex(look.emissive); m.specular.setHex(look.specular);
     }
 
     function addMarkerSprite(vec) {
@@ -3855,7 +3898,7 @@
       );
       scene.add(glow);
 
-      rimLight = rim; rimLight2 = rim2;
+      rimLight = rim; rimLight2 = rim2; keyLight = key;
       initialized = true;
       tint();
       updateGlobePosition();
@@ -3883,6 +3926,8 @@
           earth.material = new THREE.MeshPhongMaterial({
             map: tex, color: 0xC2C8F2, emissive: 0x10122A, emissiveIntensity: 0.55, shininess: 6, specular: 0x343A70,
           });
+          earthTex = tex;
+          tintEarth();
           compile();
           if (!running) renderer.render(scene, camera);
           done();
