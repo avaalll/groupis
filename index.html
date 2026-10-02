@@ -9921,8 +9921,31 @@
     if (map2gis && typeof map2gis.invalidateSize === 'function') requestAnimationFrame(() => { try { map2gis.invalidateSize(); } catch {} });
   }));
 
+  /* ── Поворот экрана и смена размера окна ──
+     Карта 2GIS сама не узнаёт, что её контейнер изменился: холст остаётся прежнего размера, а рядом —
+     пустая чёрная область. Пересчитываем размер карты при любом изменении. На iPad и iPhone новые
+     размеры приходят не сразу после поворота, поэтому повторяем пересчёт несколько раз. */
+  let relayoutTimers = [];
+  function relayoutNow() {
+    if (map2gis && typeof map2gis.invalidateSize === 'function') { try { map2gis.invalidateSize(); } catch {} }
+    scheduleWishDeclutter();
+    if (dockPill) { dockPill.classList.remove('is-ready'); dockPillLeft = null; moveDockPill(); }
+  }
+  function relayoutApp() {
+    relayoutTimers.forEach(clearTimeout);
+    requestAnimationFrame(relayoutNow);
+    relayoutTimers = [120, 350, 700, 1200].map((ms) => setTimeout(relayoutNow, ms));
+  }
+  addEventListener('resize', relayoutApp);
+  addEventListener('orientationchange', relayoutApp);
+  addEventListener('pageshow', relayoutApp);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) relayoutApp(); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', relayoutApp);
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', relayoutApp);
+  if (window.ResizeObserver) new ResizeObserver(relayoutApp).observe(document.getElementById('map'));
+
   if ('serviceWorker' in navigator) {
-    addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW', err)); });
+    addEventListener('load',() => { navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW', err)); });
   }
 
   // Карта стартует из bootApp: сразу, если вход уже выполнен, или после вступления на экране входа.
