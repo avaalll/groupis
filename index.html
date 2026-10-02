@@ -4637,6 +4637,7 @@
       if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
     });
     openAppFromShortcut();
+    setTimeout(prefetchChats, 2500);   // когда интерфейс уже на месте
   }
 
   /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings */
@@ -4663,22 +4664,41 @@
     let dbp = null;
     const open = () => dbp || (dbp = new Promise((res, rej) => {
       try {
-        const rq = indexedDB.open('groupis-cache', 1);
-        rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
-        rq.onsuccess = () => res(rq.result);
+        const rq = indexedDB.open('groupis-cache', 2);
+        rq.onupgradeneeded = () => {
+          const db = rq.result;
+          for (const name of ['kv', 'media']) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+        };
+        rq.onsuccess = () => {
+          const db = rq.result;
+          db.onversionchange = () => { db.close(); dbp = null; };
+          res(db);
+        };
         rq.onerror = () => rej(rq.error);
       } catch (err) { rej(err); }
     }));
-    const run = (mode, fn) => open().then((db) => new Promise((res, rej) => {
-      const tx = db.transaction('kv', mode);
-      const rq = fn(tx.objectStore('kv'));
+    const run = (stores, mode, fn) => open().then((db) => new Promise((res, rej) => {
+      const tx = db.transaction(stores, mode);
+      const rq = fn(tx);
       tx.oncomplete = () => res(rq && rq.result);
       tx.onerror = tx.onabort = () => rej(tx.error);
     })).catch((err) => { console.warn('[cache]', err); return undefined; });
     return {
-      get: (k) => run('readonly', (s) => s.get(k)),
-      set: (k, v) => run('readwrite', (s) => s.put(v, k)),
-      clear: () => run('readwrite', (s) => s.clear()),
+      get: (k) => run('kv', 'readonly', (tx) => tx.objectStore('kv').get(k)),
+      set: (k, v) => run('kv', 'readwrite', (tx) => tx.objectStore('kv').put(v, k)),
+      clear: () => run(['kv', 'media'], 'readwrite', (tx) => { tx.objectStore('kv').clear(); tx.objectStore('media').clear(); }),
+      mediaGet: (k) => run('media', 'readonly', (tx) => tx.objectStore('media').get(k)),
+      mediaSet: (k, v) => run('media', 'readwrite', (tx) => tx.objectStore('media').put(v, k)),
+      // оставить не больше max файлов — самые старые удаляются
+      mediaPrune: (max) => run('media', 'readwrite', (tx) => {
+        const store = tx.objectStore('media'), all = [];
+        store.openCursor().onsuccess = (e) => {
+          const cur = e.target.result;
+          if (cur) { all.push([cur.key, (cur.value && cur.value.at) || 0]); cur.continue(); return; }
+          if (all.length <= max) return;
+          all.sort((a, b) => a[1] - b[1]).slice(0, all.length - max).forEach(([k]) => store.delete(k));
+        };
+      }),
     };
   })();
 
@@ -4710,34 +4730,46 @@
     if (!groupInvites.length && Array.isArray(s.groupInvites)) groupInvites = s.groupInvites;
     if (myPhotos === null && Array.isArray(s.myPhotos)) myPhotos = s.myPhotos;
     if (!groupStats.size && Array.isArray(s.groupStats)) groupStats = new Map(s.groupStats);
+    // ссылки на файлы чатов, подписанные в прошлый раз, ещё действуют — вложения показываются без запроса к серверу
+    const signed = await KV.get('signed:' + uid);
+    if (Array.isArray(signed) && currentUser && currentUser.id === uid) {
+      const now = Date.now();
+      for (const [path, v] of signed) if (v && v.exp > now && !mediaUrlCache.has(path)) mediaUrlCache.set(path, v);
+    }
     updateBadge();
   }
 
-  /* Медиа из чатов: путь в хранилище → локальная ссылка на файл в памяти */
-  const MEDIA_CACHE = 'groupis-chat-media-v1';
-  const MEDIA_BLOB_MAX = 12 * 1024 * 1024;
-  const mediaBlobUrls = new Map();
-  function mediaCacheKey(path) { return 'https://chat-media.groupis.local/' + encodeURI(path); }
+  /* Медиа из чатов. Файл хранится на устройстве (IndexedDB), в памяти — готовая ссылка на него:
+     сообщение рисуется сразу с картинкой, без заглушки. Для фото запоминается и размер — место под него
+     занято заранее, лента не прыгает. */
+  const MEDIA_BLOB_MAX = 25 * 1024 * 1024;
+  const MEDIA_KEEP = 600;                 // сколько файлов держим на устройстве
+  const SIGN_TTL = 3 * 24 * 3600;         // срок подписанной ссылки, секунды
+  const mediaBlobUrls = new Map();        // путь → ссылка на файл в памяти
+  const mediaDims = new Map();            // путь → [ширина, высота] фото
+  const mediaLoading = new Map();         // путь → идущая загрузка
+  if ('caches' in window) caches.delete('groupis-chat-media-v1').catch(() => {});   // прежнее хранилище
+
   async function cachedMediaUrl(path) {
     if (mediaBlobUrls.has(path)) return mediaBlobUrls.get(path);
-    if (!('caches' in window)) return null;
-    try {
-      const store = await caches.open(MEDIA_CACHE);
-      const res = await store.match(mediaCacheKey(path));
-      if (!res) return null;
-      if (mediaBlobUrls.has(path)) return mediaBlobUrls.get(path);
-      const url = URL.createObjectURL(await res.blob());
-      mediaBlobUrls.set(path, url);
-      return url;
-    } catch { return null; }
+    const rec = await KV.mediaGet(path);
+    if (!rec || !rec.blob) return null;
+    if (mediaBlobUrls.has(path)) return mediaBlobUrls.get(path);
+    let url;
+    try { url = URL.createObjectURL(rec.blob); } catch { return null; }
+    mediaBlobUrls.set(path, url);
+    if (rec.w && rec.h) mediaDims.set(path, [rec.w, rec.h]);
+    return url;
   }
   async function rememberMediaBlob(path, blob, url) {
     mediaBlobUrls.set(path, url || URL.createObjectURL(blob));
-    if (!('caches' in window) || blob.size > MEDIA_BLOB_MAX) return;
-    try {
-      const store = await caches.open(MEDIA_CACHE);
-      await store.put(mediaCacheKey(path), new Response(blob, { headers: { 'Content-Type': blob.type || 'application/octet-stream' } }));
-    } catch (err) { console.warn('[media cache]', err); }
+    if (blob.size > MEDIA_BLOB_MAX) return;
+    let w = 0, h = 0;
+    if ((blob.type || '').startsWith('image/') && window.createImageBitmap) {
+      try { const bmp = await createImageBitmap(blob); w = bmp.width; h = bmp.height; bmp.close(); } catch {}
+    }
+    if (w && h) mediaDims.set(path, [w, h]);
+    await KV.mediaSet(path, { blob, w, h, at: Date.now() });
   }
   // Скачать по подписанной ссылке, запомнить и вернуть локальную ссылку; при ошибке — null
   async function fetchMediaToCache(path, signedUrl) {
@@ -4749,13 +4781,81 @@
       return mediaBlobUrls.get(path);
     } catch (err) { console.warn('[media cache] fetch:', err); return null; }
   }
+  // Файл окажется на устройстве: если он уже там — берём его, иначе скачиваем (один раз, даже если просили дважды)
+  function ensureMediaCached(path, signedUrl) {
+    if (mediaBlobUrls.has(path)) return Promise.resolve(mediaBlobUrls.get(path));
+    if (mediaLoading.has(path)) return mediaLoading.get(path);
+    const p = cachedMediaUrl(path).then((url) => url || fetchMediaToCache(path, signedUrl))
+      .finally(() => mediaLoading.delete(path));
+    mediaLoading.set(path, p);
+    return p;
+  }
+
+  /* Подписанные ссылки на файлы чатов живут несколько дней и хранятся на устройстве */
+  function freshSignedUrl(path) {
+    const c = mediaUrlCache.get(path);
+    return c && c.exp > Date.now() ? c.url : null;
+  }
+  let signedSaveTimer = null;
+  function saveSignedUrls() {
+    if (!currentUser) return;
+    const uid = currentUser.id;
+    clearTimeout(signedSaveTimer);
+    signedSaveTimer = setTimeout(() => {
+      if (!currentUser || currentUser.id !== uid) return;
+      const now = Date.now();
+      KV.set('signed:' + uid, [...mediaUrlCache].filter(([, v]) => v.exp > now).slice(-2000));
+    }, 800);
+  }
+  async function signMediaPaths(paths) {
+    const need = [...new Set(paths)].filter((p) => p && !freshSignedUrl(p));
+    if (!need.length) return;
+    const now = Date.now();
+    try {
+      const { data, error } = await supabaseClient.storage.from(CHAT_BUCKET).createSignedUrls(need, SIGN_TTL);
+      if (error) console.warn('[chat media] sign:', error.message);
+      for (const item of (data || [])) {
+        if (item.signedUrl) mediaUrlCache.set(item.path, { url: item.signedUrl, exp: now + (SIGN_TTL - 3600) * 1000 });
+      }
+      saveSignedUrls();
+    } catch (err) { console.warn('[chat media] sign:', err); }
+  }
+
+  const KEEP_KINDS = ['image', 'voice', 'circle'];   // что скачиваем на устройство целиком
+  function keepablePaths(list, max) {
+    return [...new Set(list.filter((m) => m.mediaPath && !m.localUrl && KEEP_KINDS.includes(m.kind)).slice(-max).map((m) => m.mediaPath))];
+  }
+  // Перед показом чата: файлы последних сообщений, уже лежащие на устройстве, — в память (это быстро)
+  async function warmChatMedia(list, max = 40) {
+    const paths = keepablePaths(list, max).filter((p) => !mediaBlobUrls.has(p));
+    if (!paths.length) return;
+    await Promise.race([Promise.all(paths.map(cachedMediaUrl)), new Promise((r) => setTimeout(r, 300))]);
+  }
+  // В фоне: скачать на устройство вложения последних сообщений, которых там ещё нет
+  async function prefetchChatMedia(list, max = 30) {
+    if (navigator.connection && navigator.connection.saveData) return;
+    const missing = [];
+    for (const p of keepablePaths(list, max)) if (!(await cachedMediaUrl(p))) missing.push(p);
+    if (!missing.length) return;
+    await signMediaPaths(missing);
+    let i = 0;
+    const worker = async () => {
+      while (i < missing.length) {
+        const p = missing[i++], url = freshSignedUrl(p);
+        if (url) await ensureMediaCached(p, url);
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+  }
 
   function clearLocalCaches() {
     clearTimeout(stateSaveTimer);
     KV.clear();
-    if ('caches' in window) caches.delete(MEDIA_CACHE).catch(() => {});
+    clearTimeout(signedSaveTimer);
     mediaBlobUrls.forEach((url) => { try { URL.revokeObjectURL(url); } catch {} });
     mediaBlobUrls.clear();
+    mediaDims.clear();
+    mediaLoading.clear();
     chatHistoryCache.clear();
     friendProfileCache.clear();
     Object.values(hiddenMsgs).forEach((set) => set.clear());
@@ -8034,11 +8134,17 @@
   }
 
   function chatMediaHtml(m) {
-    // Пока сообщение отправляется — локальный файл, потом — подписанная ссылка из Storage
-    // фото, голосовые и кружки, уже скачанные на устройство, показываются сразу — без заглушки
-    const local = m.localUrl || (m.mediaPath && m.kind !== 'video' && m.kind !== 'file' ? mediaBlobUrls.get(m.mediaPath) : null);
-    const src = local ? `src="${escapeHtml(local)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
-    if (m.kind === 'image') return `<img class="chat-photo" ${src} alt="Фото" data-open-photo>`;
+    // Ссылка подставляется сразу при отрисовке: пока сообщение отправляется — локальный файл, потом — файл,
+    // сохранённый на устройстве, а если его там нет — подписанная ссылка, запомненная с прошлого раза.
+    // Нет ни того, ни другого — ссылку подставит hydrateChatMedia
+    const path = m.mediaPath || '';
+    const signed = path ? freshSignedUrl(path) : null;
+    const url = m.localUrl || (path && m.kind !== 'file' ? mediaBlobUrls.get(path) : null) || signed;
+    const src = (url ? `src="${escapeHtml(url)}" ` : '') + (path ? `data-media-path="${escapeHtml(path)}"` : '');
+    if (m.kind === 'image') {
+      const size = chatPhotoSize(path);
+      return `<img class="chat-photo" ${src} ${size ? `style="${size}"` : ''} alt="Фото" data-open-photo>`;
+    }
     if (m.kind === 'video') return `<video class="chat-video" ${src} controls playsinline preload="metadata"></video>`;
     if (m.kind === 'voice') {
       return `<div class="chat-voice"><audio ${src} controls preload="metadata"></audio>${m.duration ? `<span class="chat-voice-dur">${fmtDuration(m.duration)}</span>` : ''}</div>`;
@@ -8054,7 +8160,8 @@
       // Карточка файла: значок по расширению, имя, размер. Ссылку подставит hydrateChatMedia
       const name = m.fileName || 'Файл';
       const ext = fileExt(name);
-      const href = m.localUrl ? `href="${escapeHtml(m.localUrl)}"` : `data-media-path="${escapeHtml(m.mediaPath || '')}"`;
+      const href = m.localUrl ? `href="${escapeHtml(m.localUrl)}"`
+        : (signed ? `href="${escapeHtml(signed)}" ` : '') + `data-media-path="${escapeHtml(path)}"`;
       return `<a class="chat-file" ${href} target="_blank" rel="noopener" data-chat-file data-file-name="${escapeHtml(name)}">
         <span class="chat-file-ico" style="background:${fileIconColor(ext)}">${escapeHtml((ext || 'file').slice(0, 4).toUpperCase())}</span>
         <span class="chat-file-main">
@@ -8120,46 +8227,70 @@
 
   const mediaUrlCache = new Map(); // путь в Storage → { url, exp }
 
-  function setChatMediaSrc(el, url, fallbackUrl) {
-    // когда медиа загрузится, высота сообщения вырастет — держим ленту внизу
-    el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); }, { once: true });
-    if (el.tagName !== 'IMG') el.addEventListener('error', () => showMediaFallback(el, fallbackUrl || url), { once: true });
-    el.src = url;
+  // Размер фото на экране известен заранее — место под него занято ещё до загрузки
+  function chatPhotoSize(path) {
+    const d = path && mediaDims.get(path);
+    if (!d) return '';
+    const k = Math.min(1, 260 / d[0], 320 / d[1]);
+    return `width:${Math.max(1, Math.round(d[0] * k))}px;aspect-ratio:${d[0]}/${d[1]}`;
   }
 
-  /* Подставить ссылки в медиа сообщений. Фото, голосовые и кружки сначала ищем на устройстве —
-     тогда они появляются сразу; остальное подписываем на сервере, скачиваем и запоминаем. */
+  const mediaAttr = (el) => (el.tagName === 'A' ? 'href' : 'src');
+  const mediaPending = (el) => !el.getAttribute(mediaAttr(el));
+
+  /* Подставить ссылки туда, где их ещё нет: сначала файл с устройства, иначе — подписанная ссылка */
+  async function fillChatMedia(els, remoteOnly = false) {
+    if (!remoteOnly) {
+      await Promise.all(els.filter((el) => el.tagName !== 'A').map(async (el) => {
+        const path = el.dataset.mediaPath;
+        const url = await cachedMediaUrl(path);
+        if (!url || !mediaPending(el)) return;
+        if (el.tagName === 'IMG' && !el.style.aspectRatio) el.style.cssText += chatPhotoSize(path);
+        el.src = url;
+      }));
+    }
+    const rest = els.filter((el) => el.isConnected && mediaPending(el));
+    if (!rest.length) return;
+    await signMediaPaths(rest.map((el) => el.dataset.mediaPath));
+    for (const el of rest) {
+      const url = freshSignedUrl(el.dataset.mediaPath);
+      if (url && mediaPending(el)) el.setAttribute(mediaAttr(el), url);
+    }
+  }
+
+  // Вложение не открылось (ссылка устарела, файл на устройстве испорчен) — один раз берём свежую ссылку
+  function onChatMediaError(el) {
+    const path = el.dataset.mediaPath, src = el.getAttribute('src') || '';
+    if (!path || !src) return;
+    if (el.dataset.mediaRetried) { if (el.tagName !== 'IMG') showMediaFallback(el, src); return; }
+    el.dataset.mediaRetried = '1';
+    if (src.startsWith('blob:')) mediaBlobUrls.delete(path); else mediaUrlCache.delete(path);
+    el.removeAttribute('src');
+    fillChatMedia([el], true);
+  }
+
+  /* Медиа сообщений: большинство уже нарисовано со ссылкой (см. chatMediaHtml). Здесь — недостающие ссылки
+     и сохранение фото, голосовых и кружков на устройство, чтобы в следующий раз они открылись мгновенно. */
   async function hydrateChatMedia(root) {
     if (!root) return;
-    const pending = (el) => el.dataset.mediaPath && !el.getAttribute(el.tagName === 'A' ? 'href' : 'src');
-    const keepable = (el) => el.tagName === 'IMG' || el.tagName === 'AUDIO' || el.classList.contains('chat-circle');
-    let els = [...root.querySelectorAll('[data-media-path]')].filter(pending);
+    const els = [...root.querySelectorAll('[data-media-path]')].filter((el) => el.dataset.mediaPath && !el.dataset.mediaBound);
     if (!els.length) return;
-    await Promise.all(els.filter(keepable).map(async (el) => {
-      const url = await cachedMediaUrl(el.dataset.mediaPath);
-      if (url && pending(el)) setChatMediaSrc(el, url);
-    }));
-    els = els.filter((el) => el.isConnected && pending(el));
-    if (!els.length) return;
-    const now = Date.now();
-    const need = [...new Set(els.map((el) => el.dataset.mediaPath))].filter((p) => {
-      const cached = mediaUrlCache.get(p);
-      return !cached || cached.exp < now;
-    });
-    if (need.length) {
-      const { data, error } = await supabaseClient.storage.from(CHAT_BUCKET).createSignedUrls(need, 3600);
-      if (error) console.warn('[chat media] sign:', error.message);
-      for (const item of (data || [])) {
-        if (item.signedUrl) mediaUrlCache.set(item.path, { url: item.signedUrl, exp: now + 50 * 60 * 1000 });
-      }
-    }
     for (const el of els) {
+      el.dataset.mediaBound = '1';
+      if (el.tagName === 'A') continue;
+      // когда медиа загрузится, высота сообщения может вырасти — держим ленту внизу
+      el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); });
+      el.addEventListener('error', () => onChatMediaError(el));
+    }
+    await fillChatMedia(els.filter(mediaPending));
+    for (const el of els) {
+      const isImg = el.tagName === 'IMG';
+      if (!isImg && el.tagName !== 'AUDIO' && !el.classList.contains('chat-circle')) continue;
       const path = el.dataset.mediaPath;
-      const cached = mediaUrlCache.get(path);
-      if (!cached || !pending(el)) continue;
-      if (el.tagName === 'A') { el.href = cached.url; continue; }   // карточка файла
-      if (!keepable(el)) { setChatMediaSrc(el, cached.url); continue; }
-      fetchMediaToCache(path, cached.url).then((url) => { if (pending(el)) setChatMediaSrc(el, url || cached.url, cached.url); });
+      if (mediaBlobUrls.has(path)) continue;
+      const keep = () => { const url = freshSignedUrl(path); if (url) ensureMediaCached(path, url); };
+      // фото сохраняем после того, как оно показалось: второй раз по сети оно не скачивается
+      if (isImg && !el.complete) el.addEventListener('load', keep, { once: true }); else keep();
     }
   }
 
@@ -8429,6 +8560,7 @@
           ? m.matchId !== null && String(m.matchId) === String(c.matchId)
           : m.groupId !== null && String(m.groupId) === String(c.groupId));
     if (!belongs) {
+      rememberIncomingMessage(m);
       if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
       return;
     }
@@ -8632,6 +8764,46 @@
     chatHistoryCache.set(key, list);
     KV.set(`chat:${currentUser.id}:${key}`, list);
   }
+  function rememberIncomingMessage(m) {
+    if (!currentUser) return;
+    const key = m.matchId !== null ? 'match:' + m.matchId
+      : m.groupId !== null ? 'group:' + m.groupId
+      : 'dm:' + (String(m.fromId) === String(currentUser.id) ? m.toId : m.fromId);
+    const list = chatHistoryCache.get(key);
+    if (list && !list.some((x) => String(x.id) === String(m.id))) {
+      list.push(m);
+      KV.set(`chat:${currentUser.id}:${key}`, list.slice(-200));
+    }
+    prefetchChatMedia([m]);
+  }
+
+  /* После входа, в фоне: переписки всех чатов и вложения последних сообщений — на устройство.
+     Тогда любой чат, даже тот, что ещё не открывали, появляется сразу и с фото. */
+  let chatsPrefetching = false;
+  async function prefetchChats() {
+    if (chatsPrefetching || !currentUser) return;
+    chatsPrefetching = true;
+    const uid = currentUser.id;
+    const mine = () => currentUser && currentUser.id === uid;
+    try {
+      for (const { spec } of forwardTargets().slice(0, 60)) {
+        if (!mine()) return;
+        const key = chatKey(spec);
+        if (chat && chatKey(chat) === key) continue;   // открытый чат обновляет себя сам
+        let list = await loadChatHistory(spec);
+        if (!mine()) return;
+        if (list && !(chat && chatKey(chat) === key)) {
+          list = list.slice(-200);
+          chatHistoryCache.set(key, list);
+          KV.set(`chat:${uid}:${key}`, list);
+        } else list = chatHistoryCache.get(key) || (await KV.get(`chat:${uid}:${key}`));
+        if (Array.isArray(list)) await prefetchChatMedia(list);
+      }
+      KV.mediaPrune(MEDIA_KEEP);
+    } catch (err) { console.warn('[chat prefetch]', err); }
+    finally { chatsPrefetching = false; }
+  }
+
   /* «Удалить у меня»: сообщение остаётся у остальных, а у меня скрыто. Список скрытых хранится
      на устройстве и, если выполнен supabase_chat_actions.sql, на сервере — тогда он общий для всех моих устройств */
   const hiddenMsgs = { dm: new Set(), group: new Set(), match: new Set() };
@@ -9010,11 +9182,21 @@
       if (chat !== c) return; // пока читали кеш, пользователь ушёл
       if (Array.isArray(cached)) chatHistoryCache.set(key, cached); else cached = null;
     }
-    if (cached) { c.messages = cached.filter((m) => !isHiddenMsg(c.type, m.id)); show(); }
+    if (cached) {
+      c.messages = cached.filter((m) => !isHiddenMsg(c.type, m.id));
+      await warmChatMedia(c.messages);
+      if (chat !== c) return;
+      show();
+    }
 
     const fresh = await loadChatHistory(c);
     if (chat !== c) return; // пока грузили, пользователь ушёл
-    if (!cached) { c.messages = fresh || []; show(); }
+    if (!cached) {
+      c.messages = fresh || [];
+      await warmChatMedia(c.messages);
+      if (chat !== c) return;
+      show();
+    }
     else if (fresh) {
       // то, что ещё отправляется, остаётся в конце ленты
       const sending = c.messages.filter((m) => m.pending);
