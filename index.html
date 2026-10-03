@@ -3124,6 +3124,12 @@
     .pal-dot { width: 32px; height: 32px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .35); transition: transform .4s var(--spring); }
     .pal-opt[aria-pressed="true"] .pal-dot { transform: scale(1.12); box-shadow: 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
     @media (max-width: 360px) { .pal-seg { grid-template-columns: repeat(2, 1fr); } }
+
+    /* ── Воспоминание: с кем ── */
+    .post-with-list { margin-top: 8px; }
+    .post-with-list .person-card[role="radio"] .person-check { border-radius: 50%; }
+    .post-head .post-author.is-with { font-size: 13.5px; }
+    .map-popup .pop-with { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
   </style>
 </head>
 <body class="auth-locked">
@@ -4996,6 +5002,7 @@
       images: Array.isArray(r.images) ? r.images : [],
       place: r.place, caption: r.caption,
       coords: Array.isArray(r.coords) ? r.coords : null,
+      companions: r.companions && typeof r.companions === 'object' ? r.companions : null,
       ts: r.ts, time: r.ts ? new Date(r.ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '',
     }));
     scheduleStateSave();
@@ -7001,6 +7008,7 @@
     wrap.innerHTML = `
       ${cover ? `<img class="pop-img" src="${safeUrl(cover)}" alt="">` : ''}
       <div class="pop-place">📍 ${escapeHtml(post.place || '')}</div>
+      ${postWithLabel(post) ? `<div class="pop-with">${escapeHtml(postWithLabel(post))}</div>` : ''}
       ${post.caption ? `<div class="pop-caption">${escapeHtml(post.caption)}</div>` : ''}
       <button type="button" class="pop-open">Открыть воспоминание</button>`;
     wrap.querySelector('.pop-open').addEventListener('click', (e) => { e.stopPropagation(); closePopup(); jumpToPostInFeed(post.id); });
@@ -9567,6 +9575,17 @@
   };
 
   /* ═══════ ОБЩИЕ ФУНКЦИИ ═══════ */
+  /* С кем воспоминание: «@автор + @друг, @друг» или «@автор + «Группа»».
+     Имена сохраняются в самом воспоминании — подпись не меняется, даже если потом кто-то удалится из друзей */
+  function postWithLabel(p) {
+    const c = p && p.companions;
+    if (!c) return '';
+    const rest = c.group && c.group.name ? `«${c.group.name}»`
+      : (c.users || []).map((u) => u.handle || u.name).filter(Boolean).join(', ');
+    if (!rest) return '';
+    return `${c.by || p.author || ''} + ${rest}`;
+  }
+
   function postImages(p) {
     if (Array.isArray(p.images) && p.images.length) return p.images;
     if (p.image) return [p.image];
@@ -9995,7 +10014,7 @@
         <header class="post-head">
           <span class="avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml((p.author || '?').trim().charAt(0).toUpperCase() || '?')}</span>
           <div class="row-main">
-            <div class="post-author">${escapeHtml(p.author || '')}</div>
+            <div class="post-author ${postWithLabel(p) ? 'is-with' : ''}">${escapeHtml(postWithLabel(p) || p.author || '')}</div>
             <div class="post-place">📍 ${escapeHtml(p.place || '')}</div>
           </div>
           <span class="row-time">${escapeHtml(p.time || '')}</span>
@@ -10164,6 +10183,15 @@
             </div>
           </div>
           <label class="edit-field"><span class="edit-label">Место</span><input class="edit-input" type="text" id="post-place" maxlength="80" placeholder="Например, Россия, Москва, Патриаршие пруды"></label>
+          <div class="edit-field">
+            <span class="edit-label">С кем</span>
+            <div class="seg" id="post-with-mode">
+              <button type="button" class="seg-opt" data-with-mode="friends" aria-pressed="false">Друзья</button>
+              <button type="button" class="seg-opt" data-with-mode="group" aria-pressed="false">Группа</button>
+            </div>
+            <ul class="people-picker post-with-list" id="post-with-list" hidden></ul>
+            <span class="post-hint" id="post-with-preview"></span>
+          </div>
           <label class="edit-field"><span class="edit-label">Подпись</span><textarea class="edit-textarea" id="post-caption" maxlength="300"></textarea></label>
           <div class="edit-actions">
             <button type="button" class="btn" id="post-cancel">Отмена</button>
@@ -10175,6 +10203,64 @@
       const fileInput = winBody.querySelector('#post-input');
       const countEl = winBody.querySelector('#photo-count');
       const placeInput = winBody.querySelector('#post-place');
+
+      // С кем воспоминание: несколько друзей или одна группа (необязательно)
+      let withMode = '', withGroup = null;
+      const withIds = new Set();
+      const withList = winBody.querySelector('#post-with-list');
+      const withPreview = winBody.querySelector('#post-with-preview');
+      const buildCompanions = () => {
+        if (withMode === 'group' && withGroup) {
+          const g = groupById(withGroup);
+          return g ? { by: profile.handle, users: [], group: { id: String(g.id), name: g.name } } : null;
+        }
+        if (withMode === 'friends' && withIds.size) {
+          return { by: profile.handle, group: null,
+            users: friends.filter((f) => withIds.has(f.id)).map((f) => ({ id: f.id, name: f.name, handle: f.handle })) };
+        }
+        return null;
+      };
+      const syncWith = () => {
+        winBody.querySelectorAll('[data-with-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.withMode === withMode)));
+        withList.hidden = !withMode;
+        withList.querySelectorAll('[data-with-id]').forEach((el) => {
+          const on = withMode === 'group' ? el.dataset.withId === withGroup : withIds.has(el.dataset.withId);
+          el.setAttribute('aria-checked', String(on));
+        });
+        const label = postWithLabel({ companions: buildCompanions(), author: profile.name });
+        withPreview.textContent = label ? 'Будет подписано: ' + label : 'Необязательно — отметьте друзей или группу';
+      };
+      const renderWithList = () => {
+        if (withMode === 'friends') {
+          withList.innerHTML = friends.length ? friends.map((f) => `
+            <li class="person-card" data-with-id="${escapeHtml(f.id)}" role="checkbox" aria-checked="false" tabindex="0">
+              <span class="person-check"></span>${avatarCircleHtml(f, 36)}
+              <div class="person-main"><div class="person-name">${escapeHtml(f.name)}</div><div class="person-handle">${escapeHtml(f.handle || '')}</div></div>
+            </li>`).join('') : `<div class="empty-msg">Сначала добавьте друзей.</div>`;
+        } else if (withMode === 'group') {
+          const gs = myGroups();
+          withList.innerHTML = gs.length ? gs.map((g) => `
+            <li class="person-card" data-with-id="${escapeHtml(String(g.id))}" role="radio" aria-checked="false" tabindex="0">
+              <span class="person-check"></span>
+              <span class="group-avatar" style="width:36px;height:36px;font-size:15px;${g.photo ? `background-image:url('${safeUrl(g.photo)}')` : ''}">${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>
+              <div class="person-main"><div class="person-name">${escapeHtml(g.name)}</div><div class="person-handle">${escapeHtml(membersLabel((g.members || []).length + 1))}</div></div>
+            </li>`).join('') : `<div class="empty-msg">Вы пока не состоите в группах.</div>`;
+        } else withList.innerHTML = '';
+        syncWith();
+      };
+      winBody.querySelector('#post-with-mode').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-with-mode]'); if (!b) return;
+        withMode = withMode === b.dataset.withMode ? '' : b.dataset.withMode;   // повторное нажатие — ни с кем
+        renderWithList();
+      });
+      withList.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-with-id]'); if (!el) return;
+        const id = el.dataset.withId;
+        if (withMode === 'group') withGroup = withGroup === id ? null : id;
+        else if (withIds.has(id)) withIds.delete(id); else withIds.add(id);
+        syncWith();
+      });
+      syncWith();
 
       function refreshGrid() {
         grid.innerHTML = pendingImages.map((src, i) => `
@@ -10208,13 +10294,24 @@
         submitBtn.disabled = true; submitBtn.textContent = 'Ищем место…';
         let coords = null;
         if (place) { try { coords = await geocodePlace(place); } catch {} }
-        submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+        submitBtn.textContent = 'Сохраняем…';
         const id = 'p' + Date.now();
-        const { error } = await supabaseClient.from('posts').insert({
+        const row = {
           id, author_id: currentUser.id, author_name: profile.name,
           images: pendingImages, place: place || 'Без места', caption, coords, ts: Date.now(),
-        });
-        if (error) { console.warn('[posts] insert:', error.message); return; }
+        };
+        const companions = buildCompanions();
+        if (companions) row.companions = companions;
+        let { error } = await supabaseClient.from('posts').insert(row);
+        let noCompanions = false;
+        if (error && companions && /companions/i.test(error.message || '')) {
+          // колонки ещё нет — сохраняем воспоминание без отметок
+          delete row.companions; noCompanions = true;
+          ({ error } = await supabaseClient.from('posts').insert(row));
+        }
+        submitBtn.disabled = false; submitBtn.textContent = oldLabel;
+        if (error) { console.warn('[posts] insert:', error.message); alert('Не удалось сохранить воспоминание: ' + error.message); return; }
+        if (noCompanions) alert('Воспоминание сохранено, но без отметки «с кем»: выполните supabase_post_companions.sql в Supabase.');
         await loadPostsFromDB();
         syncPostMarkers();
         showPlacesScreen();
