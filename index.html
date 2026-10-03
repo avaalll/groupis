@@ -4841,8 +4841,8 @@
     const s = await KV.get('state:' + uid);
     if (!s || !currentUser || currentUser.id !== uid) return;
     if (!posts.length && Array.isArray(s.posts)) posts = s.posts;
-    if (!wishes.length && Array.isArray(s.wishes)) wishes = s.wishes;
-    if (!groups.length && Array.isArray(s.groups)) groups = s.groups;
+    if (!wishes.length && Array.isArray(s.wishes)) wishes = s.wishes.filter(wishAlive);
+    if (!groups.length && Array.isArray(s.groups)) groups = s.groups.map((g) => (g.wish && !groupWishAlive(g.wishAt) ? { ...g, wish: '' } : g));
     if (!friends.length && Array.isArray(s.friends)) friends = s.friends;
     if (!notifications.length && Array.isArray(s.notifications)) notifications = s.notifications;
     if (!groupMatches.length && Array.isArray(s.groupMatches)) groupMatches = s.groupMatches;
@@ -5009,7 +5009,8 @@
       text: r.text, place: r.place,
       coords: Array.isArray(r.coords) ? r.coords : null,
       audience: r.audience, groupId: r.group_id, ts: r.ts,
-    }));
+    })).filter(wishAlive);
+    cleanupMyExpiredWishes(data || []);
     scheduleStateSave();
   }
 
@@ -5031,9 +5032,10 @@
     groups = (gr || []).map((g) => ({
       id: g.id, ownerId: g.owner_id, name: g.name, photo: g.photo,
       visibility: g.visibility, members: membersByGroup[g.id] || [],
-      wish: (g.wish || '').trim(), wishAt: g.wish_at || null,
+      wish: groupWishAlive(g.wish_at) ? (g.wish || '').trim() : '', wishAt: g.wish_at || null,
       unionWith: g.union_with != null ? String(g.union_with) : null,
     }));
+    cleanupMyExpiredGroupWishes(gr || []);
     scheduleStateSave();
   }
 
@@ -7034,6 +7036,51 @@
   /* ═══════ ЖЕЛАНИЯ ═══════ */
   /* Желание без места висит облаком над иконкой автора (видно только последнее — «текущее»),
      желание с местом — облаком над точкой на карте. Желание группы хранится в groups.wish. */
+  /* Желание живёт 12 часов с публикации, потом исчезает само. Удаляет его сервер по расписанию
+     (supabase_wish_expiry.sql), а приложение прячет просроченные сразу, не дожидаясь сервера. */
+  const WISH_TTL = 12 * 3600 * 1000;
+  function wishAlive(w) { const ts = Number(w && w.ts); return !ts || Date.now() - ts < WISH_TTL; }
+  function groupWishAlive(at) { const ts = at ? Date.parse(at) : NaN; return !ts || Date.now() - ts < WISH_TTL; }
+  function wishLeftLabel(ts) {
+    const left = Number(ts) + WISH_TTL - Date.now();
+    if (!Number(ts) || left <= 0) return '';
+    const h = Math.floor(left / 3600000);
+    return 'исчезнет через ' + (h ? `${h} ч` : `${Math.max(1, Math.ceil(left / 60000))} мин`);
+  }
+  // Запасной путь, если задача на сервере не настроена: свои просроченные желания удаляю сам
+  function cleanupMyExpiredWishes(rows) {
+    if (!currentUser) return;
+    const myId = String(currentUser.id);
+    if (!rows.some((r) => String(r.author_id) === myId && !wishAlive({ ts: r.ts }))) return;
+    supabaseClient.from('wishes').delete().eq('author_id', currentUser.id).lt('ts', Date.now() - WISH_TTL)
+      .then(({ error }) => { if (error) console.warn('[wishes] expire:', error.message); });
+  }
+  function cleanupMyExpiredGroupWishes(rows) {
+    if (!currentUser) return;
+    for (const g of rows) {
+      if (g.owner_id !== currentUser.id || !(g.wish || '').trim() || groupWishAlive(g.wish_at)) continue;
+      supabaseClient.rpc('set_group_wish', { gid: String(g.id), wish_text: '' })
+        .then(({ error }) => { if (error) console.warn('[group wish] expire:', error.message); });
+    }
+  }
+  // Раз в минуту: истёкшие желания пропадают с карты и из экранов без перезагрузки
+  setInterval(() => {
+    if (!currentUser) return;
+    const before = wishes.length;
+    wishes = wishes.filter(wishAlive);
+    let changed = wishes.length !== before;
+    if (groups.some((g) => g.wish && !groupWishAlive(g.wishAt))) {
+      groups = groups.map((g) => (g.wish && !groupWishAlive(g.wishAt) ? { ...g, wish: '' } : g));
+      changed = true;
+    }
+    if (!changed) return;
+    scheduleStateSave();
+    refreshWishClouds();
+    loadGroupMemberProfiles().then(loadUserLocations);
+    rerenderWishContext();
+    refreshGroupsList();
+  }, 60000);
+
   function visibleWishes() {
     const myId = currentUser && String(currentUser.id);
     const friendIds = new Set(friends.map((f) => String(f.id)));
@@ -7130,6 +7177,7 @@
     if (w.place) meta.push('📍 ' + escapeHtml(w.place));
     meta.push(escapeHtml(wishAudienceLabel(w)));
     meta.push(wishTimeLabel(w.ts));
+    if (wishLeftLabel(w.ts)) meta.push(wishLeftLabel(w.ts));
     const id = escapeHtml(w.id);
     return `
       <li class="wish-card" data-wish-id="${id}">
@@ -7166,13 +7214,13 @@
       const currentHtml = current
         ? `<div class="wish-block">
             ${myWishPreviewHtml(current)}
-            <div class="wish-meta">${escapeHtml(wishAudienceLabel(current))} · ${wishTimeLabel(current.ts)}</div>
+            <div class="wish-meta">${escapeHtml(wishAudienceLabel(current))} · ${wishTimeLabel(current.ts)}${wishLeftLabel(current.ts) ? ' · ' + wishLeftLabel(current.ts) : ''}</div>
             <div class="wish-actions">
               <button class="wa-btn" type="button" data-wish-edit="${escapeHtml(current.id)}">${ICON_EDIT}Изменить</button>
               <button class="wa-btn danger" type="button" data-wish-remove="${escapeHtml(current.id)}">${ICON_TRASH}Удалить</button>
             </div>
           </div>`
-        : `<div class="wish-empty-card">Желания пока нет. Загадайте — оно появится облаком над вашей иконкой на карте.
+        : `<div class="wish-empty-card">Желания пока нет. Загадайте — оно появится облаком над вашей иконкой на карте и провисит 12 часов.
             <div class="wish-actions"><button class="wa-btn primary" type="button" data-action="new-wish">${ICON_PLUS}Загадать желание</button></div>
           </div>`;
 
@@ -7218,7 +7266,7 @@
     if (!g) return;
     const text = await promptModal({
       title: g.wish ? 'Желание группы' : 'Новое желание группы',
-      text: 'Облако появится над иконкой группы на карте — его увидят все.',
+      text: 'Облако появится над иконкой группы на карте — его увидят все. Через 12 часов оно исчезнет само.',
       value: g.wish || '', placeholder: 'Например: сходить в кино сегодня вечером', maxLength: 120,
       confirmLabel: g.wish ? 'Сохранить' : 'Опубликовать',
     });
@@ -7259,7 +7307,7 @@
           <label class="edit-field">
             <span class="edit-label">Место (необязательно)</span>
             <input class="edit-input" type="text" id="wish-place" maxlength="80" value="${escapeHtml(currentPlace)}">
-            <span class="edit-hint">Если пусто — облако над вашей иконкой${replacing ? ' (заменит текущее желание)' : ''}. С местом — облако над этой точкой на карте.</span>
+            <span class="edit-hint">Если пусто — облако над вашей иконкой${replacing ? ' (заменит текущее желание)' : ''}. С местом — облако над этой точкой на карте. Через 12 часов желание исчезнет само.</span>
           </label>
           <div class="edit-field">
             <span class="edit-label">Кому видно</span>
@@ -7836,7 +7884,7 @@
       const wishHtml = g.wish
         ? `<div class="wish-block">
             ${groupWishPreviewHtml(g)}
-            ${g.wishAt ? `<div class="wish-meta">обновлено ${wishTimeLabel(Date.parse(g.wishAt))}</div>` : ''}
+            ${g.wishAt ? `<div class="wish-meta">обновлено ${wishTimeLabel(Date.parse(g.wishAt))}${wishLeftLabel(Date.parse(g.wishAt)) ? ' · ' + wishLeftLabel(Date.parse(g.wishAt)) : ''}</div>` : ''}
             ${isMember ? groupWishActionsHtml(g) : ''}
           </div>`
         : isMember
@@ -7845,7 +7893,7 @@
               <div class="edit-actions">
                 <button type="submit" class="btn btn-primary">Опубликовать</button>
               </div>
-              <span class="edit-hint">Желание появится облаком над иконкой группы на карте — его увидят все.</span>
+              <span class="edit-hint">Желание появится облаком над иконкой группы на карте — его увидят все. Через 12 часов оно исчезнет само.</span>
             </form>`
           : `<div class="match-hint">Группа пока не опубликовала желание.</div>`;
 
