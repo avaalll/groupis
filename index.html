@@ -232,7 +232,7 @@
       transform-origin: 50% 100%; transition: transform .18s ease-out;
       width: 84px; height: 84px;
     }
-    .memory-marker:hover { transform: scale(1.08); }
+    @media (hover: hover) { .memory-marker:hover { transform: scale(1.08); } }
     .memory-marker::after {
       content: ""; position: absolute; left: 50%; bottom: -4px;
       width: 14px; height: 14px; background: var(--you);
@@ -6112,10 +6112,11 @@
         ...(mapStyleId ? { style: mapStyleId } : {}),
       });
 
-      // Клик по пустому месту карты: закрываем окно или попап.
-      // Клики по маркерам друзей обрабатываются самими маркерами.
+      // Клик по пустому месту карты: раскрытая карточка воспоминания сворачивается, открытое окно закрывается.
+      // Клики по маркерам обрабатываются самими маркерами.
       map2gis.on('click', () => {
-        if (openApp !== null) closeApp(); else closePopup();
+        closePopup();
+        if (openApp && openApp !== 'map') closeApp();
       });
 
       // Облака желаний плавно уменьшаются при отдалении карты; кончик хвостика остаётся у иконки
@@ -6213,10 +6214,14 @@
   }
 
   /* ═══════ 3D-АВАТАР ═══════
-     Фигура собирается из простых тел — сфер, «капсул» и тел вращения. Мужская и женская фигуры
-     различаются пропорциями (плечи, талия, бёдра, черты лица), у каждой свои причёски и одежда.
-     Цвета задаются в sRGB и переводятся в линейное пространство, а картинка выводится в sRGB —
-     так кожа и ткань освещаются естественно, без серого налёта. Фигура по умолчанию — по полу из профиля. */
+     Человек собирается в коде, без готовых моделей, с пропорциями взрослого человека (около 7,5 «голов» роста).
+     Голова — сфера, которой функция формы придаёт свод черепа, челюсть, скулы, глазницы и подбородок; нос, губы,
+     уши, глаза с радужкой, веки с ресницами и брови — отдельные детали. Туловище задано сечениями по высоте
+     (грудь, талия, бёдра, лопатки, ягодицы), руки и ноги — трубки с профилем мышц, кисти — с пальцами.
+     Одежда — оболочки поверх тела со складками, швами, манжетами, молнией и шнурками; ткани получают
+     нарисованные на canvas фактуры (трикотаж, футер, деним, нейлон, кожа, замша), волосы — пряди, которые
+     ложатся на голову и плечи. Свет студийный: карта окружения для бликов, мягкие тени, контровой свет.
+     Цвета задаются в sRGB и переводятся в линейное пространство, вывод — sRGB с тональной кривой ACES. */
   const AVATAR_KEY = 'avatar.3d.v2';
   const AVATAR_SKINS = {
     porcelain: { base: 0xF6DBC8, label: 'Фарфоровый' },
@@ -6319,453 +6324,1981 @@
     if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); upsertMyLocation(lastUserLocation); }
   }
 
-  // Пропорции фигур (метры, ступни на y = 0). torso — профиль тела вращения: [радиус, высота]
+  /* ── Пропорции ──
+     Метры, ступни на y = 0, лицо смотрит в +z. Голова — от центра черепа (headY): skull — полуоси свода,
+     jaw — суперэллипсоид челюсти, bumps — рельеф лица [x, y, z, σx, σy, σz, высота, зеркально].
+     torso — сечения туловища [y, полуширина, глубина спереди, глубина сзади, сдвиг центра, «квадратность»],
+     tbumps — рельеф тела [x, y, сторона (1 — грудь, −1 — спина), σx, σy выше, σy ниже, высота, зеркально, грудь]. */
   function avatarProportions(gender) {
-    return gender === 'female' ? {
-      headY: 1.655, headR: 0.138, headScale: [0.88, 0.98, 0.96], chin: [0.3, 0.15],
-      neckR: 0.044, shoulderY: 1.405, shoulderX: 0.198, wristOut: 0.085, legX: 0.088, hipY: 0.9,
-      thigh: 0.088, knee: 0.058, ankle: 0.04, armR: [0.047, 0.039, 0.032], hand: 0.85,
-      torso: [[0, 0.84], [0.165, 0.85], [0.212, 0.9], [0.2, 0.98], [0.156, 1.1], [0.163, 1.19], [0.178, 1.27], [0.172, 1.35], [0.13, 1.42], [0.06, 1.465], [0, 1.47]],
-      torsoZ: 0.68, waistY: 1.1, split: 1.02, bustY: 1.262,
-      eyeX: 0.315, eyeR: 0.172, browW: 0.0035, noseK: 0.86,
-    } : {
-      headY: 1.705, headR: 0.146, headScale: [0.9, 1.0, 0.97], chin: [0.2, 0.2],
-      neckR: 0.057, shoulderY: 1.45, shoulderX: 0.238, wristOut: 0.06, legX: 0.1, hipY: 0.92,
-      thigh: 0.09, knee: 0.066, ankle: 0.05, armR: [0.058, 0.048, 0.04], hand: 1,
-      torso: [[0, 0.86], [0.17, 0.87], [0.2, 0.92], [0.196, 1.02], [0.19, 1.12], [0.204, 1.24], [0.222, 1.34], [0.214, 1.42], [0.15, 1.48], [0.07, 1.51], [0, 1.515]],
-      torsoZ: 0.66, waistY: 1.12, split: 1.0, bustY: 0,
-      eyeX: 0.33, eyeR: 0.16, browW: 0.0068, noseK: 1,
+    if (gender === 'female') return {
+      fem: true, height: 1.68, headY: 1.574, headZ: 0.008,
+      skull: { w: 0.072, top: 0.104, bot: 0.084, front: 0.087, back: 0.098 },
+      jaw: { c: [0, -0.043, 0.022], r: [0.0545, 0.068, 0.065], n: 2.35 },
+      bumps: [
+        [0.029, 0.025, 0.081, 0.02, 0.008, 0.02, 0.0016, 1],     // надбровье
+        [0.030, 0.0045, 0.077, 0.0185, 0.0125, 0.02, -0.0145, 1], // глазницы
+        [0.051, -0.016, 0.062, 0.017, 0.012, 0.02, 0.0045, 1],   // скулы
+        [0.044, -0.036, 0.064, 0.02, 0.016, 0.02, 0.0035, 1],    // щёки
+        [0.064, 0.028, 0.034, 0.014, 0.018, 0.02, -0.0025, 1],   // виски
+        [0, -0.064, 0.08, 0.026, 0.018, 0.02, 0.0055, 0],        // область рта
+        [0, -0.088, 0.077, 0.016, 0.005, 0.02, -0.002, 0],       // под нижней губой
+        [0, -0.1, 0.066, 0.013, 0.009, 0.02, 0.0025, 0],         // подбородок
+        [0, 0.005, -0.094, 0.04, 0.04, 0.03, 0.004, 0],          // затылок
+      ],
+      eye: { x: 0.030, y: 0.0045, r: 0.0121, up: 33, lo: 20, lash: 0.0088 },
+      nose: { root: 0.012, tip: -0.031, base: -0.040, w: 0.0148, proj: 0.019 },
+      mouth: { y: -0.066, w: 0.0222, up: 0.0078, lo: 0.0098 },
+      ear: { y: -0.008, z: -0.006, h: 0.055 },
+      brow: { y: 0.0238, arch: 0.0062, w: 0.0052 },
+      neck: { rx: 0.0465, rz: 0.042, z: -0.012, y0: 1.36, y1: 1.535 },
+      shoulder: [0.155, 1.338, -0.006], elbow: [0.188, 1.044, -0.026], wrist: [0.205, 0.8, 0.012],
+      armR: [[0, 0.039, 0.04], [0.2, 0.037, 0.039], [0.45, 0.034, 0.035], [0.55, 0.029, 0.03], [0.64, 0.031, 0.033], [0.86, 0.025, 0.025], [1, 0.02, 0.023]],
+      hand: 0.88,
+      hip: [0.087, 0.865], knee: [0.079, 0.47, 0.012], ankle: [0.074, 0.076, -0.008],
+      legR: [[0, 0.072, 0.088, 0], [0.12, 0.078, 0.085, 0], [0.35, 0.071, 0.074, 0.002], [0.5, 0.05, 0.051, 0.004], [0.6, 0.047, 0.052, -0.004],
+        [0.68, 0.048, 0.055, -0.007], [0.83, 0.036, 0.039, -0.003], [0.95, 0.026, 0.028, 0], [1, 0.025, 0.027, 0]],
+      foot: { len: 0.24, w: 0.086 },
+      torso: [
+        [0.765, 0.126, 0.077, 0.088, -0.006, 2.0], [0.815, 0.158, 0.089, 0.112, -0.008, 2.1], [0.87, 0.171, 0.093, 0.118, -0.008, 2.2],
+        [0.93, 0.158, 0.091, 0.104, -0.006, 2.2], [0.99, 0.127, 0.086, 0.086, -0.003, 2.1], [1.03, 0.117, 0.085, 0.081, -0.001, 2.1],
+        [1.09, 0.123, 0.087, 0.083, 0.0, 2.15], [1.15, 0.131, 0.091, 0.087, 0.002, 2.2], [1.21, 0.135, 0.094, 0.09, 0.003, 2.25],
+        [1.27, 0.135, 0.094, 0.092, 0.003, 2.25], [1.318, 0.142, 0.09, 0.09, 0.001, 2.25], [1.348, 0.152, 0.077, 0.082, -0.002, 2.35],
+        [1.37, 0.14, 0.066, 0.072, -0.005, 2.25], [1.392, 0.106, 0.057, 0.062, -0.008, 2.05], [1.41, 0.075, 0.051, 0.056, -0.01, 2.0],
+        [1.428, 0.053, 0.048, 0.051, -0.011, 2.0],
+      ],
+      tbumps: [
+        [0.05, 1.236, 1, 0.034, 0.03, 0.038, 0.031, 1, 1],      // грудь
+        [0.07, 1.25, -1, 0.04, 0.05, 0.05, 0.004, 1],           // лопатки
+        [0.062, 0.83, -1, 0.056, 0.05, 0.055, 0.02, 1],         // ягодицы
+        [0, 1.1, -1, 0.012, 0.22, 0.22, -0.004, 0],             // позвоночник
+        [0, 0.94, 1, 0.07, 0.05, 0.05, 0.004, 0],               // низ живота
+      ],
+      chest: 1.236, hemTee: 0.905, waist: 1.03, crotch: 0.775,
+    };
+    return {
+      fem: false, height: 1.80, headY: 1.686, headZ: 0.008,
+      skull: { w: 0.0775, top: 0.111, bot: 0.09, front: 0.092, back: 0.104 },
+      jaw: { c: [0, -0.046, 0.024], r: [0.0655, 0.0735, 0.07], n: 3.0 },
+      bumps: [
+        [0.03, 0.027, 0.086, 0.022, 0.009, 0.02, 0.0045, 1],    // надбровные дуги
+        [0, 0.022, 0.09, 0.012, 0.01, 0.02, 0.003, 0],          // переносица
+        [0.032, 0.006, 0.081, 0.0195, 0.0128, 0.02, -0.015, 1], // глазницы
+        [0.056, -0.016, 0.066, 0.018, 0.012, 0.02, 0.0048, 1],  // скулы
+        [0.047, -0.042, 0.066, 0.02, 0.016, 0.02, 0.002, 1],    // щёки
+        [0.069, 0.03, 0.036, 0.015, 0.02, 0.02, -0.003, 1],    // виски
+        [0, -0.068, 0.085, 0.03, 0.02, 0.02, 0.006, 0],         // область рта
+        [0, -0.094, 0.083, 0.018, 0.006, 0.02, -0.0025, 0],     // под нижней губой
+        [0.013, -0.108, 0.071, 0.012, 0.01, 0.02, 0.003, 1],    // подбородок
+        [0.061, -0.084, -0.004, 0.013, 0.012, 0.015, 0.004, 1], // углы челюсти
+        [0.048, -0.1, 0.03, 0.02, 0.008, 0.02, 0.002, 1],       // линия челюсти
+        [0, 0.005, -0.1, 0.04, 0.04, 0.03, 0.004, 0],           // затылок
+      ],
+      eye: { x: 0.0318, y: 0.0055, r: 0.0125, up: 31, lo: 19, lash: 0.0062 },
+      nose: { root: 0.014, tip: -0.034, base: -0.044, w: 0.0168, proj: 0.022 },
+      mouth: { y: -0.07, w: 0.0245, up: 0.0072, lo: 0.0092 },
+      ear: { y: -0.007, z: -0.008, h: 0.062 },
+      brow: { y: 0.0262, arch: 0.0025, w: 0.0082 },
+      neck: { rx: 0.0595, rz: 0.0535, z: -0.014, y0: 1.44, y1: 1.645 },
+      shoulder: [0.176, 1.432, -0.006], elbow: [0.214, 1.126, -0.03], wrist: [0.232, 0.863, 0.01],
+      armR: [[0, 0.046, 0.047], [0.2, 0.044, 0.046], [0.42, 0.042, 0.045], [0.55, 0.035, 0.036], [0.65, 0.038, 0.041], [0.87, 0.03, 0.03], [1, 0.024, 0.028]],
+      hand: 1,
+      hip: [0.096, 0.935], knee: [0.1, 0.505, 0.012], ankle: [0.102, 0.085, -0.01],
+      legR: [[0, 0.074, 0.09, 0], [0.12, 0.08, 0.088, 0], [0.35, 0.076, 0.078, 0.002], [0.5, 0.054, 0.055, 0.004], [0.6, 0.051, 0.057, -0.005],
+        [0.7, 0.053, 0.061, -0.008], [0.84, 0.039, 0.042, -0.003], [0.95, 0.03, 0.032, 0], [1, 0.029, 0.031, 0]],
+      foot: { len: 0.275, w: 0.1 },
+      torso: [
+        [0.825, 0.128, 0.078, 0.088, -0.006, 2.0], [0.875, 0.156, 0.094, 0.112, -0.006, 2.1], [0.935, 0.165, 0.099, 0.118, -0.006, 2.2],
+        [0.995, 0.154, 0.101, 0.104, -0.004, 2.2], [1.055, 0.143, 0.103, 0.093, -0.002, 2.2], [1.115, 0.14, 0.105, 0.09, 0.0, 2.25],
+        [1.18, 0.143, 0.109, 0.093, 0.002, 2.3], [1.25, 0.147, 0.116, 0.099, 0.004, 2.35], [1.315, 0.148, 0.12, 0.104, 0.004, 2.35],
+        [1.375, 0.152, 0.115, 0.104, 0.002, 2.3], [1.418, 0.166, 0.1, 0.098, -0.002, 2.3], [1.446, 0.172, 0.083, 0.087, -0.004, 2.4],
+        [1.468, 0.158, 0.07, 0.076, -0.007, 2.3], [1.49, 0.122, 0.062, 0.067, -0.01, 2.1], [1.508, 0.088, 0.057, 0.061, -0.012, 2.0],
+        [1.524, 0.066, 0.055, 0.058, -0.013, 2.0],
+      ],
+      tbumps: [
+        [0.062, 1.335, 1, 0.045, 0.03, 0.03, 0.0075, 1],        // грудные мышцы
+        [0, 1.13, 1, 0.065, 0.06, 0.06, 0.004, 0],              // живот
+        [0.075, 1.33, -1, 0.04, 0.05, 0.05, 0.0065, 1],         // лопатки
+        [0.062, 0.895, -1, 0.055, 0.05, 0.05, 0.012, 1],        // ягодицы
+        [0, 1.2, -1, 0.012, 0.25, 0.25, -0.004, 0],             // позвоночник
+      ],
+      chest: 1.31, hemTee: 0.955, waist: 1.035, crotch: 0.825,
     };
   }
 
-  // «Капсула» с разными радиусами концов: от y = 0 (радиус r0) до y = len (радиус r1)
-  function capsuleGeo(THREE, r0, r1, len, seg = 16) {
-    const pts = [], n = 6;
-    for (let i = 0; i <= n; i++) { const a = -Math.PI / 2 + (i / n) * (Math.PI / 2); pts.push(new THREE.Vector2(Math.cos(a) * r0, Math.sin(a) * r0)); }
-    for (let i = 0; i <= n; i++) { const a = (i / n) * (Math.PI / 2); pts.push(new THREE.Vector2(Math.cos(a) * r1, len + Math.sin(a) * r1)); }
-    pts[0].x = 0; pts[pts.length - 1].x = 0;
-    return new THREE.LatheGeometry(pts, seg);
+  // ── Вспомогательное: векторы-массивы, шум, таблицы ──
+  const avClamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
+  const avMix = (a, b, t) => a + (b - a) * t;
+  const avStep = (a, b, v) => { const t = avClamp((v - a) / (b - a)); return t * t * (3 - 2 * t); };
+  const avAdd = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const avSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const avScl = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const avDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const avCross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const avLen = (a) => Math.hypot(a[0], a[1], a[2]);
+  const avNorm = (a) => { const l = avLen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const avLerp3 = (a, b, t) => [avMix(a[0], b[0], t), avMix(a[1], b[1], t), avMix(a[2], b[2], t)];
+  const avPow = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
+  function avHash(x, y = 0, z = 0) {
+    let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1440662683);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   }
-  function profileRadius(pts, y) {
-    if (y <= pts[0][1]) return pts[0][0];
-    for (let i = 1; i < pts.length; i++) {
-      const [r0, y0] = pts[i - 1], [r1, y1] = pts[i];
-      if (y <= y1) return r0 + (r1 - r0) * ((y - y0) / ((y1 - y0) || 1));
+  // Гладкий шум на решётке; px, py — период (для бесшовных текстур), 0 — без периода
+  function avNoise(x, y, px = 0, py = 0, seed = 0) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    let u = x - xi, v = y - yi;
+    u = u * u * (3 - 2 * u); v = v * v * (3 - 2 * v);
+    const X = (i) => (px ? ((i % px) + px) % px : i), Y = (j) => (py ? ((j % py) + py) % py : j);
+    const a = avHash(X(xi), Y(yi), seed), b = avHash(X(xi + 1), Y(yi), seed);
+    const c = avHash(X(xi), Y(yi + 1), seed), d = avHash(X(xi + 1), Y(yi + 1), seed);
+    return avMix(avMix(a, b, u), avMix(c, d, u), v);
+  }
+  function avFbm(x, y, oct = 4, px = 0, py = 0, seed = 0) {
+    let s = 0, a = 1, n = 0, f = 1;
+    for (let i = 0; i < oct; i++) { s += a * avNoise(x * f, y * f, px * f, py * f, seed + i * 31); n += a; a *= 0.5; f *= 2; }
+    return s / n;
+  }
+  // Сплайн по таблице [[t, v1, v2…], …]: значения в точке t
+  function avTable(rows, t) {
+    const n = rows.length;
+    if (t <= rows[0][0]) return rows[0].slice(1);
+    if (t >= rows[n - 1][0]) return rows[n - 1].slice(1);
+    let i = 0;
+    while (i < n - 2 && t > rows[i + 1][0]) i++;
+    const a = rows[Math.max(0, i - 1)], b = rows[i], c = rows[i + 1], d = rows[Math.min(n - 1, i + 2)];
+    const u = (t - b[0]) / (c[0] - b[0]), u2 = u * u, u3 = u2 * u, out = [];
+    for (let k = 1; k < b.length; k++) {
+      const p0 = a[k], p1 = b[k], p2 = c[k], p3 = d[k];
+      out.push(0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (3 * p1 - p0 - 3 * p2 + p3) * u3));
     }
-    return pts[pts.length - 1][0];
-  }
-  // Кусок профиля между y0 и y1 — с точками ровно на концах
-  function profileRange(pts, y0, y1) {
-    const out = [[profileRadius(pts, y0), y0]];
-    for (const p of pts) if (p[1] > y0 + 1e-4 && p[1] < y1 - 1e-4) out.push(p);
-    out.push([profileRadius(pts, y1), y1]);
     return out;
   }
-  // Детерминированный «шум» — причёска одинаковая при каждой отрисовке
-  function avatarRnd(i) { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
 
-  // После деформации сферы нормали на её шве и на полюсах усредняем — иначе виден стык
-  function smoothSphereNormals(geo, ws, hs, bottomPole = false) {
-    const n = geo.attributes.normal;
-    const avg = (ids) => {
-      const s = ids.reduce((a, k) => [a[0] + n.getX(k), a[1] + n.getY(k), a[2] + n.getZ(k)], [0, 0, 0]);
-      const l = Math.hypot(s[0], s[1], s[2]) || 1;
-      ids.forEach((k) => n.setXYZ(k, s[0] / l, s[1] / l, s[2] / l));
-    };
-    for (let iy = 0; iy <= hs; iy++) avg([iy * (ws + 1), iy * (ws + 1) + ws]);
-    avg(Array.from({ length: ws + 1 }, (_, k) => k));
-    if (bottomPole) avg(Array.from({ length: ws + 1 }, (_, k) => hs * (ws + 1) + k));
+  // ── Текстуры: рисуются на canvas один раз и переиспользуются всеми аватарами ──
+  const avTexCache = new Map();
+  function avCached(key, make) { let v = avTexCache.get(key); if (!v) { v = make(); avTexCache.set(key, v); } return v; }
+  function avCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  // Холст по формуле: fn(x, y, out) записывает в out цвет [r, g, b] (0…255)
+  function avPixels(w, h, fn) {
+    const c = avCanvas(w, h), g = c.getContext('2d'), img = g.createImageData(w, h), d = img.data, o = [0, 0, 0];
+    for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i += 4) {
+      fn(x, y, o); d[i] = o[0]; d[i + 1] = o[1]; d[i + 2] = o[2]; d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+  function avLuma(canvas) {
+    const d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data, out = new Float32Array(canvas.width * canvas.height);
+    for (let i = 0; i < out.length; i++) out[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 765;
+    return out;
+  }
+  // Карта нормалей из карты высот (0…1)
+  function avNormalCanvas(hgt, w, h, k, wrapY = true) {
+    const at = (x, y) => hgt[(wrapY ? (y + h) % h : avClamp(y, 0, h - 1)) * w + ((x + w) % w)];
+    return avPixels(w, h, (x, y, o) => {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * k, dy = (at(x, y + 1) - at(x, y - 1)) * k, l = Math.hypot(dx, dy, 1);
+      o[0] = (-dx / l * 0.5 + 0.5) * 255; o[1] = (dy / l * 0.5 + 0.5) * 255; o[2] = (0.5 / l + 0.5) * 255;
+    });
+  }
+  function avTex(THREE, canvas, { srgb = false, wrapT = true } = {}) {
+    const t = new THREE.CanvasTexture(canvas);
+    if (srgb) t.encoding = THREE.sRGBEncoding;
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = wrapT ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    t.anisotropy = 4;
+    t.avShared = true;   // общая для всех аватаров — при уборке сцены не удаляется
+    return t;
   }
 
-  function buildAvatarGroup(THREE, rawCfg) {
+  // Ткани: цвет (меланж, переплетение) и рельеф. Плитка ≈ 6 см. Для маленьких холстов — без фактуры
+  function avFabric(THREE, kind, lo = false) {
+    if (lo) return { map: null, normal: null };
+    return avCached('fabric:' + kind, () => {
+      const N = 256, hgt = new Float32Array(N * N), K = { knit: 2.2, rib: 4, fleece: 1.8, denim: 2.6, nylon: 2.2, leather: 2.2, suede: 1.2 }[kind];
+      const lum = avPixels(N, N, (x, y, o) => {
+        const fine = avHash(x, y, 3), sp = avHash(x, y, 9);
+        let h = 0.5, c = 1;
+        if (kind === 'knit' || kind === 'rib') {
+          // петли джерси: «ёлочки» 4 × 5 пикселей
+          const fx = (x % 4) / 4, fy = (y % 5) / 5;
+          const loop = Math.sqrt(Math.max(0, 1 - Math.min(Math.abs(fx - (0.06 + 0.4 * fy)), Math.abs(fx - (0.94 - 0.4 * fy))) / 0.24));
+          if (kind === 'knit') {
+            h = 0.3 * loop + 0.45 * avFbm(x / 32, y / 32, 3, 8, 8, 5);
+            c = 0.92 + 0.05 * avNoise(x / 8, y / 2, 32, 128, 7) + 0.03 * fine;
+          } else {
+            const rib = 0.5 + 0.5 * Math.cos(2 * Math.PI * x / 8);
+            h = 0.7 * rib + 0.3 * loop; c = 0.84 + 0.13 * rib + 0.03 * fine;
+          }
+        } else if (kind === 'fleece') {
+          c = 0.86 + 0.08 * avNoise(x / 4, y / 4, 64, 64, 11) + (sp > 0.94 ? -0.12 : sp < 0.05 ? 0.06 : 0);
+          h = 0.6 * avFbm(x / 8, y / 8, 3, 32, 32, 13) + 0.2 * fine;
+        } else if (kind === 'denim') {
+          const tw = 0.5 + 0.5 * Math.sin(2 * Math.PI * (2 * x + y) / 8), slub = avNoise(x / 64, y / 2, 4, 128, 17);
+          c = 0.7 + 0.2 * tw + 0.08 * slub + 0.04 * fine - (sp > 0.97 ? 0.08 : 0);
+          h = 0.6 * tw + 0.25 * slub + 0.15 * fine;
+        } else if (kind === 'nylon') {
+          const r = 1 - Math.abs(2 * avFbm(x / 64, y / 64, 3, 4, 4, 19) - 1);
+          h = 0.7 * r * r + 0.3 * avNoise(x / 4, y / 4, 64, 64, 21); c = 0.97 + 0.03 * avNoise(x / 16, y / 16, 16, 16, 23);
+        } else if (kind === 'leather') {
+          const gr = avFbm(x / 4, y / 4, 3, 64, 64, 29);
+          h = gr * gr; c = 0.95 + 0.05 * avNoise(x / 32, y / 32, 8, 8, 31);
+        } else {   // замша
+          h = 0.5 * avNoise(x / 2, y / 2, 128, 128, 37) + 0.5 * fine;
+          c = 0.88 + 0.1 * avFbm(x / 16, y / 16, 3, 16, 16, 41);
+        }
+        hgt[y * N + x] = h;
+        o[0] = o[1] = o[2] = avClamp(c) * 255;
+      });
+      return { map: avTex(THREE, lum, { srgb: true }), normal: avTex(THREE, avNormalCanvas(hgt, N, N, K)) };
+    });
+  }
+
+  // Волосы: пряди для «карточек» (сверху корни, книзу редеют), плотная шапка и короткий «ёжик» — по отдельности, по мере надобности
+  function avHairTex(THREE, lo = false) {
+    if (lo) return {   // для маленьких холстов — простые полосы шумом, без рисования прядей
+      get card() { return avCached('hair:card:lo', () => avHairLoTex(THREE, true)); },
+      get cap() { return avCached('hair:cap:lo', () => avHairLoTex(THREE, false)); },
+      get buzz() { return avCached('hair:buzz:lo', () => avHairLoTex(THREE, false)); },
+    };
+    return {
+      get card() { return avCached('hair:card', () => avHairCardTex(THREE)); },
+      get cap() { return avCached('hair:cap', () => avHairCapTex(THREE)); },
+      get buzz() { return avCached('hair:buzz', () => avHairBuzzTex(THREE)); },
+    };
+  }
+  function avHairLoTex(THREE, card) {
+    const W = 64, H = card ? 128 : 64, len = [];
+    for (let x = 0; x < W; x++) len.push(H * (0.7 + 0.3 * avHash(x, 81)));
+    const map = avPixels(W, H, (x, y, o) => { o[0] = o[1] = o[2] = 120 + 110 * avNoise(x * 0.9, y / 12, W * 0.9, H / 12, 83); });
+    const out = { map: avTex(THREE, map, { srgb: true, wrapT: !card }) };
+    if (card) out.alpha = avTex(THREE, avPixels(W, H, (x, y, o) => { o[0] = o[1] = o[2] = y < len[x] && avNoise(x * 0.9, 0.5, W * 0.9, 0, 85) > 0.3 ? 255 : 0; }), { wrapT: false });
+    return out;
+  }
+  function avHairCardTex(THREE) {
+    const W = 256, H = 512;
+    const cc = avCanvas(W, H), cg = cc.getContext('2d'), ac = avCanvas(W, H), ag = ac.getContext('2d');
+    cg.fillStyle = '#5a5a5a'; cg.fillRect(0, 0, W, H); ag.fillStyle = '#000'; ag.fillRect(0, 0, W, H);
+    cg.lineCap = ag.lineCap = 'round';
+    for (let i = 0; i < 460; i++) {
+      const x0 = avHash(i, 1) * W, end = H * (0.68 + 0.32 * Math.sqrt(avHash(i, 2))), wv = (avHash(i, 3) - 0.5) * 7;
+      const lw = 1.2 + avHash(i, 4) * 2.4, sh = Math.round(110 + avHash(i, 5) * 95);
+      const grad = ag.createLinearGradient(0, end * 0.74, 0, end);
+      grad.addColorStop(0, '#fff'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+      for (const dx of [-W, 0, W]) {
+        const x = x0 + dx;
+        if (x < -14 || x > W + 14) continue;
+        const path = (g) => { g.beginPath(); g.moveTo(x, -4); g.bezierCurveTo(x + wv, end * 0.33, x - wv, end * 0.66, x + wv * 0.4, end); g.stroke(); };
+        cg.strokeStyle = `rgb(${sh},${sh},${sh})`; cg.lineWidth = lw; path(cg);
+        ag.strokeStyle = grad; ag.lineWidth = lw + 0.5; path(ag);
+      }
+    }
+    return {
+      map: avTex(THREE, cc, { srgb: true, wrapT: false }), alpha: avTex(THREE, ac, { wrapT: false }),
+      normal: avTex(THREE, avNormalCanvas(avLuma(cc), W, H, 3, false), { wrapT: false }),
+    };
+  }
+  function avHairCapTex(THREE) {
+    const C = 256, pc = avCanvas(C, C), pg = pc.getContext('2d');
+    pg.fillStyle = '#4c4c4c'; pg.fillRect(0, 0, C, C); pg.lineCap = 'round';
+    for (let i = 0; i < 520; i++) {
+      const x0 = avHash(i, 21) * C, wv = (avHash(i, 22) - 0.5) * 10, sh = Math.round(140 + avHash(i, 24) * 95);
+      pg.strokeStyle = `rgb(${sh},${sh},${sh})`; pg.lineWidth = 1 + avHash(i, 23) * 2.6;
+      for (const dx of [-C, 0, C]) {
+        const x = x0 + dx;
+        if (x < -16 || x > C + 16) continue;
+        pg.beginPath(); pg.moveTo(x, -2); pg.bezierCurveTo(x + wv, C * 0.33, x - wv, C * 0.66, x, C + 2); pg.stroke();
+      }
+    }
+    return { map: avTex(THREE, pc, { srgb: true }), normal: avTex(THREE, avNormalCanvas(avLuma(pc), C, C, 3)) };
+  }
+  function avHairBuzzTex(THREE) {
+    const B = 128, bc = avCanvas(B, B), bg = bc.getContext('2d');
+    bg.fillStyle = '#000'; bg.fillRect(0, 0, B, B); bg.lineCap = 'round'; bg.strokeStyle = '#fff';
+    bg.beginPath();
+    for (let i = 0; i < 1700; i++) {
+      const x = avHash(i, 31) * B, y = avHash(i, 32) * B, a = (avHash(i, 33) - 0.5) * 0.8, l = 1 + avHash(i, 34) * 1.6;
+      bg.moveTo(x, y); bg.lineTo(x + Math.sin(a) * l, y + Math.cos(a) * l);
+    }
+    bg.lineWidth = 1.1; bg.stroke();
+    // «ёжик» как цвет: тёмные волоски на светлом (кожа просвечивает) — без альфа-теста, не пропадает вдали
+    const bm = avCanvas(B, B), bmg = bm.getContext('2d');
+    bmg.drawImage(bc, 0, 0);
+    const bd = bmg.getImageData(0, 0, B, B), bdd = bd.data;
+    for (let i = 0; i < bdd.length; i += 4) { const v = bdd[i] > 128 ? 70 + (i % 7) * 6 : 232; bdd[i] = bdd[i + 1] = bdd[i + 2] = v; bdd[i + 3] = 255; }
+    bmg.putImageData(bd, 0, 0);
+    return { map: avTex(THREE, bm, { srgb: true }), normal: avTex(THREE, avNormalCanvas(avLuma(bc), B, B, 2)) };
+  }
+  // Молния: зубцы поперёк ленты
+  function avZipTex(THREE) {
+    return avCached('zip', () => {
+      const c = avPixels(32, 16, (x, y, o) => { const tooth = y < 9 && x > 3 && x < 28; o[0] = o[1] = o[2] = tooth ? 235 - Math.abs(x - 16) * 2 : 70; });
+      const h = avLuma(c);
+      return { map: avTex(THREE, c, { srgb: true }), normal: avTex(THREE, avNormalCanvas(h, 32, 16, 3)) };
+    });
+  }
+
+  // Брови: холст x — поперёк брови (снизу вверх), y — вдоль (от переносицы к хвосту)
+  function avBrowTex(THREE) {
+    return avCached('brow', () => {
+      const W = 64, H = 256, c = avCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.strokeStyle = '#fff';
+      // основа брови — мягкое пятно (чтобы бровь не «рассыпалась» вдали), сверху — волоски
+      const base = g.createLinearGradient(0, 0, W, 0);
+      base.addColorStop(0, 'rgba(255,255,255,0)'); base.addColorStop(0.3, 'rgba(255,255,255,0.55)'); base.addColorStop(0.62, 'rgba(255,255,255,0.55)'); base.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = base; g.fillRect(0, H * 0.02, W, H * 0.94);
+      for (let i = 0; i < 520; i++) {
+        const v = avHash(i, 41), y = v * H, x = W * (0.12 + 0.62 * avHash(i, 42));
+        // у переносицы волоски растут вверх, к хвосту — вдоль брови
+        const ang = avMix(0.2, 1.3, avStep(0.04, 0.55, v)) + (avHash(i, 43) - 0.5) * 0.4, l = 12 + avHash(i, 44) * 12;
+        g.lineWidth = 1.8 + avHash(i, 45) * 1.6; g.globalAlpha = 0.6 + 0.4 * avHash(i, 46);
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(ang) * l, y + Math.sin(ang) * l); g.stroke();
+      }
+      g.globalAlpha = 1;
+      return avTex(THREE, c, { wrapT: false });
+    });
+  }
+  // Ресницы: холст x — вдоль ресницы (от века к кончику), y — вдоль века
+  function avLashTex(THREE) {
+    return avCached('lash', () => {
+      const W = 64, H = 256, c = avCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.strokeStyle = '#fff'; g.lineCap = 'round';
+      const base = g.createLinearGradient(0, 0, W, 0);
+      base.addColorStop(0, '#fff'); base.addColorStop(0.35, 'rgba(255,255,255,0.7)'); base.addColorStop(0.7, 'rgba(255,255,255,0)');
+      g.fillStyle = base; g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 190; i++) {
+        const y = avHash(i, 51) * H, l = W * (0.5 + 0.5 * avHash(i, 52)), bend = (avHash(i, 53) - 0.5) * 9;
+        g.lineWidth = 2.4; g.beginPath(); g.moveTo(0, y); g.quadraticCurveTo(l * 0.5, y + bend, l, y + bend * 1.7); g.stroke();
+      }
+      return avTex(THREE, c, { wrapT: false });
+    });
+  }
+
+  // Глазное яблоко: полюс сферы смотрит вперёд; по широте — зрачок, радужка, лимб, белок
+  function avEyeTex(THREE, iris, lo = false) {
+    return avCached('eye:' + iris + (lo ? ':lo' : ''), () => {
+      const ir = (iris >> 16) & 255, ig = (iris >> 8) & 255, ib = iris & 255, EW = lo ? 128 : 512, EH = EW / 2;
+      return avTex(THREE, avPixels(EW, EH, (x, y, o) => {
+        const th = ((y + 0.5) / EH) * 180, ph = x / EW, r = (th - 9.6) / 20.4;
+        const fib = 0.62 * avNoise(ph * 96, r * 2.5, 96, 0, 7) + 0.38 * avNoise(ph * 256, r * 7, 256, 0, 9);
+        const k = (0.5 + 0.7 * fib) * (1 + 0.45 * Math.exp(-(((r - 0.2) / 0.1) ** 2))) * (1 - 0.62 * avStep(0.7, 1, r));
+        let R = ir * k, G = ig * k, B = ib * k;
+        const pupil = 1 - avStep(8.6, 10.2, th);
+        R = avMix(R, 10, pupil); G = avMix(G, 8, pupil); B = avMix(B, 8, pupil);
+        const sc = avStep(29, 33, th);
+        const vein = avStep(55, 110, th) * avStep(0.62, 0.9, avNoise(ph * 40, th / 6, 40, 0, 11)) * 0.35;
+        const sr = 236 - 22 * avStep(40, 120, th);
+        o[0] = avMix(R, sr, sc); o[1] = avMix(G, sr - 8 - 60 * vein, sc); o[2] = avMix(B, sr - 16 - 60 * vein, sc);
+      }), { srgb: true, wrapT: false });
+    });
+  }
+
+  /* Лицо: множители цвета кожи в развёртке сферы головы (румянец, тени под глазами, складка века,
+     крылья носа, щетина у мужской фигуры) и карта блеска (лоб, нос и подбородок глаже щёк) */
+  function avFaceTex(THREE, P, H, lo = false) {
+    return avCached('face:' + (P.fem ? 'f' : 'm') + (lo ? ':lo' : ''), () => {
+      const W = lo ? 256 : 512, HH = W / 2, GW = lo ? 64 : 128, GH = GW / 2, grid = new Float32Array((GW + 1) * (GH + 1));
+      const dir = (u, v) => { const ph = u * Math.PI * 2 - Math.PI / 2, th = v * Math.PI; return [-Math.cos(ph) * Math.sin(th), Math.cos(th), Math.sin(ph) * Math.sin(th)]; };
+      for (let j = 0; j <= GH; j++) for (let i = 0; i <= GW; i++) { const d = dir(i / GW, j / GH); grid[j * (GW + 1) + i] = H.R(d[0], d[1], d[2]); }
+      const rad = (u, v) => {
+        const x = u * GW, y = v * GH, i = Math.min(GW - 1, x | 0), j = Math.min(GH - 1, y | 0), fx = x - i, fy = y - j, o = j * (GW + 1) + i;
+        return avMix(avMix(grid[o], grid[o + 1], fx), avMix(grid[o + GW + 1], grid[o + GW + 2], fx), fy);
+      };
+      const E = P.eye, M = P.mouth, N = P.nose, fem = P.fem, F = [];
+      const add = (x, y, sx, sy, c, k, mirror, dz = 0) => {
+        const z = H.faceZ(x, y) + dz;
+        F.push([x, y, z, sx, sy, 0.02, c, k]);
+        if (mirror) F.push([-x, y, z, sx, sy, 0.02, c, k]);
+      };
+      add(0.045, -0.024, 0.019, 0.016, [1, 0.83, 0.81], fem ? 0.55 : 0.3, 1);           // румянец
+      add(0, N.tip, 0.012, 0.014, [1, 0.88, 0.86], 0.4, 0, 0.02);                      // кончик носа
+      add(E.x, E.y - 0.0125, 0.013, 0.005, [0.9, 0.85, 0.92], 0.45, 1);               // под глазами
+      add(E.x, E.y + 0.011, 0.012, 0.004, [0.95, 0.86, 0.86], 0.4, 1);                // веки
+      add(E.x * 1.05, E.y + 0.0175, 0.014, 0.0022, [0.8, 0.72, 0.72], 0.35, 1);       // складка века
+      add(0, M.y, M.w * 1.15, 0.012, [0.96, 0.9, 0.9], 0.4, 0);                      // вокруг рта
+      add(N.w * 0.95, N.base, 0.004, 0.005, [0.84, 0.74, 0.74], 0.5, 1);             // крылья носа
+      for (let k = 0; k <= 6; k++) {                                                // носогубные складки
+        const t = k / 6;
+        add(avMix(N.w * 1.08, M.w * 1.2, t), avMix(N.base + 0.002, M.y - 0.006, t), 0.0035, 0.004, [0.9, 0.82, 0.82], fem ? 0.14 : 0.24, 1);
+      }
+      // плавные пятна — на сетке вдвое реже (их не отличить), точки щетины и шум кожи — в полном разрешении
+      const FW = W / 2, FH = HH / 2, mul = new Float32Array(FW * FH * 4);
+      for (let py = 0; py < FH; py++) for (let px = 0; px < FW; px++) {
+        const u = (px + 0.5) / FW, v = (py + 0.5) / FH, d = dir(u, v), r = rad(u, v), x = d[0] * r, y = d[1] * r, z = d[2] * r;
+        let R = 1, G = 1, B = 1, m = 0;
+        for (const f of F) {
+          const ex = (x - f[0]) / f[3], ey = (y - f[1]) / f[4], ez = (z - f[2]) / f[5], q = ex * ex + ey * ey + ez * ez;
+          if (q > 12) continue;
+          const w = f[7] * Math.exp(-0.5 * q);
+          R *= 1 - w * (1 - f[6][0]); G *= 1 - w * (1 - f[6][1]); B *= 1 - w * (1 - f[6][2]);
+        }
+        if (!fem) {   // щетина: челюсть, подбородок, над губой
+          const jaw = avStep(-0.032, -0.056, y) * avStep(-0.04, 0.0, z) * (1 - avStep(0.068, 0.08, Math.abs(x)) * avStep(-0.075, -0.035, y));
+          const lip = avStep(N.base - 0.002, N.base - 0.007, y) * avStep(M.y + M.up * 0.5, M.y + M.up + 0.002, y) * (1 - avStep(0.022, 0.032, Math.abs(x)));
+          const mouth = Math.exp(-0.5 * (((x / (M.w * 1.05)) ** 2) + (((y - M.y) / 0.0075) ** 2)));
+          m = Math.max(jaw, lip) * (1 - mouth) * avStep(-0.13, -0.1, y + 0.02 * (1 - avStep(0, 0.04, z)));
+        }
+        const k = (py * FW + px) * 4;
+        mul[k] = R; mul[k + 1] = G; mul[k + 2] = B; mul[k + 3] = m;
+      }
+      const samp = (u, v, c) => {
+        const x = u * FW - 0.5, y = avClamp(v * FH - 0.5, 0, FH - 1.001), i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+        const i0 = (i + FW) % FW, i1 = (i + 1) % FW, a = mul[(j * FW + i0) * 4 + c], b = mul[(j * FW + i1) * 4 + c];
+        const cc = mul[((j + 1) * FW + i0) * 4 + c], dd = mul[((j + 1) * FW + i1) * 4 + c];
+        return avMix(avMix(a, b, fx), avMix(cc, dd, fx), fy);
+      };
+      const map = avPixels(W, HH, (px, py, o) => {
+        const u = (px + 0.5) / W, v = (py + 0.5) / HH;
+        let R = samp(u, v, 0), G = samp(u, v, 1), B = samp(u, v, 2);
+        const m = fem ? 0 : samp(u, v, 3);
+        if (m > 0.01) {
+          const k = m * (avHash(px, py, 77) > 0.5 ? 0.6 : 0.35);
+          R *= 1 - k * 0.12; G *= 1 - k * 0.13; B *= 1 - k * 0.08;
+        }
+        const n = 0.985 + 0.03 * avNoise(px / 3, py / 3, 0, 0, 5) + 0.012 * (avHash(px, py, 3) - 0.5);
+        o[0] = 255 * R * n; o[1] = 255 * G * n; o[2] = 255 * B * n;
+      });
+      const RW = lo ? 64 : 128, RH = RW / 2;
+      const rough = avPixels(RW, RH, (px, py, o) => {
+        const u = (px + 0.5) / RW, v = (py + 0.5) / RH, d = dir(u, v), r = rad(u, v), x = d[0] * r, y = d[1] * r, z = d[2] * r;
+        const tz = Math.exp(-0.5 * ((x / 0.022) ** 2)) * avStep(0.03, 0.07, z) * (avStep(-0.05, 0.02, y) * 0.8 + avStep(0.03, 0.06, y) * 0.4 + Math.exp(-0.5 * (((y + 0.105) / 0.012) ** 2)) * 0.6);
+        o[0] = o[2] = 0; o[1] = 255 * ((fem ? 0.5 : 0.56) - 0.14 * Math.min(1, tz));
+      });
+      return { map: avTex(THREE, map, { srgb: true, wrapT: false }), rough: avTex(THREE, rough, { wrapT: false }) };
+    });
+  }
+
+  // Кроссовки: развёртка верха (u — поперёк, от края подошвы через верх к другому краю; v — от пятки к носку)
+  function avShoeTex(THREE) {
+    return avCached('shoe', () => {
+      const W = 512, H = 256, c = avCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+      const X = (u) => u * W, Y = (t) => t * H;
+      const stitch = (pts, col = '#9a9a9a') => {
+        g.strokeStyle = col; g.lineWidth = 1.2; g.setLineDash([3, 2.5]);
+        g.beginPath(); pts.forEach(([u, t], i) => (i ? g.lineTo(X(u), Y(t)) : g.moveTo(X(u), Y(t)))); g.stroke(); g.setLineDash([]);
+      };
+      const seam = (pts) => { g.strokeStyle = '#b4b4b4'; g.lineWidth = 1.6; g.beginPath(); pts.forEach(([u, t], i) => (i ? g.lineTo(X(u), Y(t)) : g.moveTo(X(u), Y(t)))); g.stroke(); };
+      // носок
+      const toe = [];
+      for (let k = 0; k <= 24; k++) { const u = k / 24; toe.push([u, 0.8 - 0.07 * (2 * Math.abs(u - 0.5)) ** 2]); }
+      seam(toe); stitch(toe.map(([u, t]) => [u, t - 0.025]));
+      // пятка и задник
+      const heel = [];
+      for (let k = 0; k <= 24; k++) { const u = k / 24; heel.push([u, 0.17 + 0.05 * (2 * Math.abs(u - 0.5)) ** 2]); }
+      seam(heel); stitch(heel.map(([u, t]) => [u, t + 0.022]));
+      // боковины и полоса
+      for (const s of [-1, 1]) {
+        const u0 = 0.5 + s * 0.45, u1 = 0.5 + s * 0.15;
+        seam([[u0, 0.3], [u1, 0.38]]); stitch([[u0, 0.33], [u1, 0.41]]);
+        g.fillStyle = '#e4e4e4';
+        g.beginPath(); g.moveTo(X(0.5 + s * 0.42), Y(0.27)); g.lineTo(X(0.5 + s * 0.2), Y(0.68)); g.lineTo(X(0.5 + s * 0.24), Y(0.7)); g.lineTo(X(0.5 + s * 0.46), Y(0.33)); g.closePath(); g.fill();
+        stitch([[0.5 + s * 0.42, 0.27], [0.5 + s * 0.2, 0.68]]);
+      }
+      // язычок и отверстия под шнурки
+      g.fillStyle = '#ececec'; g.fillRect(X(0.415), Y(0.4), X(0.17), Y(0.36));
+      stitch([[0.415, 0.4], [0.415, 0.76], [0.585, 0.76], [0.585, 0.4]]);
+      for (const s of [-1, 1]) for (let k = 0; k < 5; k++) {
+        const u = 0.5 + s * 0.105, t = 0.45 + k * 0.06;
+        g.fillStyle = '#c8c8c8'; g.beginPath(); g.arc(X(u), Y(t), 4.4, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#505050'; g.beginPath(); g.arc(X(u), Y(t), 2.6, 0, Math.PI * 2); g.fill();
+      }
+      // перфорация на носке
+      g.fillStyle = '#c0c0c0';
+      for (let a = 0; a < 6; a++) for (let b = 0; b < 4; b++) { g.beginPath(); g.arc(X(0.43 + a * 0.028), Y(0.86 + b * 0.025), 1.3, 0, Math.PI * 2); g.fill(); }
+      return { map: avTex(THREE, c, { srgb: true, wrapT: false }), normal: avTex(THREE, avNormalCanvas(avLuma(c), W, H, 4, false), { wrapT: false }) };
+    });
+  }
+
+  // ── Построители геометрии ──
+  // Сетка (cols+1)×(rows+1) из fn(i, j) → [x, y, z]; closed — шов по кругу; poleTop/poleBottom — строка сходится в точку.
+  // color(i, j) → [r, g, b] или [r, g, b, a] — цвета вершин (множители цвета материала)
+  function avGrid(THREE, cols, rows, fn, o = {}) {
+    const { uv = null, closed = false, poleTop = false, poleBottom = false, flip = false, color = null } = o;
+    const n = (cols + 1) * (rows + 1), pos = new Float32Array(n * 3), uvs = new Float32Array(n * 2);
+    let cols4 = null, cs = 3;
+    for (let j = 0, k = 0; j <= rows; j++) for (let i = 0; i <= cols; i++, k++) {
+      const p = fn(i, j);
+      pos[k * 3] = p[0]; pos[k * 3 + 1] = p[1]; pos[k * 3 + 2] = p[2];
+      const t = uv ? uv(i, j) : [i / cols, 1 - j / rows];
+      uvs[k * 2] = t[0]; uvs[k * 2 + 1] = t[1];
+      if (color) {
+        const c = color(i, j);
+        if (!cols4) { cs = c.length; cols4 = new Float32Array(n * cs); }
+        for (let q = 0; q < cs; q++) cols4[k * cs + q] = c[q];
+      }
+    }
+    const idx = [];
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const a = j * (cols + 1) + i, b = a + 1, c = a + cols + 1, d = c + 1;
+      if (flip) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    if (cols4) g.setAttribute('color', new THREE.BufferAttribute(cols4, cs));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const nr = g.attributes.normal;
+    const avg = (ids) => {
+      let x = 0, y = 0, z = 0;
+      for (const i of ids) { x += nr.getX(i); y += nr.getY(i); z += nr.getZ(i); }
+      const l = Math.hypot(x, y, z) || 1;
+      for (const i of ids) nr.setXYZ(i, x / l, y / l, z / l);
+    };
+    if (closed) for (let j = 0; j <= rows; j++) avg([j * (cols + 1), j * (cols + 1) + cols]);
+    const row = (j) => Array.from({ length: cols + 1 }, (_, i) => j * (cols + 1) + i);
+    if (poleTop) avg(row(0));
+    if (poleBottom) avg(row(rows));
+    return g;
+  }
+
+  // Развернуть треугольники, если нормали в среднем смотрят не туда
+  function avFacing(geo, want) {
+    const n = geo.attributes.normal;
+    let s = 0;
+    for (let i = 0; i < n.count; i++) s += n.getX(i) * want[0] + n.getY(i) * want[1] + n.getZ(i) * want[2];
+    if (s >= 0) return geo;
+    const idx = geo.index.array;
+    for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }
+    geo.index.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  /* Трубка вдоль сплайна через точки pts: сечение — эллипс с полуосями rx (вбок) и rz (вперёд), сдвинутый на dz вперёд
+     и на dx вбок; shape(t, th) → [rx, rz, dz, dx], disp(t, th) — добавка по нормали сечения. t вне 0…1 продолжает трубку
+     по касательной. Возвращает геометрию и функцию точки поверхности at(t, th, extra). */
+  function avTube(THREE, pts, shape, o = {}) {
+    const { cols = 20, rows = 24, front = [0, 0, 1], capA = 0, capB = 0, disp = null, uv = [1, 1], t0 = 0, t1 = 1, color = null, capScale = 1 } = o;
+    const V3 = THREE.Vector3, F0 = new V3(front[0], front[1], front[2]);
+    const curve = pts.length > 2
+      ? new THREE.CatmullRomCurve3(pts.map((p) => new V3(p[0], p[1], p[2])), false, 'centripetal')
+      : new THREE.LineCurve3(new V3(pts[0][0], pts[0][1], pts[0][2]), new V3(pts[1][0], pts[1][1], pts[1][2]));
+    const L = curve.getLength();
+    const frameAt = (t) => {
+      const tc = avClamp(t), c = curve.getPointAt(tc), T = curve.getTangentAt(tc).normalize();
+      if (t !== tc) c.addScaledVector(T, (t - tc) * L);
+      const Fv = F0.clone().addScaledVector(T, -F0.dot(T)).normalize(), S = new V3().crossVectors(Fv, T);
+      return { c, T, Fv, S };
+    };
+    const at = (t, th, extra = 0, f = null, ax = 0, k = 1) => {
+      f = f || frameAt(t);
+      const sh = shape(t, th), rx = sh[0], rz = sh[1], dz = sh[2] || 0, dx = sh[3] || 0, d = (disp ? disp(t, th) : 0) + extra;
+      const lx = dx + (rx + d) * Math.sin(th) * k, lz = dz + (rz + d) * Math.cos(th) * k, a = ax * (rx + rz) * 0.5;
+      return [f.c.x + f.S.x * lx + f.Fv.x * lz + f.T.x * a, f.c.y + f.S.y * lx + f.Fv.y * lz + f.T.y * a, f.c.z + f.S.z * lx + f.Fv.z * lz + f.T.z * a];
+    };
+    const list = [];
+    for (let k = capA; k >= 1; k--) { const a = (k / capA) * Math.PI / 2; list.push([t0, -Math.sin(a) * capScale, Math.cos(a)]); }
+    for (let j = 0; j <= rows; j++) list.push([avMix(t0, t1, j / rows), 0, 1]);
+    for (let k = 1; k <= capB; k++) { const a = (k / capB) * Math.PI / 2; list.push([t1, Math.sin(a), Math.cos(a)]); }
+    const frames = list.map((r) => frameAt(r[0]));
+    const geo = avGrid(THREE, cols, list.length - 1, (i, j) => at(list[j][0], (i / cols) * Math.PI * 2, 0, frames[j], list[j][1], list[j][2]), {
+      closed: true, poleTop: capA > 0, poleBottom: capB > 0, color: color ? (i, j) => color(list[j][0], (i / cols) * Math.PI * 2) : null,
+      uv: (i, j) => [(i / cols) * uv[0], 1 - (list[j][0] - t0) * L * uv[1]],
+    });
+    return { geo, at, frameAt, L };
+  }
+
+  // Валик по замкнутому (или открытому) контуру — подгибка края, кант
+  function avRing(THREE, pts, r, closed = true, seg = 0) {
+    const V3 = THREE.Vector3, curve = new THREE.CatmullRomCurve3(pts.map((p) => new V3(p[0], p[1], p[2])), closed, 'centripetal');
+    return new THREE.TubeGeometry(curve, seg || Math.max(16, pts.length * 2), r, 6, closed);
+  }
+
+  /* Ленты (пряди, ресницы, брови, молния) одной геометрией. item: pts — точки оси, side — направление ширины,
+     w — ширина, n — нормали, u — диапазон текстуры поперёк, anchor: 'center' (по обе стороны оси) или 'edge' (от оси) */
+  function avStrips(THREE, items) {
+    let nv = 0;
+    for (const it of items) nv += it.pts.length * 2;
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx = [];
+    let k = 0;
+    for (const it of items) {
+      const n = it.pts.length, base = k, a = it.anchor === 'edge' ? 0 : -0.5, vr = it.v || [0, 1];
+      for (let j = 0; j < n; j++) {
+        const p = it.pts[j], s = it.side[j], w = it.w[j], nn = it.n[j], v = avMix(vr[0], vr[1], j / (n - 1));
+        for (let q = 0; q < 2; q++) {
+          const f = (a + q) * w;
+          pos[k * 3] = p[0] + s[0] * f; pos[k * 3 + 1] = p[1] + s[1] * f; pos[k * 3 + 2] = p[2] + s[2] * f;
+          nor[k * 3] = nn[0]; nor[k * 3 + 1] = nn[1]; nor[k * 3 + 2] = nn[2];
+          uv[k * 2] = it.u[q]; uv[k * 2 + 1] = 1 - v;
+          k++;
+        }
+      }
+      for (let j = 0; j < n - 1; j++) { const b = base + j * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return g;
+  }
+  // Касательные и боковые направления ленты по точкам оси и нормалям
+  function avStripItem(pts, normals, widths, u, anchor = 'center', sideHint = null) {
+    const side = pts.map((p, j) => {
+      const a = pts[Math.max(0, j - 1)], b = pts[Math.min(pts.length - 1, j + 1)];
+      let s = avNorm(avCross(avSub(b, a), normals[j]));
+      if (sideHint && avDot(s, sideHint) < 0) s = avScl(s, -1);
+      return s;
+    });
+    return { pts, side, w: widths, n: normals, u, anchor };
+  }
+
+  // Несколько геометрий (position, normal, uv, color) — в одну
+  function avMerge(THREE, geos) {
+    let nv = 0, ni = 0;
+    for (const g of geos) { nv += g.attributes.position.count; ni += g.index ? g.index.count : g.attributes.position.count; }
+    const cs = geos.every((g) => g.attributes.color) ? geos[0].attributes.color.itemSize : 0;
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx = new Uint32Array(ni), col = cs ? new Float32Array(nv * cs) : null;
+    let ov = 0, oi = 0;
+    for (const g of geos) {
+      const c = g.attributes.position.count;
+      pos.set(g.attributes.position.array, ov * 3);
+      nor.set(g.attributes.normal.array, ov * 3);
+      if (g.attributes.uv) uv.set(g.attributes.uv.array, ov * 2);
+      if (col) col.set(g.attributes.color.array, ov * cs);
+      if (g.index) { const s = g.index.array; for (let i = 0; i < s.length; i++) idx[oi++] = s[i] + ov; }
+      else for (let i = 0; i < c; i++) idx[oi++] = i + ov;
+      ov += c;
+      g.dispose();
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    if (col) out.setAttribute('color', new THREE.BufferAttribute(col, cs));
+    out.setIndex(new THREE.BufferAttribute(idx, 1));
+    return out;
+  }
+  // Пряди трубки (TubeGeometry) пустить вдоль длины: текстура волос рисует пряди по v
+  function avAlongTube(geo, ku, kv) {
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, v * kv, u * ku); }
+    return geo;
+  }
+
+  // ── Голова ──
+  // Форма — «звёздная» поверхность от центра черепа: радиус R в каждом направлении
+  function avHeadModel(P) {
+    const S = P.skull, J = P.jaw, B = [];
+    for (const b of P.bumps) { B.push(b); if (b[7]) B.push([-b[0], b[1], b[2], b[3], b[4], b[5], b[6]]); }
+    const n = J.n, jcx = J.c[0], jcy = J.c[1], jcz = J.c[2], jrx = J.r[0], jry = J.r[1], jrz = J.r[2];
+    const jawIn = (x, y, z) => Math.pow(Math.abs((x - jcx) / jrx), n) + Math.pow(Math.abs((y - jcy) / jry), n) + Math.pow(Math.abs((z - jcz) / jrz), n) < 1;
+    function base(dx, dy, dz) {
+      const a = 1 / Math.sqrt((dx / S.w) ** 2 + (dy / (dy > 0 ? S.top : S.bot)) ** 2 + (dz / (dz > 0 ? S.front : S.back)) ** 2);
+      let lo = 0, hi = 0.2;
+      for (let i = 0; i < 20; i++) { const m = (lo + hi) * 0.5; if (jawIn(dx * m, dy * m, dz * m)) lo = m; else hi = m; }
+      return 0.5 * (a + lo + Math.sqrt((a - lo) * (a - lo) + 0.007 * 0.007));   // гладкое объединение свода и челюсти
+    }
+    function R(dx, dy, dz) {
+      const r0 = base(dx, dy, dz), x = dx * r0, y = dy * r0, z = dz * r0;
+      let d = 0;
+      for (let i = 0; i < B.length; i++) {
+        const b = B[i], ex = (x - b[0]) / b[3], ey = (y - b[1]) / b[4], ez = (z - b[2]) / b[5], q = ex * ex + ey * ey + ez * ez;
+        if (q < 12) d += b[6] * Math.exp(-0.5 * q);
+      }
+      return r0 + d;
+    }
+    const point = (dx, dy, dz) => { const l = Math.hypot(dx, dy, dz) || 1, r = R(dx / l, dy / l, dz / l); return [dx / l * r, dy / l * r, dz / l * r]; };
+    // нормаль поверхности возле точки p (по соседним направлениям)
+    function normalAt(px, py, pz) {
+      const d = avNorm([px, py, pz]), ref = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+      const t1 = avNorm(avCross(ref, d)), t2 = avCross(d, t1), e = 0.01;
+      const a = point(...avAdd(d, t1, e)), b = point(...avAdd(d, t1, -e)), c = point(...avAdd(d, t2, e)), f = point(...avAdd(d, t2, -e));
+      let nn = avNorm(avCross(avSub(a, b), avSub(c, f)));
+      if (avDot(nn, d) < 0) nn = avScl(nn, -1);
+      return nn;
+    }
+    // z поверхности лица в точке (x, y)
+    function faceZ(x, y) {
+      let lo = 0, hi = 0.17;
+      for (let i = 0; i < 24; i++) { const m = (lo + hi) * 0.5, l = Math.hypot(x, y, m); if (l < R(x / l, y / l, m / l)) lo = m; else hi = m; }
+      return lo;
+    }
+    // быстрый радиус по сетке направлений — для прядей
+    const GW = 96, GH = 48, grid = new Float32Array((GW + 1) * (GH + 1));
+    for (let j = 0; j <= GH; j++) for (let i = 0; i <= GW; i++) {
+      const ph = (i / GW) * Math.PI * 2 - Math.PI / 2, th = (j / GH) * Math.PI;
+      grid[j * (GW + 1) + i] = R(-Math.cos(ph) * Math.sin(th), Math.cos(th), Math.sin(ph) * Math.sin(th));
+    }
+    function Rg(dx, dy, dz) {
+      let u = (Math.atan2(dz, -dx) + Math.PI / 2) / (Math.PI * 2);
+      u -= Math.floor(u);
+      const v = Math.acos(avClamp(dy, -1, 1)) / Math.PI, x = u * GW, y = v * GH;
+      const i = Math.min(GW - 1, x | 0), j = Math.min(GH - 1, y | 0), fx = x - i, fy = y - j, o = j * (GW + 1) + i;
+      return avMix(avMix(grid[o], grid[o + 1], fx), avMix(grid[o + GW + 1], grid[o + GW + 2], fx), fy);
+    }
+    // x поверхности сбоку головы в точке (y, z)
+    function sideX(y, z) {
+      let lo = 0, hi = 0.15;
+      for (let i = 0; i < 24; i++) { const m = (lo + hi) * 0.5, l = Math.hypot(m, y, z); if (l < R(m / l, y / l, z / l)) lo = m; else hi = m; }
+      return lo;
+    }
+    return { R, Rg, point, normalAt, faceZ, sideX };
+  }
+  // Развёртка сферы головы для точки (x, y, z) — общая для лица, носа, ушей и век
+  function avHeadUV(x, y, z) {
+    const l = Math.hypot(x, y, z) || 1;
+    let u = (Math.atan2(z / l, -x / l) + Math.PI / 2) / (Math.PI * 2);
+    u -= Math.floor(u);
+    return [u, 1 - Math.acos(avClamp(y / l, -1, 1)) / Math.PI];
+  }
+  function avSetHeadUV(geo, off = [0, 0, 0]) {
+    const p = geo.attributes.position, uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i++) { const t = avHeadUV(p.getX(i) + off[0], p.getY(i) + off[1], p.getZ(i) + off[2]); uv[i * 2] = t[0]; uv[i * 2 + 1] = t[1]; }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return geo;
+  }
+
+  // Нос: спинка — поверхность над лицом, кончик, крылья, ноздри и перегородка
+  function avNose(THREE, P, H, M, parent, lod) {
+    const N = P.nose, rows = lod ? 18 : 10, cols = lod ? 16 : 10, top = N.root, bot = N.tip + 0.003;
+    const bridge = avGrid(THREE, cols, rows, (i, j) => {
+      const s = j / rows, y = avMix(top, bot, s), w = N.w * (0.4 + 0.1 * s + 0.32 * s * s * s);
+      const pr = N.proj * (0.16 + 0.84 * Math.pow(s, 1.25)) - 0.0012;
+      const b = (i / cols) * 2 - 1, x = b * w * 1.35, z0 = H.faceZ(x, y) - 0.0015, ridge = H.faceZ(0, y) + pr;
+      const k = Math.pow(Math.max(0, 1 - b * b), 0.7);
+      return [x, y, avMix(z0, Math.max(z0, ridge), k)];
+    });
+    const add = (geo, mat, pos, scale) => {
+      const m = new THREE.Mesh(geo, mat);
+      if (pos) m.position.set(pos[0], pos[1], pos[2]);
+      if (scale) m.scale.set(scale[0], scale[1], scale[2]);
+      parent.add(m);
+      return m;
+    };
+    add(avSetHeadUV(bridge), M.face);
+    const tipZ = H.faceZ(0, N.tip) + N.proj, tr = N.w * 0.66, seg = lod ? 22 : 12;
+    const ball = (r) => new THREE.SphereGeometry(r, seg, Math.round(seg * 0.7));
+    const tipC = [0, N.tip - 0.0015, tipZ - tr * 0.95];
+    const tip = ball(tr); tip.scale(1.12, 0.92, 1); tip.translate(...tipC); add(avSetHeadUV(tip), M.face);
+    for (const s of [-1, 1]) {
+      const x = s * N.w * 0.78, y = N.base + 0.0045, ar = N.w * 0.4;
+      const ala = ball(ar); ala.scale(1, 0.82, 1.3); ala.translate(x, y, H.faceZ(x, y) + ar * 0.45); add(avSetHeadUV(ala), M.face);
+      const nos = ball(1); nos.scale(N.w * 0.27, N.w * 0.14, N.w * 0.36); nos.translate(s * N.w * 0.36, N.base + 0.0012, tipZ - N.proj * 0.45);
+      add(nos, M.nostril);
+    }
+    const col = avTube(THREE, [[0, N.tip - tr * 0.6, tipZ - tr * 0.7], [0, N.base + 0.0008, H.faceZ(0, N.base) + 0.0015]], () => [N.w * 0.2, N.w * 0.2], { cols: 8, rows: 2, capA: 2, capB: 2 });
+    add(avSetHeadUV(col.geo), M.face);
+  }
+
+  // Губы: верхняя с «луком Купидона», нижняя полнее; уголки чуть приподняты
+  function avLips(THREE, P, H, M, parent, lod) {
+    const Mo = P.mouth, cols = lod ? 28 : 14, rows = lod ? 10 : 6;
+    const bow = (s) => { const a = Math.abs(s); return Math.pow(Math.max(0, 1 - a * a), 0.5) * (1 - 0.25 * Math.exp(-((s / 0.1) ** 2))) + 0.16 * Math.exp(-(((a - 0.3) / 0.13) ** 2)); };
+    for (const upper of [true, false]) {
+      const geo = avGrid(THREE, cols, rows, (i, j) => {
+        const s = (i / cols) * 2 - 1, t = j / rows, a = Math.abs(s), x = s * Mo.w * (upper ? 1 : 0.94);
+        const corner = 0.0008 * a ** 4, hgt = upper ? Mo.up * bow(s) : Mo.lo * Math.pow(Math.max(0, 1 - a * a), 0.62);
+        const yb = upper ? Mo.y + corner + hgt : Mo.y + corner - hgt, y = avMix(yb, Mo.y + corner, t);
+        const pr = (upper ? (P.fem ? 0.0054 : 0.0044) : (P.fem ? 0.0068 : 0.0056)) * Math.pow(Math.max(0, 1 - a * a), 0.5);
+        const bulge = Math.pow(Math.sin(Math.PI * Math.pow(t, upper ? 0.85 : 0.75)), 0.8) * pr;
+        return [x, y, H.faceZ(x, y) - 0.0012 + bulge];
+      }, { flip: !upper });
+      const m = new THREE.Mesh(geo, M.lip); parent.add(m);
+    }
+    const line = [];
+    for (let k = 0; k <= 12; k++) { const s = (k / 12) * 2 - 1, x = s * Mo.w * 0.97, y = Mo.y + 0.0008 * s ** 4; line.push([x, y, H.faceZ(x, y) + 0.0003]); }
+    parent.add(new THREE.Mesh(avRing(THREE, line, 0.0007, false, 24), M.mouth));
+  }
+
+  // Ухо: рельеф по контуру — завиток по краю, противозавиток, глубокая раковина, мочка
+  function avEar(THREE, P, H, M, s, parent, lod) {
+    const E = P.ear, h = E.h, w = h * 0.56, cy = E.y, cz = E.z;
+    const C = [s * (H.sideX(cy, cz) - 0.004), cy, cz];
+    const yaw = 0.42, tilt = 0.22;
+    const nrm = avNorm([s * Math.cos(yaw), 0, Math.sin(yaw)]), up = avNorm([0, Math.cos(tilt), -Math.sin(tilt)]);
+    let fw = avNorm(avCross(nrm, up));
+    if (fw[2] < 0) fw = avScl(fw, -1);
+    const cols = lod ? 40 : 20, rows = lod ? 12 : 6;
+    const contour = (al) => {   // al = 0 — верх, рост к заднему краю
+      const c = Math.cos(al), sn = Math.sin(al);
+      let a = -sn * w * 0.5, b = c * h * 0.5;
+      if (c < 0) a *= 0.72 + 0.28 * (1 + c);   // мочка уже
+      if (a > 0) a *= 0.8;                      // передний край прямее
+      return [a - w * 0.08, b];
+    };
+    const surf = (front) => avGrid(THREE, cols, rows, (i, j) => {
+      const al = (i / cols) * Math.PI * 2, rho = j / rows, [a, b] = contour(al);
+      const back = Math.max(0, Math.sin(al)), lowFront = avStep(0.3, 0.9, -Math.sin(al)) * avStep(0.2, -0.6, Math.cos(al));
+      const rimMask = Math.max(0, 1 - lowFront) * (1 - 0.8 * avStep(-0.75, -0.95, Math.cos(al)));
+      const ca = a - w * 0.1, cb = b + h * 0.12;
+      const conchaD = Math.hypot((ca * rho + w * 0.12) / (w * 0.32), (cb * rho + h * 0.1) / (h * 0.28));
+      let hf;
+      if (front) {
+        const rim = avStep(0.7, 0.88, rho) * (1 - 0.5 * avStep(0.94, 1, rho)) * rimMask * 0.0036;
+        const anti = 0.0021 * Math.exp(-(((rho - 0.58) / 0.1) ** 2)) * (0.4 + 0.6 * back);
+        const concha = -0.0046 * Math.max(0, 1 - conchaD) ** 1.4;
+        const lobe = 0.0016 * avStep(-0.6, -0.95, Math.cos(al)) * (1 - rho);
+        hf = 0.0012 + rim + anti + concha + lobe + 0.006 * (1 - rho * rho) * 0.25;
+      } else hf = -0.0065 * Math.pow(Math.max(0, 1 - rho * rho), 0.7);
+      const pos = avAdd(avAdd(C, fw, a * rho), up, b * rho);
+      return avAdd(pos, nrm, hf + (a * rho / w + 0.5) * 0.006);
+    }, { closed: true, poleTop: true });
+    for (const front of [true, false]) {
+      const g = avFacing(surf(front), front ? nrm : avScl(nrm, -1));
+      parent.add(new THREE.Mesh(avSetHeadUV(g), M.face));
+    }
+    if (P.fem) {
+      const st = new THREE.Mesh(new THREE.SphereGeometry(0.0028, 12, 8), M.gold);
+      st.position.set(...avAdd(avAdd(C, up, -h * 0.4), nrm, 0.004));
+      parent.add(st);
+    }
+  }
+
+  // Глаз: яблоко с радужкой, веки-колпаки (моргают), ресницы, слёзное мясцо
+  function avEye(THREE, P, H, M, s, parent, lod) {
+    const E = P.eye, r = E.r, x = s * E.x, y = E.y;
+    const g = new THREE.Group();
+    g.position.set(x, y, H.faceZ(x, y) - r + 0.0068);
+    parent.add(g);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(r, lod ? 32 : 18, lod ? 24 : 12).rotateX(Math.PI / 2), M.eye);
+    g.add(ball);
+    const lidR = r * 1.07, thc = Math.PI * 0.49, off = [g.position.x, g.position.y, g.position.z];
+    const lashTex = M.lash;
+    const mkLid = (upper) => {
+      const pivot = new THREE.Group(); g.add(pivot);
+      const cap = new THREE.SphereGeometry(lidR, lod ? 32 : 18, lod ? 10 : 6, 0, Math.PI * 2, 0, thc);
+      if (!upper) cap.rotateX(Math.PI);
+      pivot.add(new THREE.Mesh(avSetHeadUV(cap, off), M.lid));
+      const rim = new THREE.TorusGeometry(lidR * Math.sin(thc), 0.00085, 6, lod ? 32 : 16, Math.PI);
+      rim.rotateX(upper ? Math.PI / 2 : -Math.PI / 2);
+      rim.translate(0, (upper ? 1 : -1) * lidR * Math.cos(thc), 0);
+      pivot.add(new THREE.Mesh(avSetHeadUV(rim, off), M.lid));
+      // ресницы: две ленты — от края века вперёд и с загибом вверх
+      const L = upper ? E.lash : E.lash * 0.36, n = lod ? 14 : 8, items = [];
+      const yv = (upper ? 1 : -1);
+      const base = [], mid = [], nb = [], nm = [];
+      for (let k = 0; k <= n; k++) {
+        const ps = Math.PI * (0.12 + 0.76 * (k / n)), sc = Math.sin(thc) * lidR * 1.004;
+        const q = [Math.cos(ps) * sc, yv * lidR * Math.cos(thc), Math.sin(ps) * sc], rad = avNorm([q[0], 0, q[2]]);
+        const taper = Math.sin(Math.PI * (0.15 + 0.7 * (k / n)));
+        const d1 = avNorm(avAdd(rad, [0, yv, 0], 0.3)), d2 = avNorm(avAdd(rad, [0, yv, 0], upper ? 1.1 : 0.4));
+        const q2 = avAdd(q, d1, L * 0.55 * taper);
+        base.push({ q, d: d1, l: L * 0.55 * taper }); mid.push({ q: q2, d: d2, l: L * 0.5 * taper });
+        nb.push(avNorm(avCross(d1, [-Math.sin(ps), 0, Math.cos(ps)]))); nm.push(avNorm(avCross(d2, [-Math.sin(ps), 0, Math.cos(ps)])));
+      }
+      for (const [row, nrms, u] of [[base, nb, [0, 0.55]], [mid, nm, [0.55, 1]]]) {
+        items.push({ pts: row.map((o) => o.q), side: row.map((o) => o.d), w: row.map((o) => o.l), n: nrms, u, anchor: 'edge' });
+      }
+      if (L > 0.001) {
+        const lm = new THREE.Mesh(avStrips(THREE, items), lashTex);
+        lm.userData.noShadow = true;
+        pivot.add(lm);
+      }
+      return pivot;
+    };
+    const upLid = mkLid(true), loLid = mkLid(false);
+    const bUp = -E.up * Math.PI / 180, bLo = E.lo * Math.PI / 180, bClose = 0.33;
+    upLid.rotation.x = bUp; loLid.rotation.x = bLo;
+    const car = new THREE.Mesh(new THREE.SphereGeometry(0.0017, 10, 8), M.caruncle);
+    car.position.set(-s * r * 0.9, -0.0005, r * 0.36); g.add(car);
+    return {
+      ball,
+      blink(k) { upLid.rotation.x = avMix(bUp, bClose, k); loLid.rotation.x = avMix(bLo, bLo - 0.05, k); },
+    };
+  }
+
+  // Бровь — лента по надбровью с нарисованными волосками
+  function avBrow(THREE, P, H, s) {
+    const B = P.brow, n = 10, pts = [], nn = [], w = [], wk = 1.25;
+    for (let k = 0; k < n; k++) {
+      const t = k / (n - 1), x = s * avMix(0.0112, 0.056, t);
+      const y = B.y + B.arch * Math.sin(Math.PI * Math.pow(t, 0.75)) - 0.0045 * t * t;
+      const z = H.faceZ(x, y) + 0.0009;
+      pts.push([x, y, z]); nn.push(H.normalAt(x, y, z));
+      w.push(wk * B.w * (t < 0.15 ? avMix(0.8, 1, t / 0.15) : avMix(1, 0.38, (t - 0.15) / 0.85)));
+    }
+    return avStrips(THREE, [avStripItem(pts, nn, w, [0, 1], 'center', [0, 1, 0])]);
+  }
+
+  // ── Туловище: сечение на высоте y под углом th (0 — спереди, π/2 — к +x) ──
+  function avTorsoModel(P) {
+    const rows = P.torso, B = [];
+    for (const b of P.tbumps) { B.push(b); if (b[7]) B.push([-b[0], ...b.slice(1)]); }
+    const tab = rows.map((r) => r.slice());
+    const prof = (y) => { const v = avTable(tab, y); return { a: v[0], bf: v[1], bb: v[2], zc: v[3], n: v[4] }; };
+    const bustB = B.filter((b) => b[8]);
+    const bustAmp = bustB.length ? bustB[0][6] : 0, bustY = bustB.length ? bustB[0][1] : 0;
+    function point(y, th, cloth = 0) {
+      const p = prof(y), s = Math.sin(th), c = Math.cos(th);
+      const x = p.a * avPow(s, 2 / p.n), z = p.zc + (c >= 0 ? p.bf : p.bb) * avPow(c, 2 / p.n);
+      let d = 0, bust = 0;
+      for (const b of B) {
+        const side = b[2] * c;
+        if (side < -0.25) continue;
+        const ex = (x - b[0]) / b[3], ey = (y - b[1]) / (y > b[1] ? b[4] : b[5]), q = ex * ex + ey * ey;
+        if (q > 12) continue;
+        const w = b[6] * avStep(-0.25, 0.55, side) * Math.exp(-0.5 * q);
+        if (b[8]) bust += w; else d += w;
+      }
+      if (cloth && bustAmp && c > 0) {   // ткань не повторяет ложбинку и спадает с груди вниз
+        const v = y >= bustY ? Math.exp(-0.5 * ((y - bustY) / 0.032) ** 2) : Math.exp(-(((bustY - y) / cloth) ** 2));
+        bust = Math.max(bust, 0.88 * bustAmp * Math.exp(-0.5 * (x / 0.078) ** 2) * v * avStep(0, 0.6, c));
+      }
+      d += bust;
+      const l = Math.hypot(x, z - p.zc) || 1;
+      return [x + (x / l) * d, y, z + ((z - p.zc) / l) * d];
+    }
+    function frame(y, th, cloth = 0) {
+      const p = point(y, th, cloth), a = point(y, th + 0.004, cloth), b = point(y, th - 0.004, cloth);
+      const u = point(y + 0.0015, th, cloth), dn = point(y - 0.0015, th, cloth);
+      return { p, n: avNorm(avCross(avSub(a, b), avSub(u, dn))) };
+    }
+    return { prof, point, frame, y0: rows[0][0], y1: rows[rows.length - 1][0] };
+  }
+
+  /* Оболочка туловища (кожа или одежда): столбцы по кругу, строки — от верхнего края yhi(th) до нижнего ylo(th),
+     распределённые по длине дуги (плечи сверху получают достаточно строк). open(y) — полуширина выреза спереди
+     в радианах (куртка нараспашку); cap — строк дна (оболочка закрывается снизу) */
+  function avShell(THREE, T, o) {
+    const { cols = 64, rows = 36, ylo, yhi, off = 0, cloth = 0, disp = null, open = null, uv = [8, 16], cap = 0, color = null, drape = null } = o;
+    const fy = (f, th) => (typeof f === 'function' ? f(th) : f);
+    const thAt = (u, y) => (open ? avMix(open(y), Math.PI * 2 - open(y), u) : Math.PI + u * Math.PI * 2);
+    const NS = 56, grid = [];
+    for (let i = 0; i <= cols; i++) {
+      const u = i / cols;
+      let th = thAt(u, 1.2), y1 = fy(yhi, th);
+      th = thAt(u, y1); y1 = fy(yhi, th);
+      const y0 = fy(ylo, thAt(u, fy(ylo, thAt(u, 1.0))));
+      const sm = [];
+      let acc = 0, prev = null, env = 0, py = y1;
+      for (let k = 0; k <= NS; k++) {
+        const y = avMix(y1, y0, k / NS), t2 = thAt(u, y), f = T.frame(y, t2, cloth), e = off + (disp ? disp(t2, y) : 0);
+        const p = [f.p[0] + f.n[0] * e, f.p[1] + f.n[1] * e, f.p[2] + f.n[2] * e];
+        if (drape) {   // ткань ниже груди свисает, а не облегает талию
+          const zc = T.prof(y).zc, r = Math.hypot(p[0], p[2] - zc) || 1e-6;
+          env = y > drape.y ? r : Math.max(r, env - drape.slope * (py - y));
+          if (env > r) {
+            let kk = env / r;
+            if (drape.tuck) kk = 1 + (kk - 1) * avStep(y0, y0 + drape.tuck, y);   // низ заправлен в резинку
+            p[0] *= kk; p[2] = zc + (p[2] - zc) * kk;
+          }
+        }
+        py = y;
+        if (prev) acc += Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]);
+        sm.push({ p, acc, th: t2, y }); prev = p;
+      }
+      grid.push(sm);
+    }
+    const pick = (sm, j) => {
+      const target = (j / rows) * sm[sm.length - 1].acc;
+      let k = 1;
+      while (k < sm.length - 1 && sm[k].acc < target) k++;
+      const a = sm[k - 1], b = sm[k], t = avClamp((target - a.acc) / ((b.acc - a.acc) || 1));
+      return { p: avLerp3(a.p, b.p, t), acc: target, th: avMix(a.th, b.th, t), y: avMix(a.y, b.y, t) };
+    };
+    const pts = grid.map((sm) => Array.from({ length: rows + 1 }, (_, j) => pick(sm, j)));
+    const bottom = pts.map((c) => c[rows]);
+    const zc = T.prof(bottom[0].y).zc, cy = bottom.reduce((s, b) => s + b.p[1], 0) / bottom.length - 0.014;
+    const total = rows + cap;
+    const at = (i, j) => {
+      if (j <= rows) return pts[i][j].p;
+      const f = (j - rows) / cap, b = bottom[i].p, a = Math.sin(f * Math.PI / 2);
+      return [b[0] * (1 - a), avMix(b[1], cy, a), avMix(b[2], zc, a)];
+    };
+    const geo = avGrid(THREE, cols, total, at, {
+      closed: !open, poleBottom: cap > 0,
+      uv: (i, j) => [(i / cols) * uv[0], 1 - (j <= rows ? pts[i][j].acc : pts[i][rows].acc + (j - rows) * 0.01) * uv[1]],
+      color: color ? (i, j) => { const q = pts[i][Math.min(j, rows)]; return color(q.th, q.y); } : null,
+    });
+    return { geo, top: pts.map((c) => c[0].p), bottom: bottom.map((b) => b.p), col: (i) => pts[i].map((q) => q.p), pts };
+  }
+
+  // ── Руки, кисти, ноги ──
+  function avArm(P, s) {
+    const S = P.shoulder, Eb = P.elbow, W = P.wrist;
+    const sh = [s * S[0], S[1], S[2]], el = [s * Eb[0], Eb[1], Eb[2]], wr = [s * W[0], W[1], W[2]];
+    const top = avAdd(sh, avNorm(avSub(sh, el)), 0.045);
+    const l0 = avLen(avSub(sh, top)), l1 = avLen(avSub(el, sh)), l2 = avLen(avSub(wr, el)), tot = l0 + l1 + l2, tS = l0 / tot;
+    const armT = (tc) => (tc - tS) / (1 - tS);
+    // профиль руки: дельта у плеча, бицепс, локоть, мышцы предплечья, сплющенное запястье
+    const shape = (tc, extra = 0) => {
+      const t = armT(tc), v = avTable(P.armR, avClamp(t)), del = 0.008 * Math.exp(-(((t - 0.03) / 0.08) ** 2));
+      return [v[0] + del + extra, v[1] + del * 0.8 + extra, 0.002 * Math.exp(-(((t - 0.3) / 0.15) ** 2)), s * del * 0.45];
+    };
+    return { pts: [top, sh, el, wr], sh, el, wr, tS, armT, shape, tAt: (t) => tS + t * (1 - tS) };
+  }
+
+  function avHand(THREE, P, s, arm, mat, parent, lod) {
+    const k = P.hand, down = avNorm(avSub(arm.wr, arm.el));
+    const out = avNorm(avSub([s, 0, 0], avScl(down, s * down[0])));
+    const fwd = avScl(avNorm(avCross(down, out)), s);
+    const W0 = arm.wr;
+    const at = (a, b, c) => avAdd(avAdd(avAdd(W0, down, a * k), fwd, b * k), out, c * k);
+    const ell = (pos, sx, sy, sz, seg = lod ? 20 : 12) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1, seg, Math.round(seg * 0.7)), mat);
+      m.matrixAutoUpdate = false;
+      m.matrix.makeBasis(new THREE.Vector3(...avScl(out, sx * k)), new THREE.Vector3(...avScl(down, sy * k)), new THREE.Vector3(...avScl(fwd, sz * k)));
+      m.matrix.setPosition(pos[0], pos[1], pos[2]);
+      parent.add(m);
+    };
+    ell(at(0.047, 0.002, 0.001), 0.0155, 0.054, 0.043);   // ладонь
+    ell(at(0.034, 0.017, -0.006), 0.012, 0.024, 0.014);  // возвышение большого пальца
+    const seg = (a, b, r, rb) => parent.add(new THREE.Mesh(avTube(THREE, [a, b], () => [r, r], { cols: lod ? 10 : 6, rows: 2, capA: 3, capB: 3, front: out }).geo, mat));
+    if (lod) {
+      const fingers = [[0.026, 0.074, 0.0088, 0.9], [0.009, 0.081, 0.0092, 1.0], [-0.009, 0.077, 0.0088, 1.1], [-0.025, 0.061, 0.0078, 1.25]];
+      for (const [w, len, r, curl] of fingers) {
+        let p = at(0.093 - Math.abs(w) * 0.12, w, 0.002), d = avNorm(avAdd(down, fwd, w * 1.4));
+        const parts = [0.47, 0.3, 0.23], bend = [0.25, 0.45, 0.32];
+        for (let i = 0; i < 3; i++) {
+          const a = bend[i] * curl;
+          d = avNorm(avAdd(avScl(d, Math.cos(a)), out, -Math.sin(a)));
+          const q = avAdd(p, d, len * parts[i] * k);
+          seg(p, q, r * k * (1 - i * 0.1));
+          p = q;
+        }
+      }
+    } else ell(at(0.11, 0.0, -0.004), 0.013, 0.04, 0.04);
+    let p = at(0.028, 0.024, -0.007), d = avNorm(avAdd(avAdd(avScl(down, 0.72), fwd, 0.55), out, -0.32));
+    for (const [len, r] of [[0.036, 0.0105], [0.03, 0.0094]]) {
+      const q = avAdd(p, d, len * k);
+      seg(p, q, r * k);
+      p = q; d = avNorm(avAdd(avScl(d, 0.92), down, 0.38));
+    }
+  }
+
+  function avLeg(P, s) {
+    const hp = [s * P.hip[0], P.hip[1], 0], kn = [s * P.knee[0], P.knee[1], P.knee[2]], an = [s * P.ankle[0], P.ankle[1], P.ankle[2]];
+    const top = avAdd(hp, [0, 1, 0], 0.035);
+    const l0 = 0.035, l1 = avLen(avSub(kn, hp)), l2 = avLen(avSub(an, kn)), tot = l0 + l1 + l2, tS = l0 / tot;
+    const legT = (tc) => (tc - tS) / (1 - tS);
+    const shape = (tc, extra = 0) => {
+      const t = legT(tc), v = avTable(P.legR, avClamp(t));
+      return [v[0] + extra, v[1] + extra, v[2], -s * 0.012 * (1 - avStep(0, 0.3, t))];
+    };
+    return { pts: [top, hp, kn, an], hp, kn, an, tS, legT, shape, tAt: (t) => tS + t * (1 - tS) };
+  }
+
+  /* Обувь строится из сферы: подошва — скруглённый брусок по следу стопы, верх — купол над ней.
+     u — поперёк (0 — край, 0,5 — верх), t — от пятки к носку */
+  function avFootFrame(P, s) {
+    const L = P.foot.len, Wd = P.foot.w, z0 = -0.068 * L / 0.275;
+    const halfW = (t) => Wd * 0.5 * (0.72 + 0.1 * avStep(0, 0.35, t) + 0.2 * Math.exp(-(((t - 0.7) / 0.18) ** 2)));
+    const endR = (t, a) => { const u = Math.max(0, (Math.abs(2 * t - 1) - a) / (1 - a)); return Math.sqrt(Math.max(0, 1 - u * u)); };
+    const cx = (t) => s * 0.006 * Math.sin(Math.PI * t);
+    const spring = (t) => 0.011 * Math.pow(avStep(0.8, 1, t), 1.5) + 0.004 * Math.pow(avStep(0.12, 0, t), 2);
+    return { L, z0, halfW, endR, cx, spring };
+  }
+  function avShoe(THREE, P, s, M, parent, lod, kind) {
+    const g = new THREE.Group();
+    g.position.set(s * P.ankle[0], 0, P.ankle[2]);
+    g.rotation.y = s * 0.1;
+    parent.add(g);
+    const F = avFootFrame(P, s), fem = P.fem, flat = kind === 'flat';
+    const hs = flat ? 0.009 : fem ? 0.024 : 0.03;
+    const sph = (ws, hsg) => new THREE.SphereGeometry(1, ws, hsg);
+    const remap = (geo, fn) => {
+      const p = geo.attributes.position, uv = geo.attributes.uv;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i), rr = Math.hypot(x, y);
+        const xs = rr > 1e-6 ? x / rr : 0, ys = rr > 1e-6 ? y / rr : 0, t = (z + 1) / 2;
+        const q = fn(xs, ys, t);
+        p.setXYZ(i, q[0], q[1], q[2]);
+        uv.setXY(i, 0.5 + Math.atan2(xs, ys) / Math.PI, 1 - t);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    };
+    // подошва (у кроссовок — с тёмным протектором снизу)
+    const sole = remap(sph(lod ? 40 : 20, lod ? 16 : 10), (xs, ys, t) => [
+      F.cx(t) + avPow(xs, 0.4) * F.halfW(t) * F.endR(t, 0.72), hs * (0.5 + 0.5 * avPow(ys, 0.3)) + F.spring(t), F.z0 + t * F.L,
+    ]);
+    const sc = [], sp = sole.attributes.position;
+    for (let i = 0; i < sp.count; i++) { const k = sp.getY(i) - F.spring(1 - sole.attributes.uv.getY(i)) < hs * 0.22 ? (flat ? 1 : 0.6) : 1; sc.push(k, k, k); }
+    sole.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
+    const sm = new THREE.Mesh(sole, M.sole); g.add(sm);
+    const hProf = flat ? [[0, 0.03], [0.2, 0.028], [0.5, 0.028], [0.8, 0.032], [1, 0.024]]
+      : [[0, 0.072], [0.18, 0.064], [0.42, 0.084], [0.62, 0.072], [0.82, 0.048], [0.95, 0.036], [1, 0.03]];
+    const hk = fem ? 0.9 : 1;
+    const upperAt = (xs, ys, t, lift = 0) => {
+      const h = avTable(hProf, t)[0] * hk, base = hs - 0.004;
+      const y = ys >= 0 ? base + Math.pow(ys, 0.85) * (h - base) : base + ys * 0.003;
+      const k = ys >= 0 ? 1 : 1 + ys * 0.05;
+      return [F.cx(t) + xs * F.halfW(t) * 0.97 * F.endR(t, 0.76) * k + xs * lift, y + F.spring(t) + Math.max(0, ys) * lift, F.z0 + t * F.L * 0.985];
+    };
+    if (flat) {
+      // стопа и балетка с низкими бортами
+      const foot = remap(sph(lod ? 36 : 18, lod ? 18 : 10), (xs, ys, t) => {
+        const h = avTable([[0, 0.05], [0.18, 0.1], [0.32, 0.075], [0.55, 0.05], [0.8, 0.03], [1, 0.022]], t)[0];
+        const y = ys >= 0 ? 0.008 + Math.pow(ys, 0.8) * (h - 0.008) : 0.008 + ys * 0.003;
+        return [F.cx(t) + xs * F.halfW(t) * 0.9 * F.endR(t, 0.74), y + F.spring(t), F.z0 + 0.008 + t * F.L * 0.95];
+      });
+      g.add(new THREE.Mesh(foot, M.skin));
+      const cut = (t) => (t > 0.78 ? 1 : t < 0.12 ? 0.036 : 0.021);
+      const shell = remap(sph(lod ? 40 : 20, lod ? 18 : 10), (xs, ys, t) => {
+        const q = upperAt(xs, ys, t, 0.0015), lim = cut(t) + F.spring(t);
+        if (t <= 0.78) q[1] = Math.min(q[1], lim);
+        return q;
+      });
+      g.add(new THREE.Mesh(shell, M.shoe));
+      const bow = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 8), M.shoe);
+      bow.scale.set(1.6, 0.7, 0.8); bow.position.set(...upperAt(0, 1, 0.79, 0.002)); g.add(bow);
+      return;
+    }
+    const upper = remap(sph(lod ? 48 : 24, lod ? 20 : 12), (xs, ys, t) => upperAt(xs, ys, t));
+    g.add(new THREE.Mesh(upper, M.shoe));
+    // шнурки крест-накрест между отверстиями
+    const eye = (side, k) => {
+      const u = 0.5 + side * 0.105, ang = (u - 0.5) * Math.PI;
+      return upperAt(Math.sin(ang), Math.cos(ang), 0.45 + k * 0.06, 0.0018);
+    };
+    const laces = [];
+    for (let k = 0; k < 4; k++) {
+      laces.push(avTube(THREE, [eye(-1, k), eye(1, k + 1)], () => [0.0021, 0.0016], { cols: 6, rows: 3, capA: 2, capB: 2, front: [0, 1, 0] }).geo);
+      laces.push(avTube(THREE, [eye(1, k), eye(-1, k + 1)], () => [0.0021, 0.0016], { cols: 6, rows: 3, capA: 2, capB: 2, front: [0, 1, 0] }).geo);
+    }
+    laces.push(avTube(THREE, [eye(-1, 4), eye(1, 4)], () => [0.0021, 0.0016], { cols: 6, rows: 3, capA: 2, capB: 2, front: [0, 1, 0] }).geo);
+    g.add(new THREE.Mesh(avMerge(THREE, laces), M.lace));
+    // кант вокруг щиколотки
+    const collar = [];
+    for (let k = 0; k <= 12; k++) { const a = Math.PI * (0.18 + 0.64 * (k / 12)); collar.push(upperAt(Math.cos(a), Math.sin(a) * 0.2 + 0.98, 0.02 + 0.16 * Math.sin(a), 0.002)); }
+    g.add(new THREE.Mesh(avRing(THREE, collar, 0.0045, false, 20), M.shoe));
+  }
+
+  // ── Волосы ──
+  // Линия роста волос: азимут (0 — спереди) → полярный угол от макушки, градусы
+  const AV_HAIRLINES = {
+    male: [[0, 45], [28, 46], [52, 52], [68, 70], [79, 99], [87, 90], [97, 70], [112, 74], [126, 101], [142, 118], [180, 129]],
+    female: [[0, 43], [36, 46], [60, 58], [74, 80], [82, 97], [92, 74], [113, 79], [130, 104], [180, 131]],
+    top: [[0, 49], [30, 50], [60, 55], [90, 61], [130, 75], [180, 85]],
+  };
+  function avLine(knots) {
+    return (az) => {
+      const a = Math.abs(az) * 180 / Math.PI;
+      let i = 0;
+      while (i < knots.length - 2 && a > knots[i + 1][0]) i++;
+      const a0 = knots[i][0], p0 = knots[i][1], a1 = knots[i + 1][0], p1 = knots[i + 1][1], t = avClamp((a - a0) / (a1 - a0));
+      return (p0 + (p1 - p0) * (0.5 - 0.5 * Math.cos(Math.PI * t))) * Math.PI / 180;
+    };
+  }
+  /* Шапка волос: лучи из «полюса» (макушка, пробор, резинка хвоста) до линии роста — пряди текстуры
+     расходятся из полюса, как настоящие. lift(t, d) — толщина над кожей (t: 0 у полюса, 1 у края) */
+  function avHairCap(THREE, H, o) {
+    const { pole, line, lift, cols = 72, rows = 20, rep = [6, 2], color = null, jitter = 0.03, seed = 1 } = o;
+    const pd = avNorm(pole), ref = Math.abs(pd[1]) < 0.95 ? [0, 1, 0] : [0, 0, 1];
+    const e1 = avNorm(avCross(ref, pd)), e2 = avCross(pd, e1);
+    const dirAt = (psi, g) => {
+      const c = Math.cos(g), sn = Math.sin(g), cp = Math.cos(psi), sp = Math.sin(psi);
+      return avNorm([pd[0] * c + (e1[0] * cp + e2[0] * sp) * sn, pd[1] * c + (e1[1] * cp + e2[1] * sp) * sn, pd[2] * c + (e1[2] * cp + e2[2] * sp) * sn]);
+    };
+    const inside = (d) => Math.acos(avClamp(d[1], -1, 1)) < line(Math.atan2(d[0], d[2]));
+    const gm = [];
+    for (let i = 0; i < cols; i++) {
+      const psi = (i / cols) * Math.PI * 2;
+      let g = 0;
+      while (g < Math.PI - 0.04 && inside(dirAt(psi, g + 0.04))) g += 0.04;
+      let lo = g, hi = g + 0.04;
+      for (let k = 0; k < 12; k++) { const m = (lo + hi) / 2; if (inside(dirAt(psi, m))) lo = m; else hi = m; }
+      gm.push(lo * (1 - jitter * avNoise(i * 0.5, seed, cols / 2)));
+    }
+    gm.push(gm[0]);
+    const gmAt = (psi) => { const x = ((psi / (Math.PI * 2)) % 1 + 1) % 1 * cols, i = Math.floor(x) % cols; return avMix(gm[i], gm[i + 1], x - Math.floor(x)); };
+    const point = (psi, t, extra = 0) => {
+      const d = dirAt(psi, gmAt(psi) * t), p = H.point(d[0], d[1], d[2]), l = lift(t, d) + extra;
+      return avAdd(p, d, l);
+    };
+    const geo = avGrid(THREE, cols, rows, (i, j) => point((i / cols) * Math.PI * 2, j / rows), {
+      closed: true, poleTop: true, uv: (i, j) => [(i / cols) * rep[0], 1 - (j / rows) * rep[1]],
+      color: color ? (i, j) => color(j / rows, dirAt((i / cols) * Math.PI * 2, gm[i] * (j / rows))) : null,
+    });
+    return { geo, dirAt, gmAt, point };
+  }
+
+  // Препятствия для прядей: голова, уши, шея, плечи, туловище и детали одежды (капюшон, воротник)
+  function avCollider(P, H, T, extra = []) {
+    const hy = P.headY, hz = P.headZ, N = P.neck, Ew = P.ear, earX = H.sideX(Ew.y, Ew.z) + 0.006;
+    return (q, m, noFace = false) => {
+      let x = q[0], y = q[1], z = q[2];
+      const l = Math.hypot(x, y, z) || 1, r = H.Rg(x / l, y / l, z / l) + m;
+      if (l < r) { const k = r / l; x *= k; y *= k; z *= k; }
+      for (const s of [-1, 1]) {   // уши
+        const ex = s * earX, dx = x - ex, dy = y - Ew.y, dz = z - Ew.z;
+        const e = Math.hypot(dx / (0.012 + m), dy / (0.03 + m), dz / (0.019 + m));
+        if (e < 1) { const k = 1 / (e || 1); x = ex + dx * k; y = Ew.y + dy * k; z = Ew.z + dz * k; }
+      }
+      if (noFace && z > 0.012 && y > -0.14 && y < 0.075) {   // лицо остаётся открытым
+        const fw = 0.067 + m;
+        if (Math.abs(x) < fw) x = (x < 0 ? -1 : 1) * fw;
+      }
+      const by = y + hy, bz = z + hz;
+      if (by > N.y0 && by < N.y1 - 0.03) {   // шея
+        const dz = bz - N.z, e = (x / (N.rx + m)) ** 2 + (dz / (N.rz + m)) ** 2;
+        if (e < 1) { const k = 1 / Math.sqrt(e); x *= k; z = N.z + dz * k - hz; }
+      }
+      if (by > T.y0 && by < T.y1) {   // туловище
+        const p = T.prof(by), mm = m + 0.014, dz = bz - p.zc, b = dz >= 0 ? p.bf : p.bb;
+        const e = Math.pow(Math.abs(x) / (p.a + mm), p.n) + Math.pow(Math.abs(dz) / (b + mm), p.n);
+        if (e < 1) { const k = Math.pow(e, -1 / p.n); x *= k; z = p.zc + dz * k - hz; }
+      }
+      const sph = [[-P.shoulder[0], P.shoulder[1] - 0.005, P.shoulder[2], 0.062], [P.shoulder[0], P.shoulder[1] - 0.005, P.shoulder[2], 0.062], ...extra];
+      for (const c of sph) {   // плечи, капюшон, воротник (координаты тела)
+        const dx = x - c[0], dy = by - c[1], dz = bz - c[2], d = Math.hypot(dx, dy, dz), rr = c[3] + m;
+        if (d < rr) { const k = rr / (d || 1); x = c[0] + dx * k; y = c[1] + dy * k - hy; z = c[2] + dz * k - hz; }
+      }
+      return [x, y, z];
+    };
+  }
+  // Прядь: от корня по направлению dir, под тяжестью вниз и в обход препятствий
+  function avStrand(root, dir, o) {
+    const { len, seg, stiff = [0.9, 0.5], grav = 1, collide, margin, noFace = false, bias = null, stop = null } = o;
+    const ds = len / seg, pts = [root.slice()];
+    let d = avNorm(dir), p = root.slice();
+    for (let k = 1; k <= seg; k++) {
+      const s = k / seg, st = avMix(stiff[0], stiff[1], Math.min(1, s * 1.5)), m = margin(s, p);
+      d = avNorm([d[0] * st, d[1] * st - (1 - st) * grav, d[2] * st]);
+      if (bias) d = avNorm(avAdd(d, bias(p, s)));
+      let q = avAdd(p, d, ds);
+      const c = collide(q, m, noFace), push = avSub(c, q), pl = avLen(push);
+      if (pl > 1e-7) {   // упёрлась — скользит по поверхности, а не отлетает
+        const n = avScl(push, 1 / pl), dn = avDot(d, n);
+        if (dn < 0) d = avNorm(avAdd(d, n, -dn));
+        q = collide(avAdd(p, d, ds), m, noFace);
+      } else q = c;
+      d = avNorm(avSub(q, p));
+      p = q;
+      pts.push(p);
+      if (stop && stop(p)) break;
+    }
+    return pts;
+  }
+  // Обрезать прядь там, где она опустилась ниже yEnd
+  function avCut(pts, yEnd) {
+    for (let k = 1; k < pts.length; k++) {
+      if (pts[k][1] < yEnd) {
+        const a = pts[k - 1], b = pts[k], t = (a[1] - yEnd) / ((a[1] - b[1]) || 1);
+        return [...pts.slice(0, k), avLerp3(a, b, t)];
+      }
+    }
+    return pts;
+  }
+  // Пересчитать прядь в n равных отрезков
+  function avResample(pts, n) {
+    const acc = [0];
+    for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + avLen(avSub(pts[k], pts[k - 1])));
+    const L = acc[acc.length - 1] || 1, out = [];
+    for (let j = 0; j < n; j++) {
+      const s = (j / (n - 1)) * L;
+      let k = 1;
+      while (k < pts.length - 1 && acc[k] < s) k++;
+      out.push(avLerp3(pts[k - 1], pts[k], avClamp((s - acc[k - 1]) / ((acc[k] - acc[k - 1]) || 1))));
+    }
+    return out;
+  }
+  // Пряди → ленты-«карточки»: нормаль — наружу от головы, ниже — от вертикальной оси
+  function avCards(strands, axis = null) {
+    return strands.map((st, i) => {
+      const pts = avResample(st.pts, st.n || 12);
+      const nn = pts.map((p, k) => {
+        const c = axis ? axis(p, k, i) : [0, Math.min(p[1], 0), p[1] < 0 ? -0.012 : 0];
+        return avNorm(avSub(p, c));
+      });
+      const w = pts.map((_, k) => avMix(st.w0, st.w1, Math.pow(k / (pts.length - 1), 1.3)));
+      const u0 = avHash(i, 91) * 0.75, it = avStripItem(pts, nn, w, [u0, u0 + 0.25]);
+      if (st.v) it.v = st.v;
+      return it;
+    });
+  }
+  // Спираль-локон вокруг оси (точки)
+  function avHelix(axisPts, r0, r1, pitch, phase) {
+    const out = [], n = axisPts.length;
+    let len = 0;
+    for (let k = 0; k < n; k++) {
+      const p = axisPts[k], a = axisPts[Math.max(0, k - 1)], b = axisPts[Math.min(n - 1, k + 1)];
+      if (k) len += avLen(avSub(p, axisPts[k - 1]));
+      const T = avNorm(avSub(b, a)), ref = Math.abs(T[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+      const e1 = avNorm(avCross(ref, T)), e2 = avCross(T, e1), ang = phase + (len / pitch) * Math.PI * 2, r = avMix(r0, r1, k / (n - 1));
+      out.push(avAdd(avAdd(p, e1, Math.cos(ang) * r), e2, Math.sin(ang) * r));
+    }
+    return out;
+  }
+  function avCoilGeo(THREE, pts, r, lod) {
+    const V3 = THREE.Vector3, curve = new THREE.CatmullRomCurve3(pts.map((p) => new V3(p[0], p[1], p[2])), false, 'centripetal');
+    return avAlongTube(new THREE.TubeGeometry(curve, Math.max(8, pts.length * (lod ? 2 : 1)), r, lod ? 6 : 4, false), 0.5, 3);
+  }
+
+  function avHair(THREE, P, H, T, cfg, M, extra, lod) {
+    const g = new THREE.Group(), style = cfg.hair, fem = P.fem;
+    if (style === 'none') return g;
+    const add = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.userData.noShadow = !shadow; g.add(m); return m; };
+    const col = avCollider(P, H, T, extra);
+    const E = P.eye;
+    const rnd = (i, k) => avHash(i, k, 7);
+    const cards = [];
+    // «ёжик»/выбритые виски — короткие волоски альфа-маской поверх кожи
+    // виски и затылок «под машинку»: кожа просвечивает сквозь короткие волоски, к краю — сходит на нет
+    const buzzCap = (dense) => {
+      // цвет — смесь волос и кожи; к краю цвета вершин доводят его до цвета кожи
+      const bc = M.buzz.color.copy(M.hairLin).lerp(M.skinLin, dense ? 0.42 : 0.55);
+      const fade = [M.skinLin.r / bc.r, M.skinLin.g / bc.g, M.skinLin.b / bc.b];
+      const cap = avHairCap(THREE, H, {
+        pole: [0, 1, -0.1], line: avLine(AV_HAIRLINES.male), lift: (t) => 0.0011 - 0.0005 * avStep(0.85, 1, t), rep: [10, 2.4], jitter: 0.02,
+        color: (t) => { const e = avStep(0.8, 1, t) * 0.75; return [avMix(1, fade[0], e), avMix(1, fade[1], e), avMix(1, fade[2], e)]; },
+      });
+      add(cap.geo, M.buzz);
+      return cap;
+    };
+    const topCap = (pole, lift, rep = [8, 2.5]) => {
+      const cap = avHairCap(THREE, H, { pole, line: avLine(AV_HAIRLINES.top), lift, rep, jitter: 0.05 });
+      add(cap.geo, M.cap);
+      return cap;
+    };
+    // короткие пряди-«пучки» поверх шапки
+    const tufts = (cap, n, o) => {
+      for (let i = 0, tries = 0; i < n && tries < n * 6; tries++) {
+        const psi = rnd(tries, 1) * Math.PI * 2, t = o.t[0] + (o.t[1] - o.t[0]) * rnd(tries, 2);
+        const root = cap.point(psi, t, -0.0015), ahead = cap.point(psi, Math.min(1, t + 0.06), -0.0015);
+        if (o.where && !o.where(root)) continue;
+        i++;
+        let dir = avNorm(avSub(ahead, root));
+        if (o.dir) {
+          if (o.only) {   // направление задано укладкой — по касательной к голове
+            const nr = avNorm(root), d0 = o.dir(root);
+            dir = avNorm(avAdd(d0, nr, -avDot(d0, nr)));
+          } else dir = avNorm(avAdd(dir, o.dir(root), 1));
+        }
+        const len = o.len[0] + (o.len[1] - o.len[0]) * rnd(i, 3);
+        let pts = avStrand(root, dir, { len, seg: o.seg || 6, stiff: o.stiff || [0.97, 0.9], grav: o.grav || 0.15, collide: col, margin: (s, p) => o.margin(s, p, i, t), bias: o.bias || null });
+        if (o.minY != null) pts = pts.filter((p, k) => k < 2 || p[1] > o.minY);
+        if (pts.length < 3) continue;
+        cards.push({ pts, w0: o.w * (0.8 + 0.4 * rnd(i, 4)), w1: o.w * 0.25, n: 6 });
+      }
+    };
+    if (!fem) {
+      if (style === 'buzz') buzzCap(true);
+      else {
+        buzzCap(false);
+        if (style === 'short') {
+          // короткий верх с текстурной чёлкой: мелкие пряди лежат по шапке вперёд
+          const lift = (t) => 0.008 * (1 - avStep(0.45, 1, t)) + 0.0009;
+          const cap = topCap([0, 1, -0.28], lift);
+          tufts(cap, lod ? 360 : 90, {
+            t: [0.03, 0.9], len: [0.014, 0.024], w: 0.009, minY: 0.066,
+            dir: () => [0, -0.1, 0.5], margin: (s, p, i, t) => lift(t) + 0.0008 + 0.0016 * Math.sin(Math.PI * s) + 0.001 * rnd(i, 5),
+          });
+        } else if (style === 'quiff') {
+          // кок: объём надо лбом, пряди зачёсаны вверх и назад
+          const vol = (d) => avStep(0.1, 0.65, d[2]) * avStep(0.3, 0.8, d[1]);
+          const lift = (t, d) => 0.006 + 0.019 * vol(d) - 0.004 * avStep(0.75, 1, t);
+          const cap = topCap([0, 0.86, 0.5], lift);
+          tufts(cap, lod ? 260 : 80, {
+            t: [0.0, 0.98], len: [0.035, 0.06], w: 0.012, grav: 0.08, seg: 8, stiff: [0.96, 0.9], only: true,
+            where: (p) => p[1] > 0.045 && p[2] > -0.03 + 0.06 * avHash(Math.round(p[0] * 1e4), 3),
+            dir: (p) => [p[0] * 1.5, 0.35, -1], bias: (p, s) => [0, -0.04 * s, -0.1],
+            margin: (s, p, i) => { const d = avNorm(p); return 0.0072 + 0.019 * vol(d) + 0.0012 * rnd(i, 5); },
+          });
+        } else if (style === 'curly') {
+          const cap = topCap([0, 1, -0.1], (t) => 0.0085 - 0.004 * avStep(0.6, 1, t));
+          const coils = [];
+          const nC = lod ? 170 : 60;
+          for (let i = 0; i < nC; i++) {
+            const psi = rnd(i, 11) * Math.PI * 2, t = Math.sqrt(rnd(i, 12)) * 0.95, root = cap.point(psi, t, -0.002), nrm = avNorm(root);
+            const ax = avNorm(avAdd(nrm, [rnd(i, 13) - 0.5, 0.2, rnd(i, 14) - 0.3], 0.6));
+            const L = 0.014 + 0.01 * rnd(i, 15), axis = [];
+            for (let k = 0; k <= 10; k++) axis.push(avAdd(root, ax, (k / 10) * L));
+            coils.push(avCoilGeo(THREE, avHelix(axis, 0.0042, 0.0034, 0.0055, rnd(i, 16) * 6.28), 0.0017, lod));
+          }
+          add(avMerge(THREE, coils), M.coil);
+        }
+      }
+    } else {
+      const line = avLine(AV_HAIRLINES.female);
+      const longish = style === 'long' || style === 'bob';
+      if (longish) {
+        const cap = avHairCap(THREE, H, { pole: [0, 1, 0.22], line, lift: (t) => 0.0056 - 0.0042 * avStep(0.8, 1, t), rep: [7, 2], jitter: 0.02 });
+        add(cap.geo, M.cap);
+        const bob = style === 'bob', layers = lod ? [52, 58, 54] : [22, 26, 22], wk = lod ? 1 : 1.45;
+        for (let L = 0; L < 3; L++) {
+          const m0 = 0.0032 + L * 0.0022;
+          for (let k = 0; k < layers[L]; k++) {
+            const i = L * 100 + k, psi = ((k + rnd(i, 1) * 0.8) / layers[L]) * Math.PI * 2, t0 = 0.1 + 0.32 * rnd(i, 2);
+            const root = cap.point(psi, t0, m0 - 0.004), ahead = cap.point(psi, t0 + 0.06, m0 - 0.004);
+            const front = avDot(avNorm(root), [0, 0, 1]);
+            const yEnd = bob ? avMix(-0.088, -0.118, avStep(-0.2, 0.6, front)) + (rnd(i, 3) - 0.5) * 0.008
+              : avMix(-0.27, -0.24, avStep(-0.2, 0.6, front)) + (rnd(i, 3) - 0.5) * 0.04;
+            let pts = avStrand(root, avSub(ahead, root), {
+              len: bob ? 0.3 : 0.6, seg: bob ? 18 : 30, stiff: [0.86, 0.45], collide: col, noFace: true,
+              margin: (s) => m0 + 0.002 * s,
+              bias: bob ? (p, s) => (p[1] < yEnd + 0.045 ? avScl(avNorm([-p[0], 0, -0.015 - p[2]]), 0.9) : [0, 0, 0]) : null,
+            });
+            pts = avCut(pts, yEnd);
+            if (pts.length < 4) continue;
+            cards.push({ pts, w0: 0.036 * wk, w1: (bob ? 0.03 : 0.02) * wk, n: bob ? 12 : lod ? 16 : 10, v: bob ? [0, 0.66] : [0, 0.95] });
+          }
+        }
+        if (bob) {   // прямая чёлка
+          const n = lod ? 26 : 10;
+          for (let k = 0; k < n; k++) {
+            const x = avMix(-0.05, 0.05, (k + 0.5) / n) + (rnd(k, 31) - 0.5) * 0.004;
+            const root = [x * 0.5, 0.098, H.faceZ(x * 0.5, 0.098) + 0.004];
+            let pts = avStrand(root, [x * 2, -0.25, 1], { len: 0.12, seg: 14, stiff: [0.9, 0.7], collide: col, margin: () => 0.0045 + 0.0015 * rnd(k, 32) });
+            pts = avCut(pts, E.y + 0.031 + (rnd(k, 33) - 0.5) * 0.003);
+            if (pts.length > 3) cards.push({ pts, w0: 0.024, w1: 0.022, n: 10, v: [0, 0.62] });
+          }
+        }
+        // непрозрачный объём под прядями — сквозь них не просвечивает фон
+        const prof = bob
+          ? [[0.02, 0.1], [0.06, 0.086], [0.082, 0.045], [0.086, -0.01], [0.083, -0.06], [0.072, -0.084], [0.058, -0.09]]
+          : [[0.02, 0.1], [0.06, 0.086], [0.081, 0.045], [0.085, -0.01], [0.084, -0.08], [0.086, -0.17], [0.08, -0.232], [0.068, -0.242]];
+        const massG = new THREE.LatheGeometry(prof.map(([rr, yy]) => new THREE.Vector2(rr, yy)), lod ? 40 : 20, Math.PI * 0.36, Math.PI * 1.28);
+        massG.translate(0, 0, -0.012);
+        add(massG, M.curlVol);
+      } else if (style === 'ponytail') {
+        const pole = avNorm([0, 0.38, -0.925]);
+        const cap = avHairCap(THREE, H, { pole, line, lift: (t) => 0.0045 - 0.0032 * avStep(0.85, 1, t), rep: [10, 2], jitter: 0.02 });
+        add(cap.geo, M.cap);
+        const tie = avAdd(H.point(...pole), pole, 0.008), d0 = avNorm(avAdd(avScl(pole, 0.5), [0, -0.55, -0.35]));
+        const ring = new THREE.TorusGeometry(0.0115, 0.0042, 8, 20);
+        const tm = new THREE.Mesh(ring, M.tie);
+        tm.position.set(...tie); tm.lookAt(...avAdd(tie, d0)); g.add(tm);
+        const ref = Math.abs(d0[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], e1 = avNorm(avCross(ref, d0)), e2 = avCross(d0, e1);
+        const axis = avStrand(avAdd(tie, d0, 0.006), d0, { len: 0.3, seg: 20, stiff: [0.9, 0.55], collide: col, margin: () => 0.018 });
+        const n = lod ? 42 : 16;
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * Math.PI * 2, rr = 0.004 + 0.008 * rnd(k, 41);
+          const root = avAdd(avAdd(avAdd(tie, d0, 0.006), e1, Math.cos(a) * rr), e2, Math.sin(a) * rr);
+          const pts = avStrand(root, d0, { len: 0.27 + 0.05 * rnd(k, 42), seg: 20, stiff: [0.9, 0.55], collide: col, margin: () => 0.006 + rr });
+          cards.push({ pts, w0: 0.018, w1: 0.008, n: 14, axis });
+        }
+      } else if (style === 'bun') {
+        const pole = avNorm([0, 0.74, -0.67]);
+        const cap = avHairCap(THREE, H, { pole, line, lift: (t) => 0.0045 - 0.0032 * avStep(0.85, 1, t), rep: [10, 2], jitter: 0.02 });
+        add(cap.geo, M.cap);
+        const c0 = avAdd(H.point(...pole), pole, 0.012), ref = [1, 0, 0], e1 = avNorm(avCross(ref, pole)), e2 = avCross(pole, e1), sp = [];
+        for (let k = 0; k <= 70; k++) {
+          const ph = (k / 70) * Math.PI * 2 * 2.4, rr = 0.004 + 0.0115 * (ph / (Math.PI * 2)), h = 0.016 * (1 - rr / 0.034);
+          sp.push(avAdd(avAdd(avAdd(c0, e1, Math.cos(ph) * rr), e2, Math.sin(ph) * rr), pole, h));
+        }
+        add(avCoilGeo(THREE, sp, 0.0098, lod), M.coil);
+      } else if (style === 'curly') {
+        const cap = avHairCap(THREE, H, { pole: [0, 1, 0.1], line, lift: (t) => 0.009 - 0.005 * avStep(0.8, 1, t), rep: [7, 2], jitter: 0.03 });
+        add(cap.geo, M.cap);
+        // объём под локонами
+        const vol = new THREE.LatheGeometry([[0.001, 0.118], [0.07, 0.1], [0.104, 0.05], [0.118, -0.02], [0.122, -0.09], [0.11, -0.16], [0.085, -0.2], [0.07, -0.205]]
+          .map(([rr, yy]) => new THREE.Vector2(rr, yy)), lod ? 48 : 24, Math.PI * 0.32, Math.PI * 1.36);
+        vol.scale(1, 1, 0.98); vol.translate(0, 0, -0.012);
+        add(vol, M.curlVol);
+        const coils = [], n = lod ? 64 : 24;
+        for (let k = 0; k < n; k++) {
+          const psi = ((k + rnd(k, 51) * 0.7) / n) * Math.PI * 2, t0 = 0.45 + 0.5 * rnd(k, 52);
+          const root = cap.point(psi, t0, 0.004), ahead = cap.point(psi, Math.min(1, t0 + 0.08), 0.004);
+          let axis = avStrand(root, avSub(ahead, root), { len: 0.24 + 0.08 * rnd(k, 53), seg: 18, stiff: [0.9, 0.6], collide: col, noFace: true, margin: () => 0.022 });
+          axis = avCut(axis, -0.21 + 0.03 * rnd(k, 54));
+          if (axis.length < 5) continue;
+          coils.push(avCoilGeo(THREE, avHelix(avResample(axis, 40), 0.012, 0.007, 0.024, rnd(k, 55) * 6.28), 0.0048, lod));
+        }
+        for (let i = 0; i < (lod ? 80 : 30); i++) {   // мелкие завитки на макушке
+          const psi = rnd(i, 61) * Math.PI * 2, t = Math.sqrt(rnd(i, 62)) * 0.55, root = cap.point(psi, t, -0.001), ax = avNorm(root), axisP = [];
+          for (let k = 0; k <= 10; k++) axisP.push(avAdd(root, ax, (k / 10) * (0.016 + 0.01 * rnd(i, 63))));
+          coils.push(avCoilGeo(THREE, avHelix(axisP, 0.0062, 0.0048, 0.0072, rnd(i, 64) * 6.28), 0.0026, lod));
+        }
+        add(avMerge(THREE, coils), M.coil);
+      }
+    }
+    if (cards.length) {
+      const items = avCards(cards, (p, k, i) => {
+        const ax = cards[i].axis;
+        if (!ax) return [0, Math.min(p[1], 0), p[1] < 0 ? -0.012 : 0];
+        return ax[Math.min(ax.length - 1, Math.round((k / ((cards[i].n || 12) - 1)) * (ax.length - 1)))];
+      });
+      add(avStrips(THREE, items), M.card);
+    }
+    return g;
+  }
+
+  // ── Одежда ──
+  function avClothes(THREE, P, T, cfg, M, group, lod, mk) {
+    const fem = P.fem, outfit = cfg.outfit, extra = [];
+    const C = lod ? 1 : 0.55;
+    const cols = Math.round(72 * C), rows = Math.round(44 * C);
+    const S = (n) => Math.max(6, Math.round(n * C));
+    const fold = (th, y, a, k = 7) => a * (0.6 * Math.sin(k * th + 1.3) + 0.4 * Math.sin(2 * k * th + 0.4) + 0.5 * (avNoise(th * 5, y * 30, 0, 0, 3) - 0.5));
+    const chest = P.chest;
+    // складки футболки: драпировка от груди вниз, у подмышек — косые
+    const pantsOff = fem ? 0.0065 : 0.009;
+    // ниже пояса футболка всегда поверх джинсов
+    const teeFolds = (amp) => (th, y) => fold(th, y, amp * avStep(chest, P.hemTee + 0.02, y)) + (pantsOff + 0.0045) * avStep(P.waist + 0.035, P.waist - 0.005, y)
+      + 0.0018 * Math.sin((y - chest) * 120 + Math.abs(th) * 3) * Math.exp(-(((Math.abs(Math.sin(th)) - 0.95) / 0.14) ** 2)) * Math.exp(-(((y - chest) / 0.07) ** 2));
+    const neckCurve = (yF, yB, pw = 1.6) => (th) => yB - (yB - yF) * Math.pow(0.5 + 0.5 * Math.cos(th), pw);
+    const vNeck = (yF, yB) => (th) => { const a = Math.abs(Math.atan2(Math.sin(th), Math.cos(th))); return yB - (yB - yF) * Math.pow(Math.max(0, 1 - a / 0.95), 1.15) - (yB - yF) * 0.12 * (1 - a / Math.PI); };
+    const hemWave = (y0) => (th) => y0 + 0.0035 * Math.sin(4 * th + 0.6) + 0.002 * Math.sin(9 * th);
+    const N = P.neck;
+    const neckPt = (th, y, e) => [(N.rx + e) * Math.sin(th), y, N.z + (N.rz + e) * Math.cos(th)];
+    // воротник-резинка: полоса от выреза вверх, по коже основания шеи
+    const ribCollar = (nf, h, off, mat) => {
+      const band = avShell(THREE, T, { cols, rows: 5, ylo: (th) => nf(th) - 0.002, yhi: (th) => Math.min(T.y1 - 0.001, nf(th) + h), off, uv: [60, 20],
+        disp: (th, y) => 0.0018 * Math.sin(Math.PI * avClamp((y - nf(th)) / h)) });
+      mk(band.geo, mat);
+      mk(avRing(THREE, band.top.slice(0, -1), 0.0024), mat);
+    };
+    const lipRing = (pts, r, mat, closed = true) => mk(avRing(THREE, closed ? pts.slice(0, -1) : pts, r, closed), mat);
+    // рукав: трубка по руке от плеча до tEnd (доля руки), с подгибкой
+    const sleeve = (s, tEnd, ease, mat, o = {}) => {
+      const arm = avArm(P, s);
+      const t0 = arm.tAt(0.075), t1 = arm.tAt(tEnd);
+      const tube = avTube(THREE, arm.pts, (tc) => arm.shape(tc, ease(arm.armT(tc))), {
+        t0, t1, cols: S(28), rows: S(o.rows || 18), capA: 8, capScale: 0.95, uv: [6, 18], disp: o.disp ? (tc, th) => o.disp(arm.armT(tc), th) : null,
+      });
+      mk(tube.geo, mat);
+      if (!o.noLip) {
+        const ring = [];
+        for (let k = 0; k <= 24; k++) ring.push(tube.at(t1, (k / 24) * Math.PI * 2, -0.001));
+        lipRing(ring, o.lip || 0.0028, mat);
+      }
+      return { arm, tube, t1 };
+    };
+    const cuff = (s, ease, mat) => {
+      const arm = avArm(P, s), a = arm.tAt(0.89), b = arm.tAt(1.0);
+      const tube = avTube(THREE, arm.pts, (tc) => arm.shape(tc, ease), { t0: a, t1: b, cols: S(24), rows: 4, uv: [24, 4] });
+      mk(tube.geo, mat);
+      const ring = [];
+      for (let k = 0; k <= 20; k++) ring.push(tube.at(b, (k / 20) * Math.PI * 2, -0.0008));
+      lipRing(ring, 0.003, mat);
+    };
+    const pants = () => {
+      const legsM = M.denim;
+      const pel = avShell(THREE, T, { cols, rows: S(14), ylo: P.crotch + 0.032, yhi: P.waist, off: pantsOff, cap: 4, uv: [12, 16] });
+      mk(pel.geo, legsM);
+      for (const s of [-1, 1]) {
+        const leg = avLeg(P, s), straight = !fem;
+        const t1 = leg.tAt(fem ? 0.985 : 1.012), t0 = leg.tAt(0.06);
+        const tube = avTube(THREE, leg.pts, (tc) => {
+          const t = leg.legT(tc), sh = leg.shape(tc), ease = fem ? avMix(0.006, 0.008, t) : avMix(0.013, 0.02, avStep(0.2, 0.7, t));
+          const minR = straight ? avMix(0, 0.061, avStep(0.4, 0.62, t)) : 0;
+          return [Math.max(sh[0] + ease, minR), Math.max(sh[1] + ease, minR), sh[2] * (straight ? 1 - avStep(0.45, 0.7, t) : 1), sh[3]];
+        }, {
+          t0, t1, cols: S(32), rows: S(36), uv: [7, 16], capA: 4, capScale: 0.6,
+          disp: (tc, th) => {
+            const t = leg.legT(tc);
+            return 0.004 * Math.pow(Math.sin((t - 0.9) * 110 + th * 0.8), 2) * avStep(0.9, 0.98, t)
+              + 0.0018 * Math.sin(t * 150) * Math.exp(-(((t - 0.52) / 0.05) ** 2)) * (Math.cos(th) < 0 ? 1 : 0.35)
+              + 0.0012 * (avNoise(th * 4, t * 40, 0, 0, s + 5) - 0.5);
+          },
+          color: (tc, th) => {   // потёртости: светлее на бёдрах спереди и на коленях
+            const t = leg.legT(tc), fr = Math.pow(Math.max(0, Math.cos(th)), 2);
+            const k = 1 + 0.22 * fr * (Math.exp(-(((t - 0.22) / 0.14) ** 2)) + 0.7 * Math.exp(-(((t - 0.5) / 0.06) ** 2)));
+            return [k, k, k];
+          },
+        });
+        mk(tube.geo, M.denimVC);
+        const ring = [];
+        for (let k = 0; k <= 24; k++) ring.push(tube.at(t1, (k / 24) * Math.PI * 2, -0.001));
+        lipRing(ring, 0.003, legsM);
+        // швы: внутренний двойная строчка, внешний — шов
+        const seamPts = (th, e) => { const o = []; for (let k = 0; k <= 16; k++) o.push(tube.at(avMix(0.02, t1 - 0.01, k / 16), th, e)); return o; };
+        mk(avRing(THREE, seamPts(-s * Math.PI / 2 + 0.06 * s, 0.0016), 0.00055, false, 48), M.stitch, { shadow: false });
+        mk(avRing(THREE, seamPts(-s * Math.PI / 2 - 0.06 * s, 0.0016), 0.00055, false, 48), M.stitch, { shadow: false });
+        mk(avRing(THREE, seamPts(s * Math.PI / 2, 0.0012), 0.0009, false, 48), M.seam, { shadow: false });
+        // задний карман
+        const pk = [[0.17, -0.05], [0.6, -0.05], [0.57, -0.16], [0.38, -0.185], [0.19, -0.16], [0.17, -0.05]].map(([a, dy]) => {
+          const f = T.frame(P.waist + dy, Math.PI - s * a), e = pantsOff + 0.0016;
+          return avAdd(f.p, f.n, e);
+        });
+        mk(avRing(THREE, pk, 0.0007, false, 40), M.stitch, { shadow: false });
+      }
+    };
+
+    if (outfit === 'tee' || outfit === 'jacket') {
+      const male = !fem, under = outfit === 'jacket';
+      const teeM = under ? M.teeWhite : M.top;
+      const nf = male ? neckCurve(1.479, 1.508) : neckCurve(1.335, 1.402, 2.2);
+      const tee = avShell(THREE, T, {
+        cols, rows, ylo: hemWave(P.hemTee), yhi: nf, off: male ? 0.0055 : 0.0042, cloth: fem ? 0.09 : 0, disp: teeFolds(male ? 0.0022 : 0.0012), uv: [22, 16],
+        drape: { y: chest, slope: male ? 0.28 : 0.4 },
+      });
+      mk(tee.geo, teeM);
+      lipRing(tee.bottom, 0.0026, teeM);
+      if (male) ribCollar(nf, 0.017, 0.0065, under ? M.ribWhite : M.rib);
+      else lipRing(tee.top, 0.0024, M.rib);
+      if (!under) for (const s of [-1, 1]) sleeve(s, male ? 0.42 : 0.33, (t) => avMix(0.007, 0.011, avStep(0, 0.4, t)), teeM);
+    }
+    if (outfit === 'jacket') {
+      const open = (y) => 0.24 + 0.1 * avStep(1.28, 1.44, y);
+      const puff = (th, y) => 0.0035 * Math.abs(Math.sin(y * 55 + 0.3 * Math.sin(3 * th))) + fold(th, y, 0.0016, 6);
+      const body = avShell(THREE, T, { cols, rows, ylo: 1.035, yhi: (th) => 1.505 - 0.075 * Math.pow(0.5 + 0.5 * Math.cos(th), 1.4), off: 0.024, disp: puff, open, uv: [18, 16], drape: { y: chest, slope: 0.12, tuck: 0.035 } });
+      mk(body.geo, M.jacket);
+      const band = avShell(THREE, T, { cols, rows: S(6), ylo: 0.975, yhi: 1.04, off: 0.019, open, uv: [70, 16], drape: { y: 1.04, slope: 0 } });
+      mk(band.geo, M.jRib);
+      lipRing(band.bottom, 0.0032, M.jRib, false);
+      // воротник-стойка
+      const top = body.top, n = top.length - 1;
+      const collar = avGrid(THREE, n, 5, (i, j) => {
+        const b = top[i], th = Math.atan2(b[0], b[2] - N.z), q = neckPt(th, b[1] + 0.034, 0.012 + 0.006 * (j / 5)), v = j / 5;
+        return avAdd(avLerp3(b, q, v), avNorm([b[0], 0, b[2] - N.z]), Math.sin(Math.PI * v) * 0.003);
+      }, { uv: (i, j) => [(i / n) * 40, j / 5] });
+      mk(avFacing(collar, [0, 0, -1]), M.jRib);
+      // молния: тесьма и зубцы вдоль краёв полочек
+      const zips = [];
+      for (const [ci, sgn] of [[0, 1], [cols, -1]]) {
+        const edge = body.col(ci).slice().reverse(), ptsE = [], nrm = [];
+        const bandEdge = band.col(ci).slice().reverse();
+        const all = [...bandEdge, ...edge.slice(1)];
+        for (const p of all) { ptsE.push(p); nrm.push(avNorm([p[0], 0, p[2] - 0.01])); }
+        const hint = [sgn, 0, 0];
+        zips.push(avStripItem(ptsE, nrm, ptsE.map(() => 0.012), [0, 1], 'center', hint));
+      }
+      mk(avStrips(THREE, zips), M.zipTape);
+      const teeth = zips.map((z) => ({ ...z, pts: z.pts.map((p, k) => avAdd(avAdd(p, z.n[k], 0.0012), z.side[k], -0.0045)), w: z.w.map(() => 0.0042), v: [0, 150] }));
+      mk(avStrips(THREE, teeth), M.zipTeeth);
+      for (const s of [-1, 1]) {
+        sleeve(s, 0.92, () => 0.026, M.jacket, { disp: (t, th) => 0.0035 * Math.pow(Math.sin(t * 45), 2) + 0.002 * Math.sin(t * 90 + th) * avStep(0.45, 0.6, t) * (1 - avStep(0.6, 0.75, t)), noLip: true, rows: 30 });
+        cuff(s, 0.01, M.jRib);
+      }
+      // карман на левом рукаве
+      const arm = avArm(P, 1), sl = avTube(THREE, arm.pts, (tc) => arm.shape(tc, 0.026), {});
+      const patch = avGrid(THREE, 6, 6, (i, j) => sl.at(arm.tAt(avMix(0.16, 0.34, j / 6)), avMix(0.6, 1.5, i / 6), 0.0035), {});
+      mk(avFacing(patch, [1, 0, 0]), M.jacket);
+      const zl = []; for (let k = 0; k <= 6; k++) zl.push(sl.at(arm.tAt(0.17), avMix(0.65, 1.45, k / 6), 0.0045));
+      mk(avRing(THREE, zl, 0.0011, false, 12), M.zipTeeth, { shadow: false });
+      extra.push([0, 1.49, -0.09, 0.05]);
+    }
+    if (outfit === 'hoodie') {
+      const hemTop = fem ? 0.92 : 0.99, hemBot = fem ? 0.855 : 0.925, off = fem ? 0.012 : 0.016;
+      const nf = fem ? neckCurve(1.35, 1.405) : neckCurve(1.455, 1.51);
+      const folds = (th, y) => fold(th, y, 0.0035 * avStep(chest, hemTop + 0.02, y), 6) + 0.0075 * Math.exp(-(((y - hemTop - 0.018) / 0.018) ** 2))
+        + 0.0025 * Math.sin(y * 95 + th * 2) * avStep(hemTop + 0.12, hemTop + 0.02, y);
+      const body = avShell(THREE, T, { cols, rows, ylo: hemTop, yhi: nf, off, cloth: fem ? 0.12 : 0, disp: folds, uv: [12, 14], drape: { y: chest, slope: fem ? 0.22 : 0.16, tuck: 0.03 } });
+      mk(body.geo, M.fleece);
+      const band = avShell(THREE, T, { cols, rows: S(6), ylo: hemBot, yhi: hemTop + 0.006, off: Math.max(off - 0.005, pantsOff + 0.004), cloth: fem ? 0.12 : 0, uv: [70, 16] });
+      mk(band.geo, M.hRib);
+      lipRing(band.bottom, 0.0035, M.hRib);
+      lipRing(band.top, 0.004, M.fleece);
+      // карман-«кенгуру»: трапеция с косыми входами
+      const py0 = hemTop + 0.006, py1 = hemTop + (fem ? 0.13 : 0.15);
+      const pocket = avGrid(THREE, S(16), S(8), (i, j) => {
+        const v = j / S(8), y = avMix(py1, py0, v), half = avMix(fem ? 0.42 : 0.46, fem ? 0.6 : 0.66, v), th = avMix(-half, half, i / S(16));
+        const f = T.frame(y, th, fem ? 0.12 : 0), e = off + folds(th, y) + 0.0035 + 0.003 * Math.sin(Math.PI * v) * Math.cos(th * 1.5);
+        return avAdd(f.p, f.n, e);
+      }, {});
+      mk(avFacing(pocket, [0, 0, 1]), M.fleece);
+      for (const sgn of [-1, 1]) {
+        const ed = [];
+        for (let k = 0; k <= 8; k++) {
+          const v = k / 8, y = avMix(py1, py0, v), th = sgn * avMix(fem ? 0.42 : 0.46, fem ? 0.6 : 0.66, v), f = T.frame(y, th, fem ? 0.12 : 0);
+          ed.push(avAdd(f.p, f.n, off + folds(th, y) + 0.0045));
+        }
+        mk(avRing(THREE, ed, 0.0022, false, 16), M.fleece);
+      }
+      // капюшон лежит на плечах, внутренняя сторона темнее
+      const k = fem ? 0.9 : 1, hy = fem ? 1.37 : 1.462;
+      const hoodPts = [[-0.035, hy - 0.016, 0.082], [-0.1, hy + 0.012, 0.012], [-0.082, hy + 0.035, -0.078], [0, hy + 0.05, -0.108], [0.082, hy + 0.035, -0.078], [0.1, hy + 0.012, 0.012], [0.035, hy - 0.016, 0.082]]
+        .map(([x, y, z]) => [x * k, y, z * k]);
+      const hood = avTube(THREE, hoodPts, (t) => { const r = (0.014 + 0.026 * Math.sin(Math.PI * t) ** 1.3) * k; return [r, r * 0.85]; }, {
+        cols: S(20), rows: S(40), capA: 3, capB: 3, front: [0, 1, 0], uv: [4, 10],
+        color: (t, th) => { const inner = Math.max(0, -Math.cos(th)) * Math.sin(Math.PI * t); const c = 1 - 0.45 * inner; return [c, c, c]; },
+      });
+      mk(hood.geo, M.fleeceVC);
+      for (let i = 1; i < hoodPts.length - 1; i++) extra.push([hoodPts[i][0], hoodPts[i][1], hoodPts[i][2], 0.03 * k]);
+      // шнурки с наконечниками и люверсы
+      for (const s of [-1, 1]) {
+        const g0 = [s * 0.03 * k, hy - 0.012, 0.09 * k], cord = [g0, [s * 0.034 * k, hy - 0.08, 0.1 * k], [s * 0.036 * k, hy - 0.16, 0.112 * k], [s * 0.034 * k, hy - 0.2, 0.116 * k]];
+        const c = cord.map((p) => { const f = T.frame(p[1], Math.atan2(p[0], 0.1), fem ? 0.12 : 0); return [p[0], p[1], Math.max(p[2], f.p[2] + off + 0.006)]; });
+        mk(avTube(THREE, c, () => [0.0024, 0.0024], { cols: 6, rows: 10 }).geo, M.cord);
+        const end = c[c.length - 1];
+        mk(avTube(THREE, [end, avAdd(end, [0, -0.017, 0.001])], () => [0.0031, 0.0031], { cols: 8, rows: 2, capB: 2 }).geo, M.metal);
+        const gr = new THREE.Mesh(new THREE.TorusGeometry(0.0045, 0.0014, 6, 14), M.metal);
+        gr.position.set(...avAdd(g0, [0, 0, 0.004])); group.add(gr);
+      }
+      for (const s of [-1, 1]) {
+        sleeve(s, 0.9, (t) => avMix(0.02, 0.016, avStep(0.6, 0.9, t)), M.fleece, {
+          noLip: true, rows: 30,
+          disp: (t, th) => 0.005 * Math.pow(Math.sin(t * 80 + th), 2) * avStep(0.7, 0.88, t) + 0.0025 * Math.sin(t * 60 + th * 2) * Math.exp(-(((t - 0.55) / 0.06) ** 2)),
+        });
+        cuff(s, 0.0085, M.hRib);
+      }
+    }
+    if (outfit === 'dress') {
+      const L = 0.05, bod = avShell(THREE, T, { cols, rows: S(30), ylo: 1.0, yhi: vNeck(1.29, 1.402), off: 0.0042, cloth: L, disp: teeFolds(0.0008), uv: [22, 16] });
+      mk(bod.geo, M.top);
+      lipRing(bod.top, 0.002, M.top);
+      // юбка: по бёдрам, ниже — расклёшенная, со складками
+      const yA = 1.035, yH = 0.87, yB = 0.44, sc = Math.round(96 * C), sr = Math.round(40 * C);
+      const hipPt = (th) => { const f = T.frame(yH, th, L); return avAdd(f.p, f.n, 0.006); };
+      const zc = T.prof(yH).zc;
+      const skirt = avGrid(THREE, sc, sr, (i, j) => {
+        const th = Math.PI + (i / sc) * Math.PI * 2, v = j / sr;
+        const hem = yB + 0.006 * Math.sin(5 * th + 1) + 0.004 * Math.sin(11 * th);
+        const y = avMix(yA, hem, v);
+        let p;
+        if (y >= yH) { const f = T.frame(y, th, L); p = avAdd(f.p, f.n, 0.0055 + 0.001 * Math.sin(th * 9)); }
+        else {
+          const h = hipPt(th), rr = avNorm([h[0], 0, h[2] - zc]), dn = yH - y;
+          const fa = 0.017 * Math.pow(dn / (yH - yB), 1.25) * (0.55 * Math.sin(9 * th + 0.7) + 0.3 * Math.sin(17 * th + 2.1) + 0.15 * Math.sin(31 * th + 0.3));
+          const flare = dn * 0.34 + dn * dn * 0.25;
+          p = [h[0] + rr[0] * (flare + fa), y, h[2] + rr[2] * (flare + fa)];
+          const blend = avStep(yH, yH - 0.05, y);
+          if (blend < 1) { const f = T.frame(y, th, L), q = avAdd(f.p, f.n, 0.0055); p = avLerp3(q, p, Math.max(blend, 0)); p[1] = y; }
+        }
+        return p;
+      }, { closed: true, uv: (i, j) => [(i / sc) * 30, 1 - j / sr * 9] });
+      mk(skirt, M.skirt);
+      const hemPts = [];
+      for (let i = 0; i <= sc; i++) { const p = skirt.attributes.position; const k = sr * (sc + 1) + i; hemPts.push([p.getX(k), p.getY(k), p.getZ(k)]); }
+      lipRing(hemPts, 0.0022, M.skirt);
+      const belt = avShell(THREE, T, { cols, rows: 4, ylo: 1.0, yhi: 1.036, off: 0.0085, cloth: L, uv: [22, 16] });
+      mk(belt.geo, M.belt);
+      // бант сбоку
+      const bf = T.frame(1.018, Math.PI * 0.42, L), bp = avAdd(bf.p, bf.n, 0.012);
+      for (const s of [-1, 1]) {
+        const loop = new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.0045, 8, 18), M.belt);
+        loop.position.set(...avAdd(bp, [0, 0, s * 0.013])); loop.rotation.set(0, Math.PI / 2 - 0.4, s * 0.5); loop.scale.set(1, 0.6, 1); group.add(loop);
+        mk(avTube(THREE, [bp, avAdd(bp, [0.006, -0.05, s * 0.012]), avAdd(bp, [0.01, -0.1, s * 0.02])], () => [0.006, 0.0018], { cols: 8, rows: 8, capB: 2 }).geo, M.belt);
+      }
+      for (const s of [-1, 1]) sleeve(s, 0.3, (t) => avMix(0.009, 0.019, avStep(0, 0.3, t)), M.top);
+    }
+    if (outfit !== 'dress') pants();
+    return extra;
+  }
+
+  /* ── Сборка фигуры ── opts.lod: 'high' — для больших холстов, 'low' — для маркера на карте */
+  function buildAvatarGroup(THREE, rawCfg, opts = {}) {
     const cfg = normalizeAvatar(rawCfg);
-    const fem = cfg.gender === 'female';
-    const P = avatarProportions(cfg.gender);
-    const R = P.headR, HS = P.headScale;
-    const dress = cfg.outfit === 'dress', hoodie = cfg.outfit === 'hoodie', jacket = cfg.outfit === 'jacket';
-    const V = (x, y, z) => new THREE.Vector3(x, y, z);
-    const UP = V(0, 1, 0);
-    const mix = (a, b, k) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
+    const lod = opts.lod === 'low' ? 0 : 1;
+    const P = avatarProportions(cfg.gender), fem = P.fem;
+    const H = avHeadModel(P), T = avTorsoModel(P);
     const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
-    const mat = (hex, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color: lin(hex), roughness, metalness: 0, ...extra });
-
-    const skinHex = AVATAR_SKINS[cfg.skin].base;
-    const hairHex = AVATAR_HAIR_COLORS[cfg.hairColor].hex;
-    const cloth = AVATAR_CLOTHES[cfg.clothes];
+    const mixHex = (a, b, k) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
+    const skinHex = AVATAR_SKINS[cfg.skin].base, hairHex = AVATAR_HAIR_COLORS[cfg.hairColor].hex, cloth = AVATAR_CLOTHES[cfg.clothes];
     const lightHair = cfg.hairColor === 'blond' || cfg.hairColor === 'platinum';
-
-    // кожа чуть «светится» тёплым изнутри — так она выглядит живой, а не пластиковой
-    const skin = mat(skinHex, 0.5, { emissive: lin(mix(skinHex, 0xFF5A3C, 0.35)), emissiveIntensity: 0.07 });
-    const top = mat(cloth.body, 0.82);
-    const topOpen = mat(cloth.body, 0.82, { side: THREE.DoubleSide });
-    const pants = mat(cloth.legs, 0.9);
-    const hairM = mat(hairHex, 0.46, { side: THREE.DoubleSide });
-    const browM = mat(mix(hairHex, 0x2A1D16, lightHair ? 0.45 : 0.25), 0.7);
-    const lipM = mat(mix(skinHex, fem ? 0xC4475F : 0xA0504A, fem ? 0.58 : 0.36), 0.42);
-    const eyeWhite = mat(0xF6F3EF, 0.32), irisM = mat(fem ? 0x5A3A26 : 0x4A3022, 0.28), pupilM = mat(0x0E0B0A, 0.2);
-    const shineM = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-    const goldM = mat(0xE3BE70, 0.28, { metalness: 0.7 });
+    const V2 = (a, b = a) => new THREE.Vector2(a, b);
+    const std = (hex, o = {}) => new THREE.MeshStandardMaterial({ color: lin(hex), roughness: 0.8, metalness: 0, ...o });
+    const phys = (hex, o = {}) => new THREE.MeshPhysicalMaterial({ color: lin(hex), roughness: 0.8, metalness: 0, ...o });
+    const lo = !lod;
+    const fabric = (hex, kind, o = {}) => {
+      const t = avFabric(THREE, kind, lo);
+      return phys(hex, { map: t.map, normalMap: t.normal, normalScale: V2(0.8), roughness: 0.88, sheenTint: lin(mixHex(hex, 0xffffff, 0.5)).multiplyScalar(0.45), envMapIntensity: 0.6, ...o });
+    };
+    const face = avFaceTex(THREE, P, H, lo), hairT = avHairTex(THREE, lo);
+    const M = {};
+    M.skin = std(skinHex, { roughness: 0.55, emissive: lin(mixHex(skinHex, 0xFF5030, 0.4)), emissiveIntensity: 0.05, envMapIntensity: 0.55 });
+    M.face = M.skin.clone(); M.face.map = face.map; M.face.roughnessMap = face.rough; M.face.roughness = 1;
+    M.lid = M.face;
+    M.lip = phys(mixHex(skinHex, fem ? 0xB23E55 : 0xA4504E, fem ? 0.55 : 0.44), { roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.3, envMapIntensity: 0.7 });
+    M.mouth = std(mixHex(skinHex, 0x4A1E1C, 0.6), { roughness: 0.7 });
+    M.nostril = std(mixHex(skinHex, 0x2A1010, 0.82), { roughness: 0.9 });
+    M.caruncle = std(mixHex(skinHex, 0xE07A7A, 0.55), { roughness: 0.3 });
+    const iris = lightHair ? 0x5C7D9E : cfg.hairColor === 'ginger' ? 0x617846 : (cfg.skin === 'dark' || cfg.skin === 'brown') ? 0x3A2416 : fem ? 0x6B4A2E : 0x553722;
+    M.eye = phys(0xffffff, { map: avEyeTex(THREE, iris, lo), roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.03 });
+    const browHex = mixHex(hairHex, 0x2A1D16, lightHair ? 0.4 : cfg.hairColor === 'iris' ? 0.55 : 0.12);
+    M.brow = std(browHex, { alphaMap: avBrowTex(THREE), alphaTest: 0.3, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.75, envMapIntensity: 0.4 });
+    M.lash = std(0x130E0C, { alphaMap: avLashTex(THREE), alphaTest: 0.3, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.6 });
+    M.gold = std(0xE3BE70, { metalness: 1, roughness: 0.25 });
+    // волосы, одежда и обувь: материал создаётся при первом обращении — текстуры рисуются только для того, что надето
+    const def = (name, make) => { let m = null; Object.defineProperty(M, name, { get: () => m || (m = make()) }); };
+    const hairCol = lin(hairHex);
+    const hairStd = (o) => { const m = std(hairHex, o); m.color.copy(hairCol); return m; };
+    def('cap', () => { const t = hairT.cap; return hairStd({ map: t.map, normalMap: t.normal || null, normalScale: V2(0.6), roughness: 0.68, envMapIntensity: 0.26 }); });
+    def('coil', () => M.cap);
+    def('card', () => { const t = hairT.card; return hairStd({ map: t.map, alphaMap: t.alpha, normalMap: t.normal || null, normalScale: V2(0.45), alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.7, envMapIntensity: 0.2 }); });
+    def('curlVol', () => { const t = hairT.cap; return std(mixHex(hairHex, 0x000000, 0.25), { map: t.map, normalMap: t.normal || null, roughness: 0.55 }); });
+    def('buzz', () => { const t = hairT.buzz; return std(hairHex, { map: t.map, normalMap: t.normal || null, normalScale: V2(0.5), roughness: 0.62, vertexColors: true, envMapIntensity: 0.45 }); });
+    def('tie', () => std(0x1A1A1E, { roughness: 0.5 }));
+    M.hairLin = hairCol; M.skinLin = lin(skinHex);
+    const legsHex = cloth.legs, denimSheen = () => lin(mixHex(legsHex, 0xffffff, 0.3)).multiplyScalar(0.25);
+    def('top', () => fabric(cloth.body, 'knit'));
+    def('rib', () => fabric(mixHex(cloth.body, 0x000000, 0.08), 'rib'));
+    def('teeWhite', () => fabric(0xF2F1EC, 'knit'));
+    def('ribWhite', () => fabric(0xE6E4DE, 'rib'));
+    def('skirt', () => fabric(cloth.body, 'knit', { side: THREE.DoubleSide }));
+    def('belt', () => fabric(mixHex(cloth.body, 0x000000, 0.12), 'knit'));
+    def('fleece', () => fabric(cloth.body, 'fleece'));
+    def('fleeceVC', () => fabric(cloth.body, 'fleece', { vertexColors: true }));
+    def('hRib', () => fabric(mixHex(cloth.body, 0x000000, 0.06), 'rib'));
+    def('jacket', () => { const t = avFabric(THREE, 'nylon', lo); return std(cloth.body, { map: t.map, normalMap: t.normal, normalScale: V2(0.3), roughness: 0.46, envMapIntensity: 1.0 }); });
+    def('jRib', () => fabric(mixHex(cloth.body, 0x000000, 0.18), 'rib'));
+    def('zipTape', () => fabric(mixHex(cloth.body, 0x000000, 0.45), 'knit', { side: THREE.DoubleSide }));
+    def('zipTeeth', () => { const z = lo ? {} : avZipTex(THREE); return std(0xB8BCC2, { map: z.map || null, normalMap: z.normal || null, metalness: 1, roughness: 0.32, side: THREE.DoubleSide }); });
+    def('denim', () => fabric(legsHex, 'denim', { sheenTint: denimSheen(), roughness: 0.92 }));
+    def('denimVC', () => fabric(legsHex, 'denim', { vertexColors: true, sheenTint: denimSheen(), roughness: 0.92 }));
+    def('stitch', () => std(0xB98A3E, { roughness: 0.75 }));
+    def('seam', () => std(mixHex(legsHex, 0x000000, 0.35), { roughness: 0.9 }));
+    def('cord', () => fabric(0xF0EEE8, 'knit'));
+    def('metal', () => std(0xC9CDD2, { metalness: 1, roughness: 0.28 }));
+    const dress = cfg.outfit === 'dress';
+    const shoeT = () => (lo ? { map: null, normal: null } : avShoeTex(THREE));
+    if (dress) {
+      def('shoe', () => phys(0x2A2427, { normalMap: avFabric(THREE, 'leather', lo).normal, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.25 }));
+      def('sole', () => std(0x1E1A1B, { roughness: 0.6, vertexColors: true }));
+    } else if (fem) {
+      def('shoe', () => { const t = shoeT(); return std(0xF4F2EE, { map: t.map, normalMap: t.normal, roughness: 0.42 }); });
+      def('sole', () => std(0xEDEAE4, { roughness: 0.6, vertexColors: true }));
+      def('lace', () => fabric(0xF6F5F2, 'knit'));
+    } else {
+      def('shoe', () => { const t = shoeT(); return phys(0x2F3036, { map: t.map, normalMap: t.normal, normalScale: V2(0.8), roughness: 0.92, sheenTint: lin(0x6A6C74).multiplyScalar(0.5) }); });
+      def('sole', () => std(0xF0EEE9, { roughness: 0.6, vertexColors: true }));
+      def('lace', () => fabric(0x3A3B40, 'knit'));
+    }
 
     const group = new THREE.Group();
-    const add = (parent, geo, m, pos, scale, rot) => {
-      const mesh = new THREE.Mesh(geo, m);
-      if (pos) mesh.position.copy(pos);
-      if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
-      if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
-      parent.add(mesh);
-      return mesh;
-    };
-    const ball = (r, w = 24, h = 16) => new THREE.SphereGeometry(r, w, h);
-    const limb = (parent, a, b, r0, r1, m, seg = 16) => {
-      const d = V(0, 0, 0).subVectors(b, a);
-      const mesh = new THREE.Mesh(capsuleGeo(THREE, r0, r1, d.length(), seg), m);
-      mesh.position.copy(a);
-      mesh.quaternion.setFromUnitVectors(UP, d.normalize());
-      parent.add(mesh);
-      return mesh;
-    };
-    // шов тела вращения — сзади (phiStart = π), чтобы спереди не было видно стыка
-    const lathe = (parent, pts, m, zScale = 1, inflate = 0, phiStart = Math.PI, phiLen = Math.PI * 2) => {
-      const g = new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r > 0 ? r + inflate : 0, y)), 44, phiStart, phiLen);
-      const mesh = new THREE.Mesh(g, m);
-      mesh.scale.z = zScale;
-      parent.add(mesh);
-      return mesh;
-    };
-    const ring = (parent, r, tube, y, m, zScale = 1) =>
-      add(parent, new THREE.TorusGeometry(r, tube, 8, 44), m, V(0, y, 0), [1, zScale, 1], [Math.PI / 2, 0, 0]);
+    const mk = (geo, mat, o = {}) => { const m = new THREE.Mesh(geo, mat); if (o.shadow === false) m.userData.noShadow = true; (o.parent || group).add(m); return m; };
+    const S = (n) => Math.max(6, Math.round(n * (lod ? 1 : 0.55)));
 
-    /* ── Туловище: низ — брюки (у платья — та же ткань), верх — одежда чуть поверх ── */
-    const T = P.torso, yBot = T[0][1], yTop = T[T.length - 1][1];
-    const bulk = hoodie ? 0.014 : 0.005;
-    const frontZ = (y, extra = 0) => (profileRadius(T, y) + extra) * P.torsoZ;
-    lathe(group, profileRange(T, yBot, P.split + 0.015), dress ? top : pants, P.torsoZ);
-    const shirt = jacket ? mat(0xF1EFEA, 0.85) : top;
-    const chest = lathe(group, profileRange(T, P.split - 0.03, yTop), shirt, P.torsoZ, bulk);
-    ring(group, profileRadius(T, P.split - 0.03) + bulk, hoodie ? 0.014 : 0.008, P.split - 0.03, shirt, P.torsoZ);
-    if (fem) {
-      // женский силуэт: грудь — плавный изгиб самой ткани спереди, без отдельных форм
-      const amp = (hoodie ? 0.018 : 0.028) / P.torsoZ;
-      const pos = chest.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-        if (z <= 0) continue;
-        const r = Math.hypot(x, z) || 1;
-        const lobes = Math.exp(-(((x - 0.068) / 0.052) ** 2)) + Math.exp(-(((x + 0.068) / 0.052) ** 2));
-        const dy = (y - P.bustY) / (y < P.bustY ? 0.045 : 0.065);
-        pos.setZ(i, z + amp * Math.min(1, lobes) * Math.exp(-dy * dy) * (z / r) ** 2);
-      }
-      chest.geometry.computeVertexNormals();
-    }
-    if (!fem && !hoodie) ring(group, P.neckR + 0.013, 0.011, yTop - 0.024, shirt);   // круглый ворот
-    if (hoodie) {
-      add(group, new THREE.TorusGeometry(P.neckR + 0.05, fem ? 0.03 : 0.036, 10, 28), top, V(0, P.shoulderY + 0.03, -0.03), [1, 0.8, 1], [Math.PI / 2 - 0.5, 0, 0]);
-      const py = P.split + 0.075;
-      add(group, ball(0.09), mat(mix(cloth.body, 0x000000, 0.14), 0.85), V(0, py, frontZ(py, bulk) - 0.024), [fem ? 1.15 : 1.35, 0.55, 0.32]);
-      const cord = mat(0xF3F1EC, 0.6);
-      for (const s of [-1, 1]) {
-        const a = V(s * 0.03, P.shoulderY - 0.005, frontZ(P.shoulderY - 0.005, bulk) + 0.004);
-        const b = V(s * 0.034, P.shoulderY - 0.12, frontZ(P.shoulderY - 0.12, bulk) + 0.004);
-        limb(group, a, b, 0.0045, 0.0045, cord, 6);
-        add(group, ball(0.0075, 10, 8), cord, b);
-      }
-    }
-    if (jacket) {
-      // расстёгнутая куртка поверх белой футболки: оболочка с разрезом спереди, лацканы и воротник
-      lathe(group, profileRange(T, P.split - 0.06, yTop - 0.014), topOpen, P.torsoZ, 0.02, Math.PI * 0.16, Math.PI * 1.68);
-      for (const s of [-1, 1]) {
-        const ly = P.shoulderY - 0.085;
-        add(group, new THREE.BoxGeometry(0.045, 0.16, 0.012), top, V(s * 0.07, ly, frontZ(ly, 0.02) + 0.004), null, [-0.18, 0, s * 0.36]);
-      }
-      add(group, new THREE.TorusGeometry(P.neckR + 0.03, 0.017, 8, 28, Math.PI * 1.3), top, V(0, yTop - 0.03, -0.004), null, [-Math.PI / 2, 0, -0.15 * Math.PI]);
-    }
-    if (dress) {
-      // юбка-«колокол» до колена и тонкий пояс
-      lathe(group, [[0.152, P.waistY + 0.01], [0.19, 1.02], [0.229, 0.9], [0.258, 0.73], [0.279, 0.565], [0.272, 0.54], [0.258, 0.535]], topOpen, 0.8);
-      ring(group, profileRadius(T, P.waistY) + 0.011, 0.011, P.waistY, mat(mix(cloth.body, 0x000000, 0.3), 0.6), P.torsoZ);
-    }
-
-    /* ── Руки ── */
-    const longSleeve = hoodie || jacket;
-    const [ra, re, rw] = P.armR;
+    // кожа туловища у шеи и в вырезе
+    const skinTop = avShell(THREE, T, { cols: S(56), rows: S(16), ylo: fem ? 1.25 : 1.36, yhi: T.y1, uv: [1, 1] });
+    mk(skinTop.geo, M.skin);
+    // шея (у мужской фигуры — с кадыком)
+    const Nk = P.neck;
+    const neck = avTube(THREE, [[0, Nk.y0, Nk.z], [0, avMix(Nk.y0, Nk.y1, 0.5), Nk.z + 0.002], [0, Nk.y1, Nk.z + 0.004]], (t, th) => {
+      const k = 1 + 0.14 * avStep(0.3, 0, t) - 0.05 * avStep(0.4, 1, t);
+      return [Nk.rx * k, Nk.rz * k];
+    }, { cols: S(28), rows: S(14), capB: 3, disp: fem ? null : (t, th) => 0.005 * Math.exp(-(((t - 0.45) / 0.09) ** 2)) * Math.pow(Math.max(0, Math.cos(th)), 6) });
+    mk(neck.geo, M.skin);
+    // руки и кисти
     for (const s of [-1, 1]) {
-      const sh = V(s * P.shoulderX, P.shoulderY - 0.035, 0);
-      const el = V(s * (P.shoulderX + 0.032), P.shoulderY - 0.31, -0.022);
-      const wr = V(s * (P.shoulderX + P.wristOut), P.shoulderY - 0.565, 0.03);
-      add(group, ball(ra + (longSleeve ? 0.012 : 0.009)), top, sh, [1, 0.9, 0.92]);
-      if (longSleeve) {
-        limb(group, sh, el, ra + 0.01, re + 0.01, top);
-        limb(group, el, wr, re + 0.01, rw + 0.012, top);
-      } else {
-        limb(group, sh, el, ra, re, skin);
-        limb(group, el, wr, re, rw, skin);
-        limb(group, sh, sh.clone().lerp(el, 0.46), ra + 0.009, ra + 0.006, top);   // короткий рукав
-      }
-      const dir = V(0, 0, 0).subVectors(wr, el).normalize();
-      const hc = wr.clone().addScaledVector(dir, 0.052 * P.hand);
-      const hand = add(group, ball(0.046 * P.hand, 20, 14), skin, hc, [0.8, 1.2, 0.56]);
-      hand.quaternion.setFromUnitVectors(UP, dir);
-      add(group, ball(0.016 * P.hand, 12, 8), skin, hc.clone().add(V(-s * 0.004, 0.014, 0.026 * P.hand)), [0.9, 1.4, 0.9]);
+      const arm = avArm(P, s);
+      mk(avTube(THREE, arm.pts, (tc) => arm.shape(tc), { t0: arm.tAt(0.04), t1: 1, cols: S(24), rows: S(30), capA: 4, capScale: 0.35, capB: 3 }).geo, M.skin);
+      avHand(THREE, P, s, arm, M.skin, group, lod);
     }
-
-    /* ── Ноги и обувь ── */
+    // ноги (видны у платья) и обувь
     for (const s of [-1, 1]) {
-      const hip = V(s * P.legX, P.hipY, 0), knee = V(s * P.legX * 0.9, 0.5, 0.014), ank = V(s * P.legX * 0.84, 0.115, -0.004);
-      const legM = dress ? skin : pants;
-      const kneeR = dress ? P.knee : P.knee + (fem ? 0.004 : 0.01);
-      const ankR = dress ? P.ankle : P.ankle + (fem ? 0.004 : 0.012);
-      limb(group, hip, knee, P.thigh + (dress ? -0.006 : 0.004), kneeR, legM);
-      limb(group, knee, ank, kneeR, ankR, legM);
-      const sz = fem ? 0.84 : 1;
-      const upper = fem ? (dress ? 0x2B2228 : 0xF1EEE9) : 0x2B2C31;
-      const sole = fem ? (dress ? 0x1A1518 : 0xDAD4CC) : 0xF3F1EC;
-      add(group, ball(0.07 * sz), mat(upper, 0.6), V(ank.x, 0.055 * sz + 0.004, 0.04 * sz), [0.78, 0.6, 1.5]);
-      add(group, ball(0.07 * sz), mat(sole, 0.75), V(ank.x, 0.02, 0.042 * sz), [0.85, 0.28, 1.56]);
+      if (dress) {
+        const leg = avLeg(P, s);
+        mk(avTube(THREE, leg.pts, (tc) => leg.shape(tc), {
+          t0: leg.tAt(0.09), t1: 1, cols: S(28), rows: S(36), capA: 4, capScale: 0.6, capB: 3,
+          disp: (tc, th) => { const t = leg.legT(tc); return 0.005 * Math.exp(-(((t - 0.5) / 0.035) ** 2)) * Math.pow(Math.max(0, Math.cos(th)), 4) + 0.003 * Math.exp(-(((t - 0.985) / 0.02) ** 2)) * Math.pow(Math.abs(Math.sin(th)), 6); },
+        }).geo, M.skin);
+      }
+      avShoe(THREE, P, s, M, group, lod, dress ? 'flat' : 'sneaker');
     }
+    // одежда
+    const extra = avClothes(THREE, P, T, cfg, M, group, lod, mk);
 
-    /* ── Шея и голова ── */
-    limb(group, V(0, yTop - 0.06, -0.006), V(0, P.headY - 0.075, 0.004), P.neckR, P.neckR * 0.94, skin);
+    // голова
     const head = new THREE.Group();
-    head.position.set(0, P.headY, 0.008);
+    head.position.set(0, P.headY, P.headZ);
     group.add(head);
+    const ws = lod ? 96 : 48, hs = lod ? 72 : 36;
+    const hg = new THREE.SphereGeometry(1, ws, hs, -Math.PI / 2), hp = hg.attributes.position;
+    for (let i = 0; i < hp.count; i++) { const p = H.point(hp.getX(i), hp.getY(i), hp.getZ(i)); hp.setXYZ(i, p[0], p[1], p[2]); }
+    hg.computeVertexNormals();
+    const nr = hg.attributes.normal, fixRow = (ids) => { let x = 0, y = 0, z = 0; for (const i of ids) { x += nr.getX(i); y += nr.getY(i); z += nr.getZ(i); } const l = Math.hypot(x, y, z) || 1; for (const i of ids) nr.setXYZ(i, x / l, y / l, z / l); };
+    for (let j = 0; j <= hs; j++) fixRow([j * (ws + 1), j * (ws + 1) + ws]);
+    fixRow(Array.from({ length: ws + 1 }, (_, i) => i)); fixRow(Array.from({ length: ws + 1 }, (_, i) => hs * (ws + 1) + i));
+    mk(hg, M.face, { parent: head });
+    avNose(THREE, P, H, M, head, lod);
+    avLips(THREE, P, H, M, head, lod);
+    const eyes = [-1, 1].map((s) => avEye(THREE, P, H, M, s, head, lod));
+    for (const s of [-1, 1]) { avEar(THREE, P, H, M, s, head, lod); mk(avBrow(THREE, P, H, s), M.brow, { parent: head, shadow: false }); }
+    head.add(avHair(THREE, P, H, T, cfg, M, extra, lod));
+
+    group.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = true; } });
     group.userData.head = head;
-    /* Голова — одна плавная форма без швов: сфера, нижняя половина которой сужается к подбородку
-       (у женской фигуры — сильнее, лицо уже и мягче), вытягивается вниз и чуть выдвигается вперёд. */
-    const [KX, KY] = P.chin, KZ = 0.1, KF = 0.1;
-    const headGeo = new THREE.SphereGeometry(R, 48, 36);
-    const hp = headGeo.attributes.position;
-    const deformHead = (x, y, z) => {
-      if (y >= 0) return [x, y, z];
-      const t = -y / R;
-      return [x * (1 - KX * t * Math.sqrt(t)), y * (1 + KY * t), z * (1 - KZ * t * (z < 0 ? 2 : 0.4)) + KF * R * t];
+    group.userData.blink = (k) => eyes.forEach((e) => e.blink(k));
+    group.userData.gaze = (t) => {
+      let a = 0, b = 0;
+      if (t >= 0) { const k = Math.floor(t / 1.9); a = (avHash(k, 1, 3) - 0.5) * 0.16; b = (avHash(k, 2, 3) - 0.5) * 0.1; }
+      eyes.forEach((e) => { e.ball.rotation.y = a; e.ball.rotation.x = b; });
     };
-    for (let i = 0; i < hp.count; i++) {
-      const p = deformHead(hp.getX(i), hp.getY(i), hp.getZ(i));
-      hp.setXYZ(i, p[0], p[1], p[2]);
-    }
-    headGeo.computeVertexNormals();
-    smoothSphereNormals(headGeo, 48, 36, true);
-    add(head, headGeo, skin, null, HS);
-    // глубина лица в точке (x, y) — та же формула деформации, решённая обратно
-    const faceZ = (x, y) => {
-      const ys = y / HS[1];
-      const y0 = ys < 0 ? (1 - Math.sqrt(1 - 4 * (KY / R) * ys)) / (2 * KY / R) : ys;
-      const t = y0 < 0 ? -y0 / R : 0;
-      const x0 = x / HS[0] / (1 - KX * t * Math.sqrt(t));
-      const q = R * R - x0 * x0 - y0 * y0;
-      return q > 0 ? (Math.sqrt(q) * (1 - KZ * t * 0.4) + KF * R * t) * HS[2] : 0;
-    };
-    for (const s of [-1, 1]) {
-      add(head, ball(R * 0.25, 16, 12), skin, V(s * R * HS[0] * 0.97, -R * 0.05, -R * 0.05), [0.42, 0.8, 0.62], [0, s * 0.35, 0]);
-      if (fem) add(head, ball(0.0075, 10, 8), goldM, V(s * R * HS[0] * 0.99, -R * 0.33, -R * 0.03));
-    }
-
-    // глаза: белок, радужка, зрачок, блик и верхнее веко
-    const er = R * P.eyeR, ey = R * 0.07;
-    for (const s of [-1, 1]) {
-      const x = s * R * P.eyeX, z0 = faceZ(x, ey) - er * 0.25;
-      add(head, ball(er, 20, 14), eyeWhite, V(x, ey, z0), [1, 0.78, 0.55]);
-      const front = z0 + er * 0.55, ir = er * 0.56;
-      add(head, ball(ir, 16, 12), irisM, V(x, ey - er * 0.04, front - ir * 0.5 + 0.0012), [1, 1, 0.5]);
-      add(head, ball(ir * 0.5, 12, 8), pupilM, V(x, ey - er * 0.04, front - ir * 0.25 + 0.0022), [1, 1, 0.5]);
-      add(head, ball(ir * 0.26, 8, 6), shineM, V(x + ir * 0.35, ey + ir * 0.3, front + 0.003));
-      add(head, new THREE.SphereGeometry(er * 1.1, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.32), skin, V(x, ey, z0), [1, 0.8, 0.58], [0.22, 0, 0]);
-      if (fem) {
-        add(head, new THREE.TorusGeometry(er * 1.06, 0.0021, 6, 18, Math.PI), pupilM, V(x, ey + er * 0.08, z0 + er * 0.3), [1, 0.62, 1], [0.2, 0, 0]);
-        add(head, new THREE.BoxGeometry(0.008, 0.0022, 0.003), pupilM, V(x + s * er * 1.08, ey + er * 0.18, z0 + er * 0.24), null, [0, 0, s * 0.5]);
-      }
-      // брови: у мужской фигуры прямые и плотные, у женской — тонкие с изгибом
-      const by = R * 0.43;
-      const pts = [V(s * R * 0.14, by + 0.002, 0), V(s * R * 0.33, by + (fem ? 0.012 : 0.006), 0), V(s * R * 0.52, by + (fem ? 0.001 : 0.002), 0)];
-      pts.forEach((p) => { p.z = faceZ(p.x, p.y) + 0.0015; });
-      limb(head, pts[0], pts[1], P.browW * 1.15, P.browW, browM, 8);
-      limb(head, pts[1], pts[2], P.browW, P.browW * 0.65, browM, 8);
-    }
-
-    // нос: спинка, кончик и крылья
-    const nk = P.noseK;
-    const nTop = V(0, R * 0.22, faceZ(0, R * 0.22) - 0.004), nTip = V(0, -R * 0.2, faceZ(0, -R * 0.2) + 0.012 * nk);
-    limb(head, nTop, nTip, 0.0085 * nk, 0.0135 * nk, skin, 12);
-    add(head, ball(0.0172 * nk, 16, 12), skin, nTip.clone().add(V(0, -0.004, 0.002)), [1.1, 0.9, 0.95]);
-    for (const s of [-1, 1]) add(head, ball(0.0105 * nk, 12, 8), skin, V(s * 0.0135 * nk, nTip.y - 0.007, nTip.z - 0.009), [1.1, 0.85, 0.9]);
-
-    // губы: у мужской фигуры — сдержанная улыбка, у женской — пухлые губы с «луком Купидона»
-    const my = -R * 0.6, mz = faceZ(0, my);
-    if (fem) {
-      for (const s of [-1, 1]) add(head, ball(0.0085, 14, 10), lipM, V(s * 0.0072, my + 0.0055, mz - 0.0035), [1.55, 0.6, 0.6], [0, 0, s * 0.22]);
-      add(head, ball(0.0105, 16, 10), lipM, V(0, my - 0.0045, mz - 0.004), [1.75, 0.68, 0.62]);
-      const blush = mat(0xEE8C8C, 0.6, { transparent: true, opacity: 0.3, depthWrite: false });
-      for (const s of [-1, 1]) add(head, ball(0.024, 16, 10), blush, V(s * R * 0.5, -R * 0.25, faceZ(s * R * 0.5, -R * 0.25) - 0.004), [1, 0.62, 0.3]);
-    } else {
-      const arc = Math.PI * 0.62, rr = R * 0.16;
-      add(head, new THREE.TorusGeometry(rr, 0.0042, 8, 18, arc), lipM, V(0, my + rr * 0.9, mz - 0.003), [1, 1, 0.6], [0, 0, -Math.PI / 2 - arc / 2]);
-    }
-
-    /* ── Причёска ── */
-    /* «Шапка» волос облегает голову (та же деформация, что у головы) и идёт по естественной линии роста:
-       высоко надо лбом, ниже у висков, над ушами и низко на затылке. Линия — угол от макушки в градусах:
-       спереди, у виска, над ухом, за ухом и сзади. */
-    const HAIRLINE = {
-      short: [60, 70, 80, 112, 136], buzz: [62, 72, 80, 110, 134], curly: [58, 68, 80, 112, 136],
-      flowing: [62, 78, 96, 116, 136], sleek: [60, 76, 88, 114, 136],
-    };
-    const hairlineAt = (line, az) => {
-      const a = Math.abs((((az + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * 180 / Math.PI;
-      const keys = [0, 45, 90, 130, 180];
-      for (let i = 1; i < keys.length; i++) {
-        if (a > keys[i]) continue;
-        const k = (a - keys[i - 1]) / (keys[i] - keys[i - 1]), s = k * k * (3 - 2 * k);
-        return (line[i - 1] + (line[i] - line[i - 1]) * s) * Math.PI / 180;
-      }
-      return line[4] * Math.PI / 180;
-    };
-    // точка на «шапке»: frac — доля от макушки до линии роста, az — угол вокруг головы (0 — лоб, к +x)
-    const hairPoint = (line, frac, az) => {
-      const th = frac * hairlineAt(line, az);
-      return deformHead(R * Math.sin(th) * Math.sin(az), R * Math.cos(th), R * Math.sin(th) * Math.cos(az));
-    };
-    const cap = (line, k, m = hairM) => {
-      const ws = 56, hsg = 18;
-      const g = new THREE.SphereGeometry(R, ws, hsg, 0, Math.PI * 2, 0, Math.PI / 2);
-      const pos = g.attributes.position;
-      for (let iy = 0; iy <= hsg; iy++) {
-        for (let ix = 0; ix <= ws; ix++) {
-          const frac = iy / hsg, p = hairPoint(line, frac, (ix / ws) * Math.PI * 2 - Math.PI / 2);
-          // объём сверху, а к линии роста волосы прилегают к коже — край не отстоит от головы
-          const w = 1 - 0.88 * frac * frac * frac;
-          pos.setXYZ(iy * (ws + 1) + ix, p[0] * HS[0] * (1 + (k[0] - 1) * w), p[1] * HS[1] * (1 + (k[1] - 1) * w), p[2] * HS[2] * (1 + (k[2] - 1) * w));
-        }
-      }
-      g.computeVertexNormals();
-      smoothSphereNormals(g, ws, hsg);
-      return add(head, g, m);
-    };
-    const curls = (list) => {
-      const im = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 10), hairM, list.length);
-      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = V(1, 1, 1);
-      list.forEach((c, i) => { sc.setScalar(c.r); m4.compose(c.p, q, sc); im.setMatrixAt(i, m4); });
-      im.instanceMatrix.needsUpdate = true;
-      head.add(im);
-    };
-    const topCurls = (n, line, k, rMin, rMax) => {
-      const out = [];
-      for (let i = 0; i < n; i++) {
-        const p = hairPoint(line, Math.sqrt((i + 0.5) / n) * 0.9, i * 2.39996);
-        out.push({ p: V(p[0] * HS[0] * k[0], p[1] * HS[1] * k[1], p[2] * HS[2] * k[2]), r: rMin + (rMax - rMin) * avatarRnd(i) });
-      }
-      return out;
-    };
-    const hs = cfg.hair;
-    if (!fem) {
-      if (hs === 'buzz') cap(HAIRLINE.buzz, [1.03, 1.04, 1.04], mat(mix(hairHex, skinHex, 0.28), 0.8));
-      if (hs === 'short') {
-        // короткая стрижка: объём сверху и мягкая чёлка, зачёсанная набок
-        cap(HAIRLINE.short, [1.07, 1.16, 1.09]);
-        add(head, ball(R * 0.34, 24, 16), hairM, V(R * 0.14, R * 0.64, R * 0.7), [1.55, 0.42, 0.62], [-0.85, 0, -0.28]);
-      }
-      if (hs === 'quiff') {
-        cap(HAIRLINE.short, [1.05, 1.07, 1.06]);
-        add(head, ball(R * 0.56, 28, 18), hairM, V(0, R * 0.9, R * 0.4), [1.12, 0.72, 1.1], [-0.38, 0, 0]);
-      }
-      if (hs === 'curly') {
-        cap(HAIRLINE.curly, [1.06, 1.1, 1.08]);
-        curls(topCurls(48, HAIRLINE.curly, [1.1, 1.13, 1.11], R * 0.15, R * 0.21));
-      }
-    } else {
-      if (hs === 'long' || hs === 'bob' || hs === 'curly') cap(HAIRLINE.flowing, [1.07, 1.09, 1.08]);
-      if (hs === 'ponytail' || hs === 'bun') cap(HAIRLINE.sleek, [1.04, 1.05, 1.05]);
-      if (hs === 'long') {
-        // прямые длинные волосы до груди, спереди открывают лицо; косая чёлка
-        lathe(head, [[R * 0.6, R * 0.85], [R * 0.92, R * 0.4], [R * 1.04, -R * 0.1], [R * 1.1, -R * 0.85], [R * 1.13, -R * 1.6], [R * 1.11, -R * 2.2], [R * 1.02, -R * 2.42], [R * 0.93, -R * 2.46]],
-          hairM, 1, 0, Math.PI * 0.3, Math.PI * 1.4).scale.x = 0.98;
-        add(head, ball(R * 0.5, 24, 16), hairM, V(R * 0.2, R * 0.63, R * 0.58), [1.3, 0.42, 0.72], [-0.38, 0, -0.38]);
-      }
-      if (hs === 'bob') {
-        // каре до подбородка с прямой чёлкой
-        lathe(head, [[R * 0.6, R * 0.85], [R * 0.95, R * 0.35], [R * 1.1, -R * 0.15], [R * 1.16, -R * 0.62], [R * 1.15, -R * 0.9], [R * 1.07, -R * 1.04], [R * 0.97, -R * 1.07]],
-          hairM, 1, 0, Math.PI * 0.26, Math.PI * 1.48).scale.x = 0.98;
-        add(head, ball(R * 0.6, 28, 16), hairM, V(0, R * 0.56, R * 0.58), [1.3, 0.38, 0.7], [-0.55, 0, 0]);
-      }
-      if (hs === 'ponytail') {
-        const base = V(0, R * 0.28, -R * 1.02);
-        add(head, new THREE.TorusGeometry(R * 0.2, R * 0.07, 8, 18), mat(mix(hairHex, 0x000000, 0.4), 0.5), base, null, [0.95, 0, 0]);
-        const pts = [base, V(0, R * 0.02, -R * 1.38), V(0, -R * 0.75, -R * 1.5), V(0, -R * 1.6, -R * 1.34), V(0, -R * 2.0, -R * 1.18)];
-        const rad = [R * 0.22, R * 0.24, R * 0.2, R * 0.13, R * 0.04];
-        for (let i = 0; i < pts.length - 1; i++) limb(head, pts[i], pts[i + 1], rad[i], rad[i + 1], hairM, 14);
-      }
-      if (hs === 'bun') {
-        const bc = V(0, R * 0.92, -R * 0.55);
-        add(head, ball(R * 0.46, 24, 18), hairM, bc, [1, 0.92, 1]);
-        add(head, new THREE.TorusGeometry(R * 0.36, R * 0.09, 8, 20), hairM, bc.clone().add(V(0, -R * 0.2, R * 0.06)), null, [Math.PI / 2 - 0.5, 0, 0]);
-      }
-      if (hs === 'curly') {
-        // пышные кудри: макушка и объём по бокам и сзади до плеч
-        const list = topCurls(36, HAIRLINE.flowing, [1.1, 1.12, 1.1], R * 0.16, R * 0.22);
-        const n = 120;
-        for (let i = 0; i < n; i++) {
-          const y = R * (0.55 - ((i + 0.5) / n) * 2.15);
-          const az = Math.PI * 0.27 + ((i * 0.618034) % 1) * Math.PI * 1.46;
-          const rr = R * (1.06 + 0.22 * Math.min(1, Math.max(0, (0.3 * R - y) / (1.6 * R))));
-          list.push({ p: V(Math.sin(az) * rr * 0.97, y, Math.cos(az) * rr), r: R * (0.19 + 0.07 * avatarRnd(i + 50)) });
-        }
-        curls(list);
-      }
-    }
     return group;
   }
 
-  // Свет «студии»: тёплый основной, холодная заливка и два цветных контровых в цветах «Призмы»
-  function addAvatarLights(THREE, scene) {
-    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x6A5D57, 0.62));
-    const key = new THREE.DirectionalLight(0xFFF1E4, 1.15); key.position.set(2.2, 3.6, 3.4); scene.add(key);
-    const fill = new THREE.DirectionalLight(0xD3DCFF, 0.38); fill.position.set(-3, 1.4, 2.2); scene.add(fill);
-    const rim = new THREE.DirectionalLight(0xB9A2FF, 0.75); rim.position.set(-2.2, 2.6, -3.4); scene.add(rim);
-    const rim2 = new THREE.DirectionalLight(0x86E8F0, 0.4); rim2.position.set(2.6, 1.6, -3); scene.add(rim2);
+  // Моргание: раз в несколько секунд, иногда дважды
+  function avBlink(t) {
+    const per = 4.3, k = Math.floor(t / per), ph = t - k * per - avHash(k, 9, 1) * 1.2;
+    const one = (x) => (x < 0 || x > 0.3 ? 0 : x < 0.09 ? x / 0.09 : x < 0.14 ? 1 : 1 - (x - 0.14) / 0.16);
+    return Math.max(one(ph), avHash(k, 8, 1) > 0.75 ? one(ph - 0.38) : 0);
+  }
+
+  // Свет «студии»: тёплый основной (с тенями), холодный заполняющий и два контровых в цветах «Призмы»
+  function addAvatarLights(THREE, scene, shadows) {
+    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x5E5650, 0.14));
+    const key = new THREE.DirectionalLight(0xFFF0E2, 1.3);
+    key.position.set(1.4, 3.6, 2.1); key.target.position.set(0, 0.95, 0);
+    scene.add(key, key.target);
+    if (shadows) {
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.bias = -0.0004; key.shadow.normalBias = 0.006;
+    }
+    const fill = new THREE.DirectionalLight(0xD5DEFF, 0.2); fill.position.set(-2.6, 1.6, 2.2); scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xD8CEFF, 0.5); rim.position.set(-2, 2.8, -3.2); scene.add(rim);
+    const rim2 = new THREE.DirectionalLight(0xC2EEF2, 0.32); rim2.position.set(2.4, 1.8, -3); scene.add(rim2);
+    return key;
+  }
+  // Тень основного света — по фигуре целиком или по голове и плечам
+  function avAimShadow(key, P, framing) {
+    const bust = framing === 'bust', c = key.shadow.camera;
+    const ty = bust ? P.headY - 0.1 : P.height * 0.52, half = bust ? 0.32 : 0.62, halfY = bust ? 0.32 : 1.0;
+    key.target.position.set(0, ty, 0);
+    key.position.set(1.4, ty + 2.65, 2.1);
+    c.left = -half; c.right = half; c.top = halfY; c.bottom = -halfY; c.near = 0.5; c.far = 7;
+    c.updateProjectionMatrix();
+  }
+  // Карта окружения: купол (светлый верх, тёмный пол) и софтбоксы — для бликов на глазах, коже, волосах, металле
+  function avatarEnvironment(THREE, renderer) {
+    const scene = new THREE.Scene();
+    const geo = new THREE.SphereGeometry(10, 32, 16), pa = geo.attributes.position, col = [];
+    for (let i = 0; i < pa.count; i++) {
+      const y = pa.getY(i) / 10, k = y > 0 ? 0.26 + 0.3 * Math.pow(y, 0.6) : 0.26 - 0.2 * Math.pow(-y, 0.5);
+      col.push(k * 1.02, k, k * 0.97);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    const panel = (w, h, p, c, k) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k), side: THREE.DoubleSide }));
+      m.position.set(p[0], p[1], p[2]); m.lookAt(0, 1, 0); scene.add(m);
+    };
+    panel(3.2, 4.2, [4.2, 6.5, 5], 0xFFF2E6, 5.5);
+    panel(4, 3, [-6, 3, 4.5], 0xDCE5FF, 1.6);
+    panel(2.2, 5, [-3, 5, -6.5], 0xFFFFFF, 3);
+    panel(6, 1.2, [0, 9, 0], 0xFFFFFF, 1.8);
+    const pm = new THREE.PMREMGenerator(renderer), rt = pm.fromScene(scene, 0.035);
+    pm.dispose();
+    scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    return rt;
   }
   // Мягкая тень под ногами — градиент, а не тяжёлые карты теней
   function avatarShadow(THREE) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d');
     const gr = g.createRadialGradient(64, 64, 2, 64, 64, 63);
-    gr.addColorStop(0, 'rgba(0,0,0,0.45)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    gr.addColorStop(0, 'rgba(0,0,0,0.42)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.16)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.62), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-    mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.003;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.55), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+    mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.002;
     return mesh;
   }
-  function makeAvatarRenderer(THREE, canvas, preserve) {
+  function makeAvatarRenderer(THREE, canvas, preserve, shadows = true) {
     const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: !!preserve });
     r.outputEncoding = THREE.sRGBEncoding;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.15;
+    r.toneMappingExposure = 1.0;
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if (shadows) { r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; }
     return r;
   }
   function disposeObject(root) {
     root.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
-      ms.forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); });
+      ms.forEach((m) => {
+        for (const k of ['map', 'normalMap', 'alphaMap', 'roughnessMap']) { const t = m[k]; if (t && !t.avShared) t.dispose(); }
+        m.dispose();
+      });
     });
   }
 
   /* Сцена с аватаром. framing: 'full' — в полный рост, 'bust' — портрет по плечи.
-     Камера к новой точке переезжает плавно (в редакторе — кнопка «крупно»). */
-  function createAvatarScene(THREE, cfg, { framing = 'full', aspect = 1 } = {}) {
+     Камера к новой точке переезжает плавно (в редакторе — кнопка «крупно»). renderer — для карты окружения и теней */
+  function createAvatarScene(THREE, cfg, { framing = 'full', aspect = 1, renderer = null, lod = 'high' } = {}) {
     const scene = new THREE.Scene();
-    addAvatarLights(THREE, scene);
+    const shadows = !!(renderer && renderer.shadowMap.enabled);
+    const key = addAvatarLights(THREE, scene, shadows);
     scene.add(avatarShadow(THREE));
+    let env = null;
+    if (renderer) { try { env = avatarEnvironment(THREE, renderer); scene.environment = env.texture; } catch (err) { console.warn('[аватар] окружение:', err); } }
     const camera = new THREE.PerspectiveCamera(30, aspect, 0.05, 30);
     const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), curPos = new THREE.Vector3(), curLook = new THREE.Vector3();
     let group = null, P = null, mode = framing, aimed = false;
     const aim = () => {
-      if (mode === 'bust') { camPos.set(0, P.headY - 0.03, 1.32); camLook.set(0, P.headY - 0.09, 0); }
-      else { camPos.set(0, 1.06, 3.75); camLook.set(0, 0.94, 0); }
+      if (mode === 'bust') { camPos.set(0, P.headY - 0.055, 1.02); camLook.set(0, P.headY - 0.088, 0); }
+      else { const hh = P.height; camPos.set(0, hh * 0.5 + 0.13, hh * 2.08); camLook.set(0, hh * 0.5 + 0.02, 0); }
       if (!aimed) { curPos.copy(camPos); curLook.copy(camLook); aimed = true; }
+      if (shadows) avAimShadow(key, P, mode);
     };
     const setConfig = (c) => {
       if (group) { scene.remove(group); disposeObject(group); }
-      group = buildAvatarGroup(THREE, c);
+      group = buildAvatarGroup(THREE, c, { lod });
       P = avatarProportions(normalizeAvatar(c).gender);
       scene.add(group);
       aim();
@@ -6777,13 +8310,15 @@
       get framing() { return mode; },
       animate(t, yaw = 0, sway = 1) {
         group.rotation.y = yaw + Math.sin(t * 0.55) * 0.3 * sway;
-        const head = group.userData.head;
-        if (head) { head.rotation.z = Math.sin(t * 0.8) * 0.03 * sway; head.rotation.x = Math.sin(t * 0.63 + 1) * 0.025 * sway; }
+        const u = group.userData;
+        if (u.head) { u.head.rotation.z = Math.sin(t * 0.8) * 0.025 * sway; u.head.rotation.x = Math.sin(t * 0.63 + 1) * 0.02 * sway; }
+        if (u.blink) u.blink(sway ? avBlink(t) : 0);
+        if (u.gaze) u.gaze(sway ? t : -1);
         curPos.lerp(camPos, 0.12); curLook.lerp(camLook, 0.12);
         camera.position.copy(curPos); camera.lookAt(curLook);
       },
       resize(a) { camera.aspect = a; camera.updateProjectionMatrix(); },
-      dispose() { disposeObject(scene); },
+      dispose() { disposeObject(scene); if (env) env.dispose(); },
     };
   }
 
@@ -6792,10 +8327,11 @@
     if (!isThreeAvailable()) return false;
     const THREE = window.THREE;
     const { framing = 'full', still = false, yaw = 0.18 } = opts;
+    const big = size >= 150;
     try {
-      const renderer = makeAvatarRenderer(THREE, canvas, true);
+      const renderer = makeAvatarRenderer(THREE, canvas, true, still || big);
       renderer.setSize(size, size, false);
-      const av = createAvatarScene(THREE, cfg, { framing });
+      const av = createAvatarScene(THREE, cfg, { framing, renderer, lod: big ? 'high' : 'low' });
       let raf = null;
       const draw = (now) => { av.animate(now / 1000, yaw, still ? 0 : 1); renderer.render(av.scene, av.camera); };
       if (still) draw(0);
@@ -6999,7 +8535,7 @@
       if (placeMarkers.has(p.id)) { try { placeMarkers.get(p.id).destroy(); } catch {} placeMarkers.delete(p.id); }
       const html = buildMemoryMarkerElement(p);
       html.addEventListener('click', (e) => { e.stopPropagation(); openPostPopup(p); });
-      const marker = new mapgl.HtmlMarker(map2gis, { coordinates: p.coords, html, anchor: [0.5, 1], preventMapInteractions: false });
+      const marker = new mapgl.HtmlMarker(map2gis, { coordinates: p.coords, html, anchor: [0.5, 1], preventMapInteractions: true });
       placeMarkers.set(p.id, marker);
     }
   }
@@ -7014,8 +8550,8 @@
       ${postWithLabel(post) ? `<div class="pop-with">${escapeHtml(postWithLabel(post))}</div>` : ''}
       ${post.caption ? `<div class="pop-caption">${escapeHtml(post.caption)}</div>` : ''}
       <button type="button" class="pop-open">Открыть воспоминание</button>`;
-    wrap.querySelector('.pop-open').addEventListener('click', (e) => { e.stopPropagation(); closePopup(); jumpToPostInFeed(post.id); });
-    openPopupMarker = new mapgl.HtmlMarker(map2gis, { coordinates: post.coords, html: wrap, anchor: [0.5, 1], preventMapInteractions: false });
+    wrap.querySelector('.pop-open').addEventListener('click', (e) => { e.stopPropagation(); closePopup(); showSinglePost(post.id); });
+    openPopupMarker = new mapgl.HtmlMarker(map2gis, { coordinates: post.coords, html: wrap, anchor: [0.5, 1], preventMapInteractions: true });
   }
   function closePopup() { if (!openPopupMarker || !map2gis) { openPopupMarker = null; return; } try { openPopupMarker.destroy(); } catch {} openPopupMarker = null; }
   function jumpToPostInFeed(postId) {
@@ -10414,7 +11950,7 @@
     const size = () => [canvas.clientWidth || 480, canvas.clientHeight || 300];
     let [w, h] = size();
     renderer.setSize(w, h, false);
-    const av = createAvatarScene(THREE, avatarConfig, { aspect: w / h });
+    const av = createAvatarScene(THREE, avatarConfig, { aspect: w / h, renderer });
     let yaw = 0.2, drag = null, raf = null;
     const onDown = (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -11276,7 +12812,7 @@
   });
 
   document.getElementById('win-back').addEventListener('click', goBack);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeApp(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePopup(); closeApp(); } });
   // Клик по затемнённой карте за окном — закрыть окно и вернуться к карте
   document.getElementById('scrim').addEventListener('click', () => closeApp());
 
