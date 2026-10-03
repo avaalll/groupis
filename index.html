@@ -3129,6 +3129,9 @@
     .post-with-list { margin-top: 8px; }
     .post-with-list .person-card[role="radio"] .person-check { border-radius: 50%; }
     .post-head .post-author.is-with { font-size: 13.5px; }
+    .pw-link { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer;
+      text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
+    .pw-link:hover { color: var(--you); text-decoration-color: currentColor; }
     .map-popup .pop-with { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
   </style>
 </head>
@@ -7016,12 +7019,24 @@
   }
   function closePopup() { if (!openPopupMarker || !map2gis) { openPopupMarker = null; return; } try { openPopupMarker.destroy(); } catch {} openPopupMarker = null; }
   function jumpToPostInFeed(postId) {
+    // чужое воспоминание, где меня нет, — отдельным экраном, а не в моей ленте
+    if (!myPosts().some((x) => x.id === postId)) { showSinglePost(postId); return; }
     placesView = 'feed'; savePlacesView('feed'); showPlacesScreen();
     requestAnimationFrame(() => {
-      const idx = posts.findIndex((x) => x.id === postId);
-      const el = winBody.querySelectorAll('.post')[idx];
+      const el = winBody.querySelector(`.post[data-post-id="${CSS.escape(String(postId))}"]`);
       if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     });
+  }
+  function showSinglePost(postId) {
+    const p = posts.find((x) => x.id === postId);
+    if (!p) return;
+    if (openApp !== 'profile') showApp('profile');
+    setScreen(() => {
+      winTitle.textContent = 'Воспоминание';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = renderFeed([p]);
+      bindCarousels();
+    }, () => closeApp());
   }
   function flyToPost(post) { if (!map2gis || !Array.isArray(post.coords)) return; map2gis.setCenter(post.coords); map2gis.setZoom(15); }
 
@@ -9586,6 +9601,33 @@
     return `${c.by || p.author || ''} + ${rest}`;
   }
 
+  // Подпись с кнопками: отмеченного человека можно открыть, группу — посмотреть её участников
+  function postWithHtml(p) {
+    const c = p && p.companions;
+    if (!postWithLabel(p)) return '';
+    const myId = currentUser && String(currentUser.id);
+    const person = (id, text) => id && String(id) !== myId
+      ? `<button type="button" class="pw-link" data-post-person="${escapeHtml(id)}">${escapeHtml(text)}</button>`
+      : escapeHtml(text);
+    const rest = c.group && c.group.name
+      ? `<button type="button" class="pw-link" data-post-group="${escapeHtml(c.group.id || '')}">«${escapeHtml(c.group.name)}»</button>`
+      : (c.users || []).filter((u) => u.handle || u.name).map((u) => person(u.id, u.handle || u.name)).join(', ');
+    return `${person(p.authorId, c.by || p.author || '')} + ${rest}`;
+  }
+
+  /* Воспоминание одно на всех: запись одна (и маркер на карте один), а в «Воспоминаниях» его видят автор
+     и все отмеченные — друзья и участники отмеченной группы */
+  function postIncludesMe(p) {
+    const myId = currentUser && String(currentUser.id);
+    if (!myId || !p) return false;
+    if (String(p.authorId) === myId) return true;
+    const c = p.companions;
+    if (!c) return false;
+    if ((c.users || []).some((u) => String(u.id) === myId)) return true;
+    return !!(c.group && c.group.id && isGroupParticipant(groupById(c.group.id), currentUser.id));
+  }
+  function myPosts() { return posts.filter(postIncludesMe); }
+
   function postImages(p) {
     if (Array.isArray(p.images) && p.images.length) return p.images;
     if (p.image) return [p.image];
@@ -9999,9 +10041,9 @@
       ${isGrid ? renderGrid() : renderFeed()}`;
   }
 
-  function renderFeed() {
-    if (!posts.length) return placesEmptyHtml();
-    return `<div class="feed">${posts.map((p) => {
+  function renderFeed(list = myPosts()) {
+    if (!list.length) return placesEmptyHtml();
+    return `<div class="feed">${list.map((p) => {
       const imgs = postImages(p);
       const multi = imgs.length > 1;
       const mediaHtml = multi
@@ -10014,7 +10056,7 @@
         <header class="post-head">
           <span class="avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml((p.author || '?').trim().charAt(0).toUpperCase() || '?')}</span>
           <div class="row-main">
-            <div class="post-author ${postWithLabel(p) ? 'is-with' : ''}">${escapeHtml(postWithLabel(p) || p.author || '')}</div>
+            <div class="post-author ${postWithLabel(p) ? 'is-with' : ''}">${postWithHtml(p) || escapeHtml(p.author || '')}</div>
             <div class="post-place">📍 ${escapeHtml(p.place || '')}</div>
           </div>
           <span class="row-time">${escapeHtml(p.time || '')}</span>
@@ -10026,9 +10068,9 @@
     }).join('')}</div>`;
   }
 
-  function renderGrid() {
-    if (!posts.length) return placesEmptyHtml();
-    return `<div class="grid">${posts.map((p) => {
+  function renderGrid(list = myPosts()) {
+    if (!list.length) return placesEmptyHtml();
+    return `<div class="grid">${list.map((p) => {
       const imgs = postImages(p);
       const badge = imgs.length > 1 ? `<span class="cell-multi">${imgs.length}</span>` : '';
       return `<div class="grid-cell" data-post-id="${escapeHtml(p.id)}" role="button" tabindex="0">
@@ -10923,6 +10965,20 @@
       return;
     }
 
+    // ── воспоминание: отмеченный человек → его профиль, отмеченная группа → её участники ──
+    const postPerson = e.target.closest('[data-post-person]');
+    const postGroup = e.target.closest('[data-post-group]');
+    if (postPerson || postGroup) {
+      const postEl = e.target.closest('.post');
+      const pid = postEl && postEl.dataset.postId;
+      const back = winTitle.textContent === 'Воспоминание' ? () => showSinglePost(pid) : () => showPlacesScreen();
+      if (postPerson) { const uid = postPerson.dataset.postPerson; showFriendProfile(uid, personById(uid), back); return; }
+      const gid = postGroup.dataset.postGroup;
+      if (gid && groupById(gid)) showGroupDetailsScreen(gid, back);
+      else alert('Этой группы больше нет.');
+      return;
+    }
+
     // ── группы и match ──
     const viewProfile = e.target.closest('[data-view-profile]');
     // кнопки внутри строки («Чат», «×») обрабатываются ниже — профиль по ним не открываем
@@ -11136,12 +11192,7 @@
 
     const cell = e.target.closest('.grid-cell[data-post-id]');
     if (cell) {
-      const id = cell.dataset.postId;
-      const idx = posts.findIndex((x) => x.id === id);
-      if (idx >= 0) {
-        placesView = 'feed'; savePlacesView(placesView); showPlacesScreen();
-        requestAnimationFrame(() => { const el = winBody.querySelectorAll('.post')[idx]; if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
-      }
+      jumpToPostInFeed(cell.dataset.postId);
     }
   });
 
