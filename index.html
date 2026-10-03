@@ -5389,6 +5389,9 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wishes' }, async () => {
         await loadWishesFromDB();
         refreshWishClouds();
+        // кто-то опубликовал желание «для всех» или убрал его — появляется на карте или пропадает
+        await loadGroupMemberProfiles();
+        loadUserLocations();
         if (openApp === 'profile' && !win.hidden && winTitle.textContent === 'Желания' && !win.querySelector('.modal-backdrop')) quietly(showWishesScreen);
       }).subscribe();
     rtChannels.push(ch2);
@@ -5485,12 +5488,16 @@
      — друзей;
      — участников моих групп (где я лидер);
      — лидеров всех групп: над ними иконка группы, видна всем;
-     — после match — всех участников групп, с которыми у моих групп match. */
+     — после match — всех участников групп, с которыми у моих групп match;
+     — всех, у кого есть желание «для всех» без места: его аватар и облако видят все. */
   function computeRelevantUserIds() {
     const ids = new Set();
     const myId = currentUser && currentUser.id;
     if (!myId) return ids;
     for (const f of friends) ids.add(f.id);
+    for (const w of wishes) {
+      if (w.audience === 'all' && !Array.isArray(w.coords) && w.authorId) ids.add(w.authorId);
+    }
     for (const g of groups) {
       const mine = isGroupParticipant(g, myId);
       // Лидер чужой группы виден, только если группа проходит фильтры
@@ -5559,7 +5566,7 @@
       names = groups.filter((g) => matchedIds.has(String(g.id)) && !inGroup(g, myId) && inGroup(g, userId))
         .map((g) => (g.name || '').trim()).filter(Boolean);
     }
-    if (!names.length) return 'группа';
+    if (!names.length) return '';   // не из общей группы и не из группы с match — подписи нет
     let first = names[0];
     if (first.length > 16) first = first.slice(0, 15) + '…';
     return names.length > 1 ? `${first} +${names.length - 1}` : first;
@@ -5610,7 +5617,8 @@
     const isLeader = ownedGroups.length > 0;
 
     // Цвет плашки: друг из общей группы — зелёная, не друг — коричневая, просто друг — обычная
-    const tone = isFriend ? (groupLabel ? 'is-friend-group' : '') : 'is-group';
+    // человек, который виден только из-за желания «для всех», — обычная плашка, как у друга
+    const tone = isFriend ? (groupLabel ? 'is-friend-group' : '') : (groupLabel ? 'is-group' : '');
     const dotColor = { '': 'var(--you)', 'is-friend-group': '#0D8A98', 'is-group': '#131318' }[tone];
 
     const bottom = imgUrl
@@ -5627,7 +5635,7 @@
           <div class="user-badge-inner ${tone}">
             ${avatarInner}
             <span class="user-badge-name">${escapeHtml(label)}</span>
-            ${groupLabel || !isFriend ? `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel || 'группа')}</span>` : ''}
+            ${groupLabel ? `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel)}</span>` : ''}
           </div>
         </div>`;
 
