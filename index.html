@@ -2140,7 +2140,14 @@
       position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: min(62vh, 560px);
       overflow: hidden; background: #090C0B; -webkit-user-select: none; user-select: none;
     }
-    .photo-hero.is-many { cursor: pointer; }
+    .photo-hero[data-photo-hero] { cursor: zoom-in; transition: height .42s var(--ease); }
+    .photo-hero.is-expanded { cursor: zoom-out; aspect-ratio: auto !important; max-height: none !important; }
+    .ph-slide img { transition: transform .42s var(--ease), object-position .42s var(--ease); }
+    /* раскрытое фото — целиком, без выбранной области */
+    .photo-hero.is-expanded .ph-slide img { object-position: 50% 50% !important; transform: none !important; }
+    /* очень высокое фото не помещается по высоте — показываем целиком, с полями по бокам */
+    .photo-hero.is-expanded.is-capped .ph-slide img { object-fit: contain; }
+    .photo-hero.is-expanded::after { height: 34%; }
     .ph-track {
       display: flex; height: 100%; overflow-x: auto; overflow-y: hidden;
       scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none;
@@ -2193,7 +2200,38 @@
     .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; transition: opacity .2s; }
     .photo-grid.is-busy { opacity: .55; pointer-events: none; }
     .pg-item, .pg-add { position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; }
-    .pg-item { background: var(--field) center / cover no-repeat; cursor: pointer; }
+    .pg-item { background: var(--field); cursor: pointer; }
+    .pg-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+
+    /* ── Окно выбора области фото ── */
+    .crop-backdrop {
+      position: fixed; inset: 0; z-index: 450; display: grid; place-items: center; padding: 16px;
+      background: rgba(6, 6, 10, .62); animation: fade-in .2s ease both;
+    }
+    .crop-modal {
+      width: min(420px, 100%); max-height: calc(100dvh - 32px); overflow: auto; display: grid; gap: 12px;
+      padding: 18px 16px 14px; border-radius: 26px; background: var(--win); color: var(--ink);
+      box-shadow: 0 40px 90px -20px rgba(0, 0, 0, .55), inset 0 1px 0 var(--rim);
+      animation: modal-in .4s var(--spring) both;
+    }
+    .crop-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; text-align: center; }
+    .crop-stage {
+      position: relative; width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
+      background: #090C0B; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
+    }
+    .crop-stage:active { cursor: grabbing; }
+    .crop-stage img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .crop-grid {
+      position: absolute; inset: 0; pointer-events: none; opacity: .5;
+      background:
+        linear-gradient(90deg, transparent calc(33.33% - .5px), rgba(255,255,255,.55) calc(33.33% - .5px) calc(33.33% + .5px), transparent calc(33.33% + .5px) calc(66.66% - .5px), rgba(255,255,255,.55) calc(66.66% - .5px) calc(66.66% + .5px), transparent calc(66.66% + .5px)),
+        linear-gradient(transparent calc(33.33% - .5px), rgba(255,255,255,.55) calc(33.33% - .5px) calc(33.33% + .5px), transparent calc(33.33% + .5px) calc(66.66% - .5px), rgba(255,255,255,.55) calc(66.66% - .5px) calc(66.66% + .5px), transparent calc(66.66% + .5px));
+    }
+    .crop-ring { position: absolute; inset: 0; pointer-events: none; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255,255,255,.8), 0 0 0 999px rgba(0,0,0,.28); }
+    .crop-hint { font-size: 12px; color: var(--ink-soft); text-align: center; }
+    .crop-zoom { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); }
+    .crop-zoom svg { width: 18px; height: 18px; flex: none; }
+    .crop-zoom .flt-range { flex: 1; }
     .pg-item.is-main { cursor: default; box-shadow: inset 0 0 0 2px var(--you); }
     .pg-badge {
       position: absolute; left: 6px; bottom: 6px; padding: 3px 8px; border-radius: 999px;
@@ -4027,40 +4065,184 @@
     return !!error && (error.code === '42P01' || error.code === 'PGRST205');
   }
 
+  let photoCropMissing = false;      // нет колонки crop (не выполнен supabase_photo_crop.sql) — фото без выбранной области
+
+  function isMissingCropError(error) {
+    return !!error && /crop/i.test(error.message || '') && (error.code === '42703' || error.code === 'PGRST204' || /column/i.test(error.message || ''));
+  }
+
   async function loadProfilePhotos(userId) {
     if (profilePhotosMissing || !userId) return null;
+    const query = (cols) => supabaseClient.from('profile_photos')
+      .select(cols).eq('user_id', userId)
+      .order('created_at', { ascending: false }).limit(PHOTOS_LIMIT);
     try {
-      const { data, error } = await supabaseClient.from('profile_photos')
-        .select('id, data, created_at').eq('user_id', userId)
-        .order('created_at', { ascending: false }).limit(PHOTOS_LIMIT);
+      let { data, error } = await query(photoCropMissing ? 'id, data, created_at' : 'id, data, created_at, crop');
+      if (error && isMissingCropError(error)) {
+        photoCropMissing = true;
+        ({ data, error } = await query('id, data, created_at'));
+      }
       if (error) {
         if (isMissingTableError(error)) profilePhotosMissing = true;
         console.warn('[profile_photos] load:', error.message);
         return null;
       }
-      return (data || []).map((r) => ({ id: r.id, url: r.data, at: r.created_at }));
+      return (data || []).map((r) => ({ id: r.id, url: r.data, at: r.created_at, crop: normCrop(r.crop) }));
     } catch (err) { console.warn('[profile_photos] exception:', err); return null; }
+  }
+
+  // Новое фото в галерею (с выбранной областью, если колонка crop есть)
+  async function insertProfilePhoto(userId, data, crop) {
+    const row = { user_id: userId, data };
+    if (crop && !photoCropMissing) row.crop = crop;
+    let { error } = await supabaseClient.from('profile_photos').insert(row);
+    if (error && row.crop && isMissingCropError(error)) {
+      photoCropMissing = true;
+      delete row.crop;
+      ({ error } = await supabaseClient.from('profile_photos').insert(row));
+      if (!error) alert('Фото сохранено, но без выбранной области: выполните supabase_photo_crop.sql в Supabase.');
+    }
+    return { error };
+  }
+
+  /* ── Область фото ──
+     Фото хранится целиком, а рядом — какая его часть видна в профиле: { x, y, z }.
+     x, y (0…1) — точка фото, которая стоит в той же доле рамки (как object-position), z — приближение.
+     Так рамка любой формы (квадрат в профиле, широкая полоса над аватаром) показывает выбранное место,
+     а по нажатию фото раскрывается целиком. */
+  function normCrop(c) {
+    if (!c || typeof c !== 'object') return null;
+    const x = Number(c.x), y = Number(c.y), z = Number(c.z);
+    if (![x, y, z].every(Number.isFinite)) return null;
+    return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)), z: Math.min(4, Math.max(1, z)) };
+  }
+  function cropStyle(crop) {
+    const c = normCrop(crop);
+    if (!c) return '';
+    const p = `${(c.x * 100).toFixed(2)}% ${(c.y * 100).toFixed(2)}%`;
+    return `object-position:${p};transform-origin:${p};transform:scale(${c.z.toFixed(3)})`;
+  }
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image decode error'));
+      img.src = url;
+    });
+  }
+
+  // Квадратная миниатюра выбранной области — для карты, чатов и списков
+  async function cropThumbDataUrl(url, crop, side = 256, quality = 0.85) {
+    const img = await loadImage(url);
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const c = normCrop(crop) || { x: 0.5, y: 0.5, z: 1 };
+    const F = Math.min(iw, ih) / c.z;
+    const sx = c.x * (iw - F), sy = c.y * (ih - F);
+    const out = Math.round(Math.min(side, F));
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = out;
+    canvas.getContext('2d').drawImage(img, sx, sy, F, F, 0, 0, out, out);
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+
+  /* Окно выбора области: фото двигается пальцем или мышью, приближается щипком, колесом или ползунком.
+     Возвращает { x, y, z } или null, если человек отменил. */
+  async function openPhotoCropper(url, { title = 'Область фото', done = 'Готово' } = {}) {
+    let img;
+    try { img = await loadImage(url); } catch { return { x: 0.5, y: 0.5, z: 1 }; }
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'crop-backdrop';
+      back.innerHTML = `
+        <div class="crop-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+          <div class="crop-title">${escapeHtml(title)}</div>
+          <div class="crop-stage"><img src="${escapeHtml(url)}" alt="" draggable="false"><span class="crop-grid" aria-hidden="true"></span><span class="crop-ring" aria-hidden="true"></span></div>
+          <div class="crop-hint">Перетащите фото и приблизьте его — так его увидят в профиле. Круг — как фото видно на карте.</div>
+          <div class="crop-zoom">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5M8 10.5h5"/></svg>
+            <input type="range" class="flt-range" min="1" max="4" step="0.01" value="1" aria-label="Приближение">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5M10.5 8v5M8 10.5h5"/></svg>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn" data-crop-cancel>Отмена</button>
+            <button type="button" class="btn btn-primary" data-crop-done>${escapeHtml(done)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(back);
+      const stage = back.querySelector('.crop-stage');
+      const im = stage.querySelector('img');
+      const range = back.querySelector('input[type="range"]');
+      const c = { x: 0.5, y: 0.5, z: 1 };
+      const paint = () => {
+        im.style.cssText = cropStyle(c);
+        range.value = c.z;
+        range.style.setProperty('--p', ((c.z - 1) / 3 * 100).toFixed(1) + '%');
+      };
+      // приближение вокруг точки рамки (fx, fy — доли рамки): точка фото под ней остаётся на месте
+      const zoomTo = (z, fx = 0.5, fy = 0.5) => {
+        z = Math.min(4, Math.max(1, z));
+        const F0 = Math.min(iw, ih);
+        const at = (cz, p, f, n) => { const vis = F0 / cz; return (p * (n - vis) + f * vis) / n; };   // точка фото под долей рамки
+        const ux = at(c.z, c.x, fx, iw), uy = at(c.z, c.y, fy, ih);
+        const solve = (u, f, n) => { const vis = F0 / z; return n - vis > 0.5 ? Math.min(1, Math.max(0, (u * n - f * vis) / (n - vis))) : 0.5; };
+        c.x = solve(ux, fx, iw); c.y = solve(uy, fy, ih); c.z = z;
+        paint();
+      };
+      const pointers = new Map();
+      let last = null;
+      const onDown = (e) => {
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        try { stage.setPointerCapture(e.pointerId); } catch {}
+        last = null;
+      };
+      const onMove = (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        const prev = pointers.get(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const W = stage.clientWidth, s = W / Math.min(iw, ih);
+        if (pointers.size === 1) {
+          // перетаскивание: фото идёт за пальцем
+          const ox = c.z * iw * s - W, oy = c.z * ih * s - W;
+          if (ox > 0.5) c.x = Math.min(1, Math.max(0, c.x - (e.clientX - prev.x) / ox));
+          if (oy > 0.5) c.y = Math.min(1, Math.max(0, c.y - (e.clientY - prev.y) / oy));
+          paint();
+        } else if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          const r = stage.getBoundingClientRect();
+          const fx = ((a.x + b.x) / 2 - r.left) / r.width, fy = ((a.y + b.y) / 2 - r.top) / r.height;
+          if (last) zoomTo(c.z * dist / last, fx, fy);
+          last = dist;
+        }
+      };
+      const onUp = (e) => { pointers.delete(e.pointerId); last = null; };
+      stage.addEventListener('pointerdown', onDown);
+      stage.addEventListener('pointermove', onMove);
+      stage.addEventListener('pointerup', onUp);
+      stage.addEventListener('pointercancel', onUp);
+      stage.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const r = stage.getBoundingClientRect();
+        zoomTo(c.z * Math.exp(-e.deltaY * 0.0015), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+      }, { passive: false });
+      range.addEventListener('input', () => zoomTo(Number(range.value)));
+      const finish = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); finish(null); }
+        else if (e.key === 'Enter') { e.preventDefault(); finish(normCrop(c)); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      back.querySelector('[data-crop-cancel]').addEventListener('click', () => finish(null));
+      back.querySelector('[data-crop-done]').addEventListener('click', () => finish(normCrop(c)));
+      paint();
+    });
   }
 
   // Что показывать: фото из таблицы, а если их нет — единственное старое фото из profiles.avatar
   function photosOrAvatar(rows, avatar) {
     if (rows && rows.length) return rows;
     return avatar ? [{ id: null, url: avatar }] : [];
-  }
-
-  function downscaleDataUrl(url, maxSide = 256, quality = 0.85) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('image decode error'));
-      img.onload = () => {
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = url;
-    });
   }
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -4590,32 +4772,24 @@
         const rm = authCard.querySelector('#reg-avatar-remove');
         if (draft.avatar) { prev.style.backgroundImage = `url('${draft.avatar}')`; prev.textContent = ''; }
         authCard.querySelector('#reg-avatar-pick').addEventListener('click', () => inp.click());
-        inp.addEventListener('change', () => {
+        inp.addEventListener('change', async () => {
           const file = inp.files && inp.files[0];
+          inp.value = '';
           if (!file || !file.type.startsWith('image/')) return;
-          // крупная копия — первое фото в галерее профиля, маленькая (draft.avatar) — для карты
-          fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY).then((u) => { draft.photo = u; }).catch(() => { draft.photo = ''; });
-          const reader = new FileReader();
-          reader.onload = () => {
-            const img = new Image();
-            img.onload = () => {
-              const max = 256;
-              const s = Math.min(1, max / Math.max(img.width, img.height));
-              const w = Math.round(img.width * s), h = Math.round(img.height * s);
-              const c = document.createElement('canvas');
-              c.width = w; c.height = h;
-              c.getContext('2d').drawImage(img, 0, 0, w, h);
-              draft.avatar = c.toDataURL('image/jpeg', 0.85);
-              prev.style.backgroundImage = `url('${draft.avatar}')`;
-              prev.textContent = '';
-              rm.hidden = false;
-            };
-            img.src = reader.result;
-          };
-          reader.readAsDataURL(file);
+          // крупная копия — первое фото в галерее профиля, маленькая (draft.avatar) — выбранная область, для карты
+          try {
+            const photo = await fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY);
+            const crop = await openPhotoCropper(photo);
+            if (!crop) return;
+            draft.photo = photo; draft.crop = crop;
+            draft.avatar = await cropThumbDataUrl(photo, crop);
+            prev.style.backgroundImage = `url('${draft.avatar}')`;
+            prev.textContent = '';
+            rm.hidden = false;
+          } catch (err) { console.warn('[reg photo]', err); }
         });
         rm.addEventListener('click', () => {
-          draft.avatar = ''; draft.photo = '';
+          draft.avatar = ''; draft.photo = ''; draft.crop = null;
           prev.style.backgroundImage = '';
           prev.textContent = (draft.name || '?').charAt(0).toUpperCase() || '?';
           rm.hidden = true;
@@ -4711,7 +4885,7 @@
 
         currentUser = signUpData.user;
         if (draft.photo && draft.avatar) {
-          const { error: phErr } = await supabaseClient.from('profile_photos').insert({ user_id: currentUser.id, data: draft.photo });
+          const { error: phErr } = await insertProfilePhoto(currentUser.id, draft.photo, draft.crop);
           if (phErr) console.warn('[profile_photos] first photo:', phErr.message);
         }
         applyUserToProfileFromRow({
@@ -9641,14 +9815,15 @@
     return `<span class="avatar" style="width:${size}px;height:${size}px;background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml(letter)}</span>`;
   }
 
-  /* Шапка профиля с фото во всю ширину. Несколько фото листаются свайпом
-     или нажатием на левую/правую половину, полоски сверху показывают, какое открыто. */
+  /* Шапка профиля с фото во всю ширину: видна выбранная при добавлении область. Несколько фото листаются
+     свайпом, полоски сверху показывают, какое открыто. Нажатие раскрывает фото целиком (как в Telegram),
+     повторное — сворачивает обратно; в раскрытом виде нажатие у левого или правого края листает фото. */
   function photoHeroHtml(photos, name, handle) {
     const many = photos.length > 1;
     return `
       <div class="photo-hero ${many ? 'is-many' : ''}" data-photo-hero>
         <div class="ph-track">${photos.map((ph, i) => `
-          <div class="ph-slide"><img src="${safeUrl(ph.url)}" alt="" draggable="false" ${i ? 'loading="lazy"' : ''}></div>`).join('')}
+          <div class="ph-slide"><img src="${safeUrl(ph.url)}" alt="" draggable="false" ${i ? 'loading="lazy"' : ''} style="${cropStyle(ph.crop)}"></div>`).join('')}
         </div>
         ${many ? `<div class="ph-bars" aria-hidden="true">${photos.map((_, i) => `<span class="${i ? '' : 'is-on'}"></span>`).join('')}</div>` : ''}
         <div class="ph-caption">
@@ -9664,6 +9839,57 @@
     const cur = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
     const next = Math.max(0, Math.min(n - 1, cur + delta));
     if (next !== cur) track.scrollTo({ left: next * track.clientWidth, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
+  // Высота раскрытого фото: по пропорциям открытого снимка, но не выше 80% экрана
+  function photoHeroIndex(hero) {
+    const track = hero.querySelector('.ph-track');
+    return Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  }
+  function photoHeroFullHeight(hero) {
+    const img = hero.querySelectorAll('.ph-slide img')[photoHeroIndex(hero)];
+    const w = hero.clientWidth;
+    const ratio = img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1;
+    const cap = window.innerHeight * 0.8;
+    hero.classList.toggle('is-capped', w * ratio > cap + 1 || w * ratio < 159);
+    return Math.round(Math.max(160, Math.min(w * ratio, cap)));
+  }
+  function setPhotoHeroExpanded(hero, on) {
+    if (on === hero.classList.contains('is-expanded')) return;
+    const from = hero.offsetHeight;
+    if (on) {
+      hero.style.height = from + 'px';
+      void hero.offsetHeight;
+      hero.classList.add('is-expanded');
+      hero.style.height = photoHeroFullHeight(hero) + 'px';
+      return;
+    }
+    // обратно — к высоте, которую задаёт вёрстка: меряем её без анимации и плавно возвращаемся
+    hero.classList.remove('is-expanded');
+    hero.style.transition = 'none';
+    hero.style.height = '';
+    const to = hero.offsetHeight;
+    hero.style.height = from + 'px';
+    void hero.offsetHeight;
+    hero.style.transition = '';
+    hero.style.height = to + 'px';
+    const clear = (e) => {
+      if (e && e.target !== hero) return;
+      hero.removeEventListener('transitionend', clear);
+      if (!hero.classList.contains('is-expanded')) hero.style.height = '';
+    };
+    hero.addEventListener('transitionend', clear);
+    setTimeout(clear, 600);
+  }
+  // В раскрытом виде листнули к другому фото (или оно догрузилось) — подгоняем высоту под него
+  function syncPhotoHeroHeight(hero) {
+    if (hero && hero.classList.contains('is-expanded')) hero.style.height = photoHeroFullHeight(hero) + 'px';
+  }
+  function onPhotoHeroTap(hero, clientX) {
+    if (!hero.classList.contains('is-expanded')) { setPhotoHeroExpanded(hero, true); return; }
+    const r = hero.getBoundingClientRect(), f = (clientX - r.left) / r.width;
+    if (hero.classList.contains('is-many') && (f < 0.28 || f > 0.72)) { photoHeroStep(hero, f < 0.5 ? -1 : 1); return; }
+    setPhotoHeroExpanded(hero, false);
   }
 
   function profileAvatarHtml(size = 84) {
@@ -10499,7 +10725,8 @@
   function photoGridHtml() {
     const photos = photosOrAvatar(myPhotos, profile.avatar);
     const tiles = photos.map((ph, i) => `
-      <div class="pg-item ${i ? '' : 'is-main'}" ${i && ph.id ? `data-pg-main="${escapeHtml(ph.id)}" role="button" tabindex="0" title="Сделать главным"` : ''} style="background-image:url('${safeUrl(ph.url)}')">
+      <div class="pg-item ${i ? '' : 'is-main'}" ${i && ph.id ? `data-pg-main="${escapeHtml(ph.id)}" role="button" tabindex="0" title="Сделать главным"` : ''}>
+        <img class="pg-img" src="${safeUrl(ph.url)}" alt="" draggable="false" style="${cropStyle(ph.crop)}">
         ${i ? '' : '<span class="pg-badge">Главное</span>'}
         <button type="button" class="pg-del" data-pg-del="${escapeHtml(ph.id || '')}" aria-label="Удалить фото">×</button>
       </div>`).join('');
@@ -10523,30 +10750,47 @@
     if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); }
     loadUserLocations();
   }
+  // Миниатюра для карты — выбранная область главного фото
   async function syncMyAvatar() {
     const main = myPhotos && myPhotos[0];
-    await saveMyAvatar(main ? await downscaleDataUrl(main.url, 256, 0.85) : '');
+    await saveMyAvatar(main ? await cropThumbDataUrl(main.url, main.crop) : '');
   }
 
   async function addMyPhotos(files) {
     if (myPhotos === null && !profilePhotosMissing) await reloadMyPhotos();
     const room = PHOTOS_LIMIT - photosOrAvatar(myPhotos, profile.avatar).length;
     if (room <= 0) return;
-    const urls = [];
-    for (const file of files.slice(0, room)) urls.push(await fileToCompressedDataURL(file, PHOTO_MAX_SIDE, PHOTO_QUALITY));
+    // каждое фото: сжать и выбрать область; отменённое в окне выбора не добавляется
+    const picked = files.slice(0, room);
+    const items = [];
+    for (let i = 0; i < picked.length; i++) {
+      const data = await fileToCompressedDataURL(picked[i], PHOTO_MAX_SIDE, PHOTO_QUALITY);
+      const crop = await openPhotoCropper(data, {
+        title: picked.length > 1 ? `Область фото · ${i + 1} из ${picked.length}` : 'Область фото',
+        done: i < picked.length - 1 ? 'Дальше' : 'Готово',
+      });
+      if (crop) items.push({ data, crop });
+    }
+    if (!items.length) return;
     if (profilePhotosMissing) {
       // таблицы фото нет — как раньше, одно фото в profiles.avatar
-      await saveMyAvatar(await downscaleDataUrl(urls[urls.length - 1], 256, 0.85));
+      const last = items[items.length - 1];
+      await saveMyAvatar(await cropThumbDataUrl(last.data, last.crop));
       alert('Сохранено одно фото. Чтобы добавлять несколько, выполните supabase_profile_photos.sql в Supabase.');
       return;
     }
     // старое единственное фото (из profiles.avatar) сначала переносим в галерею, чтобы оно не пропало
-    if ((!myPhotos || !myPhotos.length) && profile.avatar) urls.unshift(profile.avatar);
+    if ((!myPhotos || !myPhotos.length) && profile.avatar) items.unshift({ data: profile.avatar, crop: null });
     // по одному — created_at идут по порядку, последнее выбранное фото станет главным
-    for (const data of urls) {
-      const { error } = await supabaseClient.from('profile_photos').insert({ user_id: currentUser.id, data });
+    for (const it of items) {
+      const { error } = await insertProfilePhoto(currentUser.id, it.data, it.crop);
       if (error) {
-        if (isMissingTableError(error)) { profilePhotosMissing = true; return addMyPhotos(files); }
+        if (isMissingTableError(error)) {
+          profilePhotosMissing = true;
+          const last = items[items.length - 1];
+          await saveMyAvatar(await cropThumbDataUrl(last.data, last.crop));
+          return;
+        }
         throw error;
       }
     }
@@ -10837,13 +11081,17 @@
     const track = e.target;
     if (!track.classList || !track.classList.contains('ph-track')) return;
     const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
-    track.parentElement.querySelectorAll('.ph-bars span').forEach((s, i) => s.classList.toggle('is-on', i === idx));
+    const hero = track.parentElement;
+    hero.querySelectorAll('.ph-bars span').forEach((s, i) => s.classList.toggle('is-on', i === idx));
+    if (hero.dataset.phIdx !== String(idx)) { hero.dataset.phIdx = String(idx); syncPhotoHeroHeight(hero); }
+  }, true);
+  // фото догрузилось (листаемые грузятся лениво) — в раскрытом виде высота подстраивается под него
+  winBody.addEventListener('load', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.closest('.ph-slide')) syncPhotoHeroHeight(e.target.closest('.photo-hero'));
   }, true);
   winBody.addEventListener('click', (e) => {
-    const hero = e.target.closest('.photo-hero.is-many');
-    if (!hero) return;
-    const r = hero.getBoundingClientRect();
-    photoHeroStep(hero, e.clientX - r.left < r.width / 2 ? -1 : 1);
+    const hero = e.target.closest('.photo-hero[data-photo-hero]');
+    if (hero) onPhotoHeroTap(hero, e.clientX);
   });
   win.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
