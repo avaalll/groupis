@@ -21,6 +21,10 @@
       try { pal = localStorage.getItem('app.palette') || 'prism'; } catch (e) {}
       if (!/^(acid|ember|frost)$/.test(pal)) pal = 'prism';
       document.documentElement.setAttribute('data-palette', pal);
+      /* Цвет системной панели — сразу по фону схемы (--land), а не после загрузки всего скрипта */
+      var land = { prism: ['#EDECE9', '#0B0B0E'], acid: ['#EEF1E2', '#070806'], ember: ['#F4E8E0', '#0B0605'], frost: ['#E4EDF7', '#050912'] };
+      var themeMeta = document.getElementById('meta-theme-color');
+      if (themeMeta) themeMeta.setAttribute('content', land[pal][dark ? 1 : 0]);
       window.__paletteAssets = function (p) {
         var dir = p === 'prism' ? 'icons/' : 'icons/' + p + '/';
         var set = function (id, href) { var el = document.getElementById(id); if (el && el.getAttribute('href') !== href) el.setAttribute('href', href); };
@@ -35,7 +39,7 @@
     })();
   </script>
   <!-- Текстура глобуса и логотип экрана входа — загружаем сразу, чтобы сцена появилась без задержки -->
-  <link rel="preload" href="img/earth-dark.jpg" as="image">
+  <link rel="preload" href="img/earth-dark.jpg" as="image" crossorigin="anonymous">
   <link rel="icon" href="icons/logo.svg" type="image/svg+xml" id="link-icon-svg">
   <link rel="icon" href="icons/icon-192.png" type="image/png" id="link-icon-png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" id="link-icon-apple">
@@ -3080,6 +3084,14 @@
     /* ── Чат: меню сообщения, выбор нескольких, закреплённое ── */
     .chat-msg { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: opacity .2s ease, box-shadow .2s ease; }
     .chat-view.is-selecting .chat-msg { cursor: pointer; }
+    /* Плашка даты: по центру ленты, при прокрутке держится у верха */
+    .chat-date { position: sticky; top: 2px; z-index: 2; align-self: center; flex: none; margin: 4px 0 2px; pointer-events: none; -webkit-user-select: none; user-select: none; }
+    .chat-date span {
+      display: block; padding: 4px 11px; border-radius: 999px;
+      background: var(--glass); border: 1px solid var(--glass-edge);
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      color: var(--ink-soft); font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+    }
     .chat-view.is-selecting .chat-msg:not(.is-selected) { opacity: .5; }
     .chat-msg.is-selected { box-shadow: 0 0 0 2px var(--win), 0 0 0 4px var(--c2); }
     .chat-msg.is-flash { animation: msg-flash 1.2s ease; }
@@ -6270,7 +6282,7 @@
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = src; s.async = true;
-      s.onload = resolve; s.onerror = () => reject(new Error('Не удалось загрузить ' + src));
+      s.onload = resolve; s.onerror = () => { s.remove(); reject(new Error('Не удалось загрузить ' + src)); };
       document.head.appendChild(s);
     });
   }
@@ -6306,7 +6318,11 @@
       syncWishScale();
 
       syncPostMarkers(); syncWishMarkers(); startGeolocation();
-    } catch (err) { console.error('[карта]', err); }
+    } catch (err) {
+      console.error('[карта]', err);
+      // Карта не загрузилась (нет сети) — пробуем снова, когда связь вернётся
+      if (!map2gis) { mapStarted = false; addEventListener('online', ensureMapStarted, { once: true }); }
+    }
   }
 
   /* ═══════ НАСТРОЙКИ ═══════ */
@@ -8617,7 +8633,46 @@
       ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
       : escapeHtml(m.content);
     const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + fmtTime(m.createdAt);
-    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}">${author}${body}<span class="chat-msg-time">${time}</span></div>`;
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}">${author}${body}<span class="chat-msg-time">${time}</span></div>`;
+  }
+
+  /* ── Даты в ленте чата ──
+     Перед первым сообщением каждого дня — плашка по центру: «Сегодня», «Вчера», «5 октября»,
+     а для прошлых лет — «5 октября 2024». При прокрутке плашка текущего дня держится у верха ленты. */
+  function chatDayKey(iso) {
+    let d = iso ? new Date(iso) : new Date();
+    if (isNaN(d)) d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function chatDayLabel(key) {
+    const [y, mo, day] = key.split('-').map(Number);
+    const d = new Date(y, mo - 1, day), now = new Date();
+    const diff = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - d) / 86400000);
+    if (diff === 0) return 'Сегодня';
+    if (diff === 1) return 'Вчера';
+    return d.toLocaleDateString('ru-RU', y === now.getFullYear() ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' }).replace(/\s*г\.$/, '');
+  }
+  // Привести плашки в соответствие с сообщениями в ленте: добавить недостающие, убрать лишние
+  function syncChatDates(body) {
+    if (!body) return;
+    const isDate = (el) => !!el && el.classList.contains('chat-date');
+    let changed = false, prevDay = null;
+    for (const el of body.querySelectorAll(':scope > .chat-msg')) {
+      const day = el.dataset.day || prevDay;
+      const sep = isDate(el.previousElementSibling) ? el.previousElementSibling : null;
+      if (day && day !== prevDay) {
+        const label = chatDayLabel(day);
+        if (!sep) { el.insertAdjacentHTML('beforebegin', `<div class="chat-date"><span>${label}</span></div>`); changed = true; }
+        else if (sep.firstElementChild.textContent !== label) sep.firstElementChild.textContent = label;
+      } else if (sep) { sep.remove(); changed = true; }
+      prevDay = day;
+    }
+    // плашка, за которой не осталось сообщений её дня
+    for (const sep of body.querySelectorAll(':scope > .chat-date')) {
+      const next = sep.nextElementSibling;
+      if (!next || !next.classList.contains('chat-msg')) { sep.remove(); changed = true; }
+    }
+    if (changed && chat && chat.stick) scrollChatToBottom();
   }
 
   const mediaUrlCache = new Map(); // путь в Storage → { url, exp }
@@ -8740,6 +8795,9 @@
     body.addEventListener('scroll', () => {
       if (chat) chat.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
     }, { passive: true });
+    syncChatDates(body);
+    // лента меняется из многих мест (новое сообщение, удаление, перерисовка) — плашки дат следуют за ней
+    new MutationObserver(() => syncChatDates(body)).observe(body, { childList: true });
     hydrateChatMedia(body);
     scrollChatToBottom();
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
@@ -11532,11 +11590,32 @@
   updateBadge();
 
   /* ═══════ СТАРТ ═══════ */
+  // Пользователь из сессии, сохранённой supabase-js на устройстве (если сервер её отклонил, она уже стёрта)
+  function storedSessionUser() {
+    try {
+      const raw = localStorage.getItem('sb-' + new URL(SUPABASE_URL).hostname.split('.')[0] + '-auth-token');
+      const saved = raw ? JSON.parse(raw) : null;
+      return saved && saved.user && saved.user.id ? saved.user : null;
+    } catch { return null; }
+  }
+
   async function bootApp() {
-    const { data: { session: s } } = await supabaseClient.auth.getSession();
-    if (s && s.user) {
-      currentUser = s.user;
-      const row = await loadProfileRow(currentUser.id);
+    let user = null;
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      user = data && data.session ? data.session.user : null;
+      // Без сети просроченный токен не обновить, но вход остаётся в силе: открываем приложение
+      // по сохранённой сессии, токен обновится сам, когда связь вернётся
+      if (!user && error) user = storedSessionUser();
+    } catch (err) {
+      console.warn('[auth] сессия:', err);
+      user = storedSessionUser();
+    }
+    if (user) {
+      currentUser = user;
+      // Профиль с прошлого запуска — на случай, если сервер недоступен
+      let row = await loadProfileRow(currentUser.id);
+      if (row) KV.set('profile:' + currentUser.id, row); else row = (await KV.get('profile:' + currentUser.id)) || null;
       applyUserToProfileFromRow(row, currentUser.email);
       document.body.classList.remove('auth-locked');
       authScreen.hidden = true;
@@ -11582,6 +11661,37 @@
   const offlineBadge = document.getElementById('offline-badge');
   const syncOnline = () => { offlineBadge.hidden = navigator.onLine; };
   addEventListener('online', syncOnline); addEventListener('offline', syncOnline); syncOnline();
+
+  // Связь вернулась: пока её не было, изменения с сервера не приходили — перечитываем данные и подписки
+  let wasOffline = !navigator.onLine, reconnectTimer = null;
+  addEventListener('offline', () => { wasOffline = true; });
+  addEventListener('online', () => {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(async () => {
+      if (!wasOffline || !navigator.onLine || !currentUser) return;
+      wasOffline = false;
+      const uid = currentUser.id;
+      const same = () => currentUser && currentUser.id === uid;
+      try {
+        const row = await loadProfileRow(uid);
+        if (!same()) return;
+        if (row) { applyUserToProfileFromRow(row, currentUser.email); KV.set('profile:' + uid, row); }
+        await Promise.all([
+          loadHiddenMessages(), loadPostsFromDB(), loadWishesFromDB(), loadGroupsFromDB(),
+          loadNotificationsFromDB(), loadFriendsFromDB(), loadGroupStats(),
+        ]);
+        if (!same()) return;
+        subscribeRealtime();
+        updateFilterDot(); syncPostMarkers(); syncWishMarkers(); updateBadge();
+        await loadGroupMemberProfiles();
+        await loadUserLocations();
+        if (!same()) return;
+        refreshMyMarker();
+        refreshGroupsList(); refreshFriendsList(); refreshNotifications();
+        if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
+      } catch (err) { console.warn('[сеть] обновление после возврата связи:', err); }
+    }, 1500);
+  });
 
   let installEvent = null;
   const installBtn = document.getElementById('install-btn');
@@ -11642,7 +11752,12 @@
   if (window.ResizeObserver) new ResizeObserver(relayoutApp).observe(document.getElementById('map'));
 
   if ('serviceWorker' in navigator) {
-    addEventListener('load',() => { navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW', err)); });
+    addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        // Установленное приложение подолгу не закрывают: проверяем обновление при каждом возвращении в него
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && navigator.onLine) reg.update().catch(() => {}); });
+      }).catch((err) => console.warn('SW', err));
+    });
   }
 
   // Карта стартует из bootApp: сразу, если вход уже выполнен, или после вступления на экране входа.
