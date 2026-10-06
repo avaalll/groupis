@@ -3179,6 +3179,42 @@
     .pal-opt[aria-pressed="true"] .pal-dot { transform: scale(1.12); box-shadow: 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
     @media (max-width: 360px) { .pal-seg { grid-template-columns: repeat(2, 1fr); } }
 
+    /* ── Сообщения в цвете схемы: свои — градиент акцента, чужие — его мягкий оттенок ── */
+    .chat-msg.me { background: linear-gradient(135deg, var(--c2), var(--c3)); color: var(--prism-ink); }
+    .chat-msg.me .chat-msg-author { color: var(--prism-ink); }
+    .chat-msg.them, :root[data-theme="dark"] .chat-msg.them { background: color-mix(in srgb, var(--you) 16%, var(--win-2)); color: var(--ink); }
+    .chat-msg.them .chat-file { background: color-mix(in srgb, var(--you) 14%, transparent); }
+    .chat-msg.them .chat-file:hover { background: color-mix(in srgb, var(--you) 22%, transparent); }
+
+    /* ── Голосовое: круглая кнопка, «волна» и время — без системного плеера ── */
+    .chat-voice { display: flex; align-items: center; gap: 10px; min-width: 216px; padding: 5px 10px 1px 5px; }
+    .chat-voice audio { display: none; }
+    .cv-play {
+      flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+      display: grid; place-items: center; background: var(--prism); color: var(--prism-ink);
+      transition: transform .4s var(--spring);
+    }
+    .cv-play:active { transform: scale(.88); transition-duration: .08s; }
+    .cv-play svg { width: 20px; height: 20px; }
+    .cv-ic-play { margin-left: 2px; }
+    .cv-ic-pause, .chat-voice.is-playing .cv-ic-play { display: none; }
+    .chat-voice.is-playing .cv-ic-pause { display: block; }
+    .chat-msg.me .cv-play { background: var(--prism-ink); color: var(--c3); }
+    .cv-wave { flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 2px; cursor: pointer; }
+    .cv-wave i { flex: 1; min-width: 2px; border-radius: 2px; background: currentColor; opacity: .3; transition: opacity .15s linear; }
+    .cv-wave i.is-on { opacity: 1; }
+    .chat-msg.them .cv-wave i.is-on { background: var(--you); }
+    .chat-voice-dur { flex: none; min-width: 30px; text-align: right; font: 500 10.5px var(--font-mono); letter-spacing: .02em; opacity: .85; font-variant-numeric: tabular-nums; }
+
+    /* ── Кружок: время и знак «без звука» — маленькие стеклянные плашки ── */
+    .chat-circle-dur, .chat-circle-sound {
+      background: rgba(12, 12, 16, .42); color: #fff;
+      -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
+    }
+    .chat-circle-dur { bottom: 12px; padding: 3px 9px; border-radius: 999px; font: 500 10.5px var(--font-mono); letter-spacing: .02em; }
+    .chat-circle-sound { right: 33px; bottom: 33px; width: 28px; height: 28px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+    .chat-circle-sound svg { width: 15px; height: 15px; display: block; }
+
     /* ── Карточка «Включить уведомления?» над панелью вкладок ── */
     .push-ask {
       position: fixed; z-index: 40; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px));
@@ -9026,13 +9062,22 @@
     }
     if (m.kind === 'video') return `<video class="chat-video" ${src} controls playsinline preload="metadata"></video>`;
     if (m.kind === 'voice') {
-      return `<div class="chat-voice"><audio ${src} controls preload="metadata"></audio>${m.duration ? `<span class="chat-voice-dur">${fmtDuration(m.duration)}</span>` : ''}</div>`;
+      // свой плеер вместо системного: кнопка, «волна» (по ней же перемотка) и время
+      return `<div class="chat-voice" data-voice data-dur="${Number(m.duration) || 0}">
+        <button type="button" class="cv-play" data-voice-play aria-label="Воспроизвести">
+          <svg class="cv-ic-play" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8.2 5.3a1 1 0 0 1 1.5-.86l10.2 6.7a1 1 0 0 1 0 1.72L9.7 19.56a1 1 0 0 1-1.5-.86V5.3z"/></svg>
+          <svg class="cv-ic-pause" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7.5 5h2.6a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm6.4 0h2.6a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-2.6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
+        </button>
+        <div class="cv-wave" data-voice-seek aria-hidden="true">${voiceBarsHtml(path || m.id)}</div>
+        <span class="chat-voice-dur">${fmtDuration(m.duration)}</span>
+        <audio ${src} preload="metadata"></audio>
+      </div>`;
     }
     if (m.kind === 'circle') {
       return `<div class="chat-circle-wrap" data-circle>
         <video class="chat-circle" ${src} playsinline muted loop autoplay preload="metadata"></video>
         ${m.duration ? `<span class="chat-circle-dur">${fmtDuration(m.duration)}</span>` : ''}
-        <span class="chat-circle-sound" aria-hidden="true">🔇</span>
+        <span class="chat-circle-sound" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.75v4.5h3.4l4.6 3.9V5.85l-4.6 3.9H4z"/><path d="m16.25 9.75 4.5 4.5M20.75 9.75l-4.5 4.5"/></svg></span>
       </div>`;
     }
     if (m.kind === 'file') {
@@ -9704,6 +9749,53 @@
       };
     } else if (video.paused) video.play().catch(() => {});
     else video.pause();
+  }
+
+  /* ── Голосовое: свой плеер ──
+     «Волна» — условная: высоты полосок считаются из адреса файла, поэтому у одного сообщения она всегда
+     одна и та же. Полоски до текущего места яркие; нажатие по волне перематывает. */
+  const VOICE_BARS = 30;
+  function voiceBarsHtml(seed) {
+    let h = 7;
+    for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    let out = '';
+    for (let i = 0; i < VOICE_BARS; i++) {
+      h = (h * 1103515245 + 12345) >>> 0;
+      out += `<i style="height:${22 + ((h >>> 16) % 79)}%"></i>`;
+    }
+    return out;
+  }
+  // у записей с телефона браузер часто не знает длину файла — тогда берём сохранённую в сообщении
+  function voiceDuration(box) {
+    const a = box.querySelector('audio');
+    return a && isFinite(a.duration) && a.duration > 0 ? a.duration : Number(box.dataset.dur) || 0;
+  }
+  function paintVoice(box) {
+    const a = box.querySelector('audio');
+    if (!a) return;
+    const dur = voiceDuration(box), playing = !a.paused && !a.ended;
+    box.classList.toggle('is-playing', playing);
+    const bars = box.querySelectorAll('.cv-wave i');
+    const on = dur ? Math.round(Math.min(1, a.currentTime / dur) * bars.length) : 0;
+    bars.forEach((b, i) => b.classList.toggle('is-on', i < on));
+    const label = box.querySelector('.chat-voice-dur');
+    if (label) label.textContent = fmtDuration(a.currentTime > 0 ? a.currentTime : dur);
+    const btn = box.querySelector('.cv-play');
+    if (btn) btn.setAttribute('aria-label', playing ? 'Пауза' : 'Воспроизвести');
+  }
+  function toggleVoice(box) {
+    const a = box.querySelector('audio');
+    if (!a || !a.getAttribute('src')) return;
+    if (!a.paused) { a.pause(); return; }
+    winBody.querySelectorAll('.chat-voice audio').forEach((o) => { if (o !== a) o.pause(); });   // играет одно голосовое
+    a.play().catch(() => {});
+  }
+  function seekVoice(box, clientX) {
+    const a = box.querySelector('audio'), wave = box.querySelector('.cv-wave'), dur = voiceDuration(box);
+    if (!a || !a.getAttribute('src') || !dur) return;
+    const r = wave.getBoundingClientRect();
+    try { a.currentTime = Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * dur; } catch {}
+    paintVoice(box);
   }
 
   /* ── Сообщения: кеш переписки, закрепление, выбор, удаление, пересылка ── */
@@ -11646,6 +11738,13 @@
   winBody.addEventListener('load', (e) => {
     if (e.target.tagName === 'IMG' && e.target.closest('.ph-slide')) syncPhotoHeroHeight(e.target.closest('.photo-hero'));
   }, true);
+  // голосовые: события плеера не всплывают — ловим на погружении и перерисовываем кнопку, волну и время
+  ['play', 'pause', 'timeupdate', 'ended', 'loadedmetadata'].forEach((type) => winBody.addEventListener(type, (e) => {
+    const box = e.target.tagName === 'AUDIO' && e.target.closest('.chat-voice');
+    if (!box) return;
+    if (type === 'ended') { try { e.target.currentTime = 0; } catch {} }
+    paintVoice(box);
+  }, true));
   winBody.addEventListener('click', (e) => {
     const hero = e.target.closest('.photo-hero[data-photo-hero]');
     if (hero) onPhotoHeroTap(hero, e.clientX);
@@ -11745,6 +11844,10 @@
     if (photoEl && photoEl.src) { openPhotoViewer(photoEl.src); return; }
     const circleEl = e.target.closest('[data-circle]');
     if (circleEl) { toggleCircle(circleEl); return; }
+    const voicePlay = e.target.closest('[data-voice-play]');
+    if (voicePlay) { toggleVoice(voicePlay.closest('[data-voice]')); return; }
+    const voiceSeek = e.target.closest('[data-voice-seek]');
+    if (voiceSeek) { seekVoice(voiceSeek.closest('[data-voice]'), e.clientX); return; }
     const groupChatBtn = e.target.closest('[data-open-group-chat]');
     if (groupChatBtn) {
       const gid = groupChatBtn.dataset.openGroupChat;
