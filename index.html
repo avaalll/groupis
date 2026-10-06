@@ -6662,8 +6662,135 @@
     return t;
   }
 
+  /* ═══════ Модели аватаров из Blender ═══════
+     Фигуры собраны в Blender (MPFB, скрипт _blender/build_avatars.py) и лежат в avatars3d/*.glb. Пока модель
+     не загрузилась (или не загрузилась вовсе, например файла нет) — аватар собирается из простых тел, как раньше.
+     Модель перекрашивается палитрой приложения по именам материалов: skin, hair, brow, top, pants. */
+  const AVATAR_MODEL_URLS = { male: './avatars3d/male.glb', female: './avatars3d/female.glb' };
+  const avatarModels = {};
+  // Растёт, когда модели загрузились: входит в ключи снимков и маркеров, поэтому они перерисовываются
+  let avatarModelsVersion = 0;
+
+  // Разбор GLB: статичные сетки, цвет, шероховатость и встроенные текстуры (без скелета и анимаций)
+  async function loadAvatarModel(THREE, url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`${url}: ${response.status}`);
+    const buf = await response.arrayBuffer();
+    const dv = new DataView(buf);
+    if (dv.getUint32(0, true) !== 0x46546C67) throw new Error(`${url}: не GLB`);
+    const jsonLen = dv.getUint32(12, true);
+    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jsonLen)));
+    const bin = 20 + jsonLen + 8;
+    const TYPES = { 5126: Float32Array, 5123: Uint16Array, 5125: Uint32Array, 5121: Uint8Array };
+    const SIZES = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+    const acc = (i) => {
+      const a = json.accessors[i], bv = json.bufferViews[a.bufferView], n = SIZES[a.type], T = TYPES[a.componentType];
+      const off = bin + (bv.byteOffset || 0) + (a.byteOffset || 0);
+      return new THREE.BufferAttribute(new T(buf.slice(off, off + a.count * n * T.BYTES_PER_ELEMENT)), n);
+    };
+    const images = await Promise.all((json.images || []).map(async (im) => {
+      const bv = json.bufferViews[im.bufferView], off = bin + (bv.byteOffset || 0);
+      const blob = new Blob([buf.slice(off, off + bv.byteLength)], { type: im.mimeType });
+      // createImageBitmap декодирует и в фоновой вкладке (у <img> декодирование там откладывается)
+      if (typeof createImageBitmap === 'function') {
+        try { return await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }); } catch {}
+        try { return await createImageBitmap(blob); } catch {}
+      }
+      return new Promise((resolve, reject) => {
+        const img = new Image(), src = URL.createObjectURL(blob);
+        img.onload = () => { URL.revokeObjectURL(src); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(src); reject(new Error(`${url}: текстура не читается`)); };
+        img.src = src;
+      });
+    }));
+    const materials = (json.materials || []).map((m) => {
+      const p = m.pbrMetallicRoughness || {}, t = p.baseColorTexture ? json.textures[p.baseColorTexture.index] : null;
+      const ext = t && t.extensions && t.extensions.EXT_texture_webp;
+      return {
+        name: m.name, color: (p.baseColorFactor || [1, 1, 1]).slice(0, 3), roughness: p.roughnessFactor ?? 1, metalness: p.metallicFactor ?? 0,
+        doubleSided: !!m.doubleSided, alpha: !!m.alphaMode && m.alphaMode !== 'OPAQUE', image: t ? images[t.source ?? ext.source] : null,
+      };
+    });
+    const parts = [];
+    let height = 0;
+    for (const node of json.nodes || []) {
+      if (node.mesh === undefined) continue;
+      for (const prim of json.meshes[node.mesh].primitives) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', acc(prim.attributes.POSITION));
+        if (prim.attributes.NORMAL !== undefined) g.setAttribute('normal', acc(prim.attributes.NORMAL));
+        if (prim.attributes.TEXCOORD_0 !== undefined) g.setAttribute('uv', acc(prim.attributes.TEXCOORD_0));
+        if (prim.indices !== undefined) g.setIndex(acc(prim.indices));
+        if (prim.attributes.NORMAL === undefined) g.computeVertexNormals();
+        g.computeBoundingBox();
+        height = Math.max(height, g.boundingBox.max.y + ((node.translation && node.translation[1]) || 0));
+        parts.push({ geometry: g, material: materials[prim.material], node });
+      }
+    }
+    if (!parts.length) throw new Error(`${url}: пустая модель`);
+    return { parts, height, headY: height - 0.125 };
+  }
+
+  const avatarModelsReady = (async () => {
+    if (!isThreeAvailable()) return;
+    await Promise.all(Object.entries(AVATAR_MODEL_URLS).map(async ([gender, url]) => {
+      try { avatarModels[gender] = await loadAvatarModel(window.THREE, url); } catch (err) { console.warn('[аватар] модель не загружена:', err); }
+    }));
+    if (!Object.keys(avatarModels).length) return;
+    avatarModelsVersion++;
+    // всё, что уже нарисовано упрощённой фигурой, перерисовываем моделью
+    try {
+      if (typeof refreshMyMarker === 'function') refreshMyMarker();
+      if (typeof loadUserLocations === 'function') loadUserLocations();
+      const stage = document.getElementById('avatar-stage-canvas');
+      if (stage && stage.__avatarRefresh) { stage.__avatarRefresh(); if (typeof renderAvatarControls === 'function') renderAvatarControls(); }
+    } catch (err) { console.warn('[аватар]', err); }
+  })();
+
+  // Экземпляр модели: геометрия и текстуры — свои копии, их освобождает disposeObject вместе со сценой
+  function buildAvatarFromModel(THREE, model, cfg) {
+    const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+    const hairHex = AVATAR_HAIR_COLORS[cfg.hairColor].hex, cloth = AVATAR_CLOTHES[cfg.clothes];
+    // брови темнее волос — иначе на светлой коже их не видно
+    const tint = {
+      skin: lin(AVATAR_SKINS[cfg.skin].base), hair: lin(hairHex), top: lin(cloth.body), pants: lin(cloth.legs),
+      brow: lin(new THREE.Color(hairHex).lerp(new THREE.Color(0x1A120E), 0.45).getHex()),
+    };
+    const group = new THREE.Group(), made = new Map();
+    const materialFor = (d) => {
+      if (made.has(d)) return made.get(d);
+      const params = { color: tint[d.name] || new THREE.Color(d.color[0], d.color[1], d.color[2]), roughness: d.roughness, metalness: d.metalness, side: d.doubleSided ? THREE.DoubleSide : THREE.FrontSide };
+      if (d.image) {
+        const tex = new THREE.Texture(d.image);
+        tex.flipY = false; tex.encoding = THREE.sRGBEncoding; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 4; tex.needsUpdate = true;
+        params.map = tex;
+      }
+      // прозрачность: брови и ресницы мягко смешиваются с кожей, остальное режется по порогу (не нужна сортировка)
+      if (d.alpha) {
+        if (d.name === 'brow' || d.name === 'lash') Object.assign(params, { transparent: true, depthWrite: false });
+        else params.alphaTest = 0.35;
+      }
+      const m = d.name === 'skin' ? avatarSkinMaterial(THREE, params) : new THREE.MeshStandardMaterial(params);
+      m.name = d.name;
+      made.set(d, m);
+      return m;
+    };
+    for (const part of model.parts) {
+      const mesh = new THREE.Mesh(part.geometry.clone(), materialFor(part.material));
+      const n = part.node;
+      if (n.translation) mesh.position.fromArray(n.translation);
+      if (n.rotation) mesh.quaternion.fromArray(n.rotation);
+      if (n.scale) mesh.scale.fromArray(n.scale);
+      if (part.material.name === 'brow' || part.material.name === 'lash') mesh.renderOrder = 1;
+      group.add(mesh);
+    }
+    group.userData.headY = model.headY; group.userData.height = model.height;
+    return group;
+  }
+
   function buildAvatarGroup(THREE, rawCfg) {
     const cfg = normalizeAvatar(rawCfg);
+    if (avatarModels[cfg.gender]) return buildAvatarFromModel(THREE, avatarModels[cfg.gender], cfg);
     const fem = cfg.gender === 'female';
     const P = avatarProportions(cfg.gender);
     const R = P.headR, HS = P.headScale;
@@ -7129,7 +7256,10 @@
     const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), curPos = new THREE.Vector3(), curLook = new THREE.Vector3();
     let group = null, P = null, mode = framing, aimed = false;
     const aim = () => {
-      if (mode === 'bust') { camPos.set(0, P.headY - 0.03, 1.32); camLook.set(0, P.headY - 0.09, 0); }
+      const modelHeadY = group.userData.headY;
+      if (mode === 'bust' && modelHeadY) { camPos.set(0, modelHeadY + 0.005, 1.1); camLook.set(0, modelHeadY - 0.04, 0); }
+      else if (modelHeadY) { const h = group.userData.height; camPos.set(0, h * 0.53, h * 2.08); camLook.set(0, h * 0.5, 0); }   // в рост — во весь кадр
+      else if (mode === 'bust') { camPos.set(0, P.headY - 0.03, 1.32); camLook.set(0, P.headY - 0.09, 0); }
       else { camPos.set(0, 1.07, 3.85); camLook.set(0, 0.95, 0); }
       if (!aimed) { curPos.copy(camPos); curLook.copy(camLook); aimed = true; }
     };
@@ -7185,7 +7315,7 @@
   function avatarCfgKey(cfg) {
     if (!cfg || typeof cfg !== 'object') return '';
     const c = normalizeAvatar(cfg);
-    return [c.gender, c.skin, c.clothes, c.hair, c.hairColor, c.outfit].join('|');
+    return [c.gender, c.skin, c.clothes, c.hair, c.hairColor, c.outfit, avatarModelsVersion].join('|');
   }
 
   /* Снимки делает один общий рендерер: контекст WebGL и шейдеры создаются один раз, а не на каждый аватар.
@@ -10969,7 +11099,7 @@
 
   function renderAvatarControls() {
     const box = winBody.querySelector('#av-controls'); if (!box) return;
-    const c = avatarConfig, g = c.gender;
+    const c = avatarConfig, g = c.gender, modeled = !!avatarModels[g];
     const hex = (n) => '#' + n.toString(16).padStart(6, '0');
     const pill = (group, key, label) =>
       `<button class="avatar-pill" type="button" data-av-group="${group}" data-av-key="${key}" aria-pressed="${c[group] === key}">${escapeHtml(label)}</button>`;
@@ -10979,9 +11109,9 @@
     box.innerHTML = [
       block('Фигура', pill('gender', 'male', 'Мужская') + pill('gender', 'female', 'Женская')),
       block('Цвет кожи', Object.entries(AVATAR_SKINS).map(([k, s]) => swatch('skin', k, hex(s.base), s.label)).join('')),
-      block('Причёска', Object.entries(AVATAR_HAIR_STYLES[g]).map(([k, l]) => pill('hair', k, l)).join('')),
-      c.hair === 'none' ? '' : block('Цвет волос', Object.entries(AVATAR_HAIR_COLORS).map(([k, h]) => swatch('hairColor', k, hex(h.hex), h.label)).join('')),
-      block('Одежда', Object.entries(AVATAR_OUTFITS[g]).map(([k, l]) => pill('outfit', k, l)).join('')),
+      modeled ? '' : block('Причёска', Object.entries(AVATAR_HAIR_STYLES[g]).map(([k, l]) => pill('hair', k, l)).join('')),
+      !modeled && c.hair === 'none' ? '' : block('Цвет волос', Object.entries(AVATAR_HAIR_COLORS).map(([k, h]) => swatch('hairColor', k, hex(h.hex), h.label)).join('')),
+      modeled ? '' : block('Одежда', Object.entries(AVATAR_OUTFITS[g]).map(([k, l]) => pill('outfit', k, l)).join('')),
       // образец цвета одежды: верх и низ
       block('Цвет одежды', Object.entries(AVATAR_CLOTHES).map(([k, cl]) =>
         swatch('clothes', k, `linear-gradient(135deg, ${hex(cl.body)} 0 54%, ${hex(cl.legs)} 54% 100%)`, cl.label)).join('')),
