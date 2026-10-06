@@ -3084,14 +3084,18 @@
     /* ── Чат: меню сообщения, выбор нескольких, закреплённое ── */
     .chat-msg { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: opacity .2s ease, box-shadow .2s ease; }
     .chat-view.is-selecting .chat-msg { cursor: pointer; }
-    /* Плашка даты: по центру ленты, при прокрутке держится у верха */
-    .chat-date { position: sticky; top: 2px; z-index: 2; align-self: center; flex: none; margin: 4px 0 2px; pointer-events: none; -webkit-user-select: none; user-select: none; }
+    /* Плашка даты: по центру ленты, стоит на своём месте перед первым сообщением дня */
+    .chat-date { align-self: center; flex: none; margin: 4px 0 2px; pointer-events: none; -webkit-user-select: none; user-select: none; }
     .chat-date span {
       display: block; padding: 4px 11px; border-radius: 999px;
       background: var(--glass); border: 1px solid var(--glass-edge);
       -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
       color: var(--ink-soft); font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
     }
+    /* Плавающая дата у верха ленты: видна, пока листают; её выталкивает плашка следующего дня */
+    .chat-date-float { position: absolute; left: 50%; top: 0; z-index: 2; margin: 0; transform: translateX(-50%); opacity: 0; transition: opacity .2s ease; }
+    .chat-date-float.is-on { opacity: 1; }
+    .chat-date.is-floating { visibility: hidden; }
     .chat-view.is-selecting .chat-msg:not(.is-selected) { opacity: .5; }
     .chat-msg.is-selected { box-shadow: 0 0 0 2px var(--win), 0 0 0 4px var(--c2); }
     .chat-msg.is-flash { animation: msg-flash 1.2s ease; }
@@ -6513,19 +6517,19 @@
   // Пропорции фигур (метры, ступни на y = 0). torso — профиль тела вращения: [радиус, высота]
   function avatarProportions(gender) {
     return gender === 'female' ? {
-      headY: 1.655, headR: 0.138, headScale: [0.88, 0.98, 0.96], chin: [0.3, 0.15],
+      headY: 1.672, headR: 0.154, headScale: [0.88, 0.98, 0.96], chin: [0.3, 0.15],
       neckR: 0.044, shoulderY: 1.405, shoulderX: 0.198, wristOut: 0.085, legX: 0.088, hipY: 0.9,
       thigh: 0.088, knee: 0.058, ankle: 0.04, armR: [0.047, 0.039, 0.032], hand: 0.85,
       torso: [[0, 0.84], [0.165, 0.85], [0.212, 0.9], [0.2, 0.98], [0.156, 1.1], [0.163, 1.19], [0.178, 1.27], [0.172, 1.35], [0.13, 1.42], [0.06, 1.465], [0, 1.47]],
       torsoZ: 0.68, waistY: 1.1, split: 1.02, bustY: 1.262,
-      eyeX: 0.315, eyeR: 0.172, browW: 0.0035, noseK: 0.86,
+      eyeX: 0.37, eyeR: 0.235, brow: 0.012, noseK: 0.8,
     } : {
-      headY: 1.705, headR: 0.146, headScale: [0.9, 1.0, 0.97], chin: [0.2, 0.2],
+      headY: 1.718, headR: 0.158, headScale: [0.9, 1.0, 0.97], chin: [0.2, 0.2],
       neckR: 0.057, shoulderY: 1.45, shoulderX: 0.238, wristOut: 0.06, legX: 0.1, hipY: 0.92,
       thigh: 0.09, knee: 0.066, ankle: 0.05, armR: [0.058, 0.048, 0.04], hand: 1,
       torso: [[0, 0.86], [0.17, 0.87], [0.2, 0.92], [0.196, 1.02], [0.19, 1.12], [0.204, 1.24], [0.222, 1.34], [0.214, 1.42], [0.15, 1.48], [0.07, 1.51], [0, 1.515]],
       torsoZ: 0.66, waistY: 1.12, split: 1.0, bustY: 0,
-      eyeX: 0.33, eyeR: 0.16, browW: 0.0068, noseK: 1,
+      eyeX: 0.37, eyeR: 0.2, brow: 0.03, noseK: 1,
     };
   }
 
@@ -6568,6 +6572,96 @@
     if (bottomPole) avg(Array.from({ length: ws + 1 }, (_, k) => hs * (ws + 1) + k));
   }
 
+  /* Трубка вдоль плавной кривой с переменным радиусом и сплюснутым сечением — пряди волос, брови, губы,
+     ресницы. rFn(t) — радиус в точке t ∈ [0, 1]; flat — сплющивание по направлению out (вектор или функция точки). */
+  function sweepGeo(THREE, pts, rFn, opt = {}) {
+    const { seg = 14, radial = 8, flat = 1, out = null } = opt;
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const pos = [], uv = [], idx = [];
+    const T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), o = new THREE.Vector3();
+    for (let i = 0; i <= seg; i++) {
+      const t = i / seg;
+      curve.getPoint(t, C); curve.getTangent(t, T);
+      if (typeof out === 'function') o.copy(out(C)); else if (out) o.copy(out); else o.set(0, 0, 1);
+      N.copy(o).addScaledVector(T, -o.dot(T));
+      if (N.lengthSq() < 1e-8) N.set(1, 0, 0).addScaledVector(T, -T.x);
+      N.normalize(); B.crossVectors(T, N);
+      const r = Math.max(rFn(t), 1e-5);
+      for (let j = 0; j < radial; j++) {
+        const a = (j / radial) * Math.PI * 2, cn = Math.cos(a) * r * flat, sb = Math.sin(a) * r;
+        pos.push(C.x + N.x * cn + B.x * sb, C.y + N.y * cn + B.y * sb, C.z + N.z * cn + B.z * sb);
+        uv.push(j / radial, t);
+      }
+    }
+    for (let i = 0; i < seg; i++) for (let j = 0; j < radial; j++) {
+      const a = i * radial + j, b = i * radial + (j + 1) % radial, c = a + radial, d = b + radial;
+      idx.push(a, b, c, b, d, c);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
+  /* Кожа: граница света и тени размыта, и красный заходит в тень дальше синего — так свет «проходит»
+     сквозь кожу (имитация подповерхностного рассеивания), и она не выглядит пластиком. */
+  function avatarSkinMaterial(THREE, params) {
+    const m = new THREE.MeshStandardMaterial(params);
+    m.onBeforeCompile = (sh) => {
+      const chunk = THREE.ShaderChunk.lights_physical_pars_fragment.replace(
+        'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+        'float sssD = dot( geometry.normal, directLight.direction );\n' +
+        'vec3 sssW = vec3( smoothstep( -0.42, 1.0, sssD ), smoothstep( -0.2, 1.0, sssD ), smoothstep( -0.12, 1.0, sssD ) );\n' +
+        'reflectedLight.directDiffuse += sssW * directLight.color * BRDF_Lambert( material.diffuseColor );');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk);
+    };
+    m.customProgramCacheKey = () => 'avatar-skin' + (m.vertexColors ? '-vc' : '');
+    return m;
+  }
+
+  // Текстуры рисуются один раз: пряди волос (светлые и тёмные полосы вдоль роста) и радужка глаза
+  const avatarTexCanvas = {};
+  function avatarHairTexture(THREE) {
+    let c = avatarTexCanvas.hair;
+    if (!c) {
+      c = avatarTexCanvas.hair = document.createElement('canvas'); c.width = 256; c.height = 4;
+      const g = c.getContext('2d');
+      let v = 0.5;
+      for (let x = 0; x < 256; x++) {
+        v = v * 0.55 + avatarRnd(x + 7) * 0.45;
+        const wide = 0.5 + 0.5 * Math.sin(x * 0.19 + 3 * avatarRnd(Math.floor(x / 24)));
+        const k = Math.round(255 * (0.6 + 0.4 * Math.min(1, v * 0.9 + wide * 0.35)));
+        g.fillStyle = `rgb(${k},${k},${k})`; g.fillRect(x, 0, 1, 4);
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  function avatarIrisTexture(THREE, hex) {
+    const key = 'iris' + hex;
+    let c = avatarTexCanvas[key];
+    if (!c) {
+      c = avatarTexCanvas[key] = document.createElement('canvas'); c.width = 64; c.height = 64;
+      const g = c.getContext('2d');
+      const col = (h, k) => { const q = new THREE.Color(h).multiplyScalar(k); return `rgb(${Math.min(255, q.r * 255) | 0},${Math.min(255, q.g * 255) | 0},${Math.min(255, q.b * 255) | 0})`; };
+      // сверху вниз — от центра глаза к краю: зрачок, светлое кольцо, радужка, тёмный ободок
+      const gr = g.createLinearGradient(0, 0, 0, 64);
+      gr.addColorStop(0, '#070505'); gr.addColorStop(0.3, '#070505'); gr.addColorStop(0.36, col(hex, 1.5));
+      gr.addColorStop(0.58, col(hex, 1)); gr.addColorStop(0.78, col(hex, 0.55)); gr.addColorStop(0.9, col(hex, 0.22)); gr.addColorStop(1, col(hex, 0.16));
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      for (let x = 0; x < 64; x++) {
+        g.fillStyle = `rgba(${avatarRnd(x) > 0.5 ? '255,236,200' : '0,0,0'},${0.05 + 0.16 * avatarRnd(x + 90)})`;
+        g.fillRect(x, 21, 1, 34);
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
   function buildAvatarGroup(THREE, rawCfg) {
     const cfg = normalizeAvatar(rawCfg);
     const fem = cfg.gender === 'female';
@@ -6585,15 +6679,24 @@
     const cloth = AVATAR_CLOTHES[cfg.clothes];
     const lightHair = cfg.hairColor === 'blond' || cfg.hairColor === 'platinum';
 
-    // кожа чуть «светится» тёплым изнутри — так она выглядит живой, а не пластиковой
-    const skin = mat(skinHex, 0.5, { emissive: lin(mix(skinHex, 0xFF5A3C, 0.35)), emissiveIntensity: 0.07 });
+    // кожа: мягкая светотень и лёгкое тёплое свечение изнутри; у головы — ещё румянец и тени по вершинам
+    const skinP = (hex, extra = {}) => avatarSkinMaterial(THREE, { color: lin(hex), roughness: 0.52, metalness: 0, emissive: lin(mix(skinHex, 0xFF5A3C, 0.35)), emissiveIntensity: 0.05, ...extra });
+    const skin = skinP(skinHex);
+    const headSkin = skinP(skinHex, { vertexColors: true });
+    const neckM = skinP(mix(skinHex, 0x6A2E1C, 0.14));
     const top = mat(cloth.body, 0.82);
     const topOpen = mat(cloth.body, 0.82, { side: THREE.DoubleSide });
     const pants = mat(cloth.legs, 0.9);
-    const hairM = mat(hairHex, 0.46, { side: THREE.DoubleSide });
+    const hairTex = avatarHairTexture(THREE);
+    hairTex.repeat.set(3, 1);
+    const hairM = mat(mix(hairHex, 0xFFFFFF, 0.06), 0.4, { side: THREE.DoubleSide, map: hairTex });
     const browM = mat(mix(hairHex, 0x2A1D16, lightHair ? 0.45 : 0.25), 0.7);
-    const lipM = mat(mix(skinHex, fem ? 0xC4475F : 0xA0504A, fem ? 0.58 : 0.36), 0.42);
-    const eyeWhite = mat(0xF6F3EF, 0.32), irisM = mat(fem ? 0x5A3A26 : 0x4A3022, 0.28), pupilM = mat(0x0E0B0A, 0.2);
+    const lipM = mat(mix(skinHex, fem ? 0xC4475F : 0xA0504A, fem ? 0.62 : 0.34), fem ? 0.3 : 0.5);
+    const mouthM = mat(mix(skinHex, 0x4A1F1C, 0.72), 0.6);
+    const irisTex = avatarIrisTexture(THREE, fem ? 0x7A5230 : 0x5E3E26);
+    const eyeWhite = mat(0xF7F4F0, 0.25, { emissive: lin(0xF7F4F0), emissiveIntensity: 0.1 });
+    const irisM = new THREE.MeshStandardMaterial({ map: irisTex, emissive: 0xFFFFFF, emissiveMap: irisTex, emissiveIntensity: 0.35, roughness: 0.18, metalness: 0 });
+    const lashM = mat(0x17100E, 0.5);
     const shineM = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
     const goldM = mat(0xE3BE70, 0.28, { metalness: 0.7 });
 
@@ -6683,20 +6786,36 @@
       const sh = V(s * P.shoulderX, P.shoulderY - 0.035, 0);
       const el = V(s * (P.shoulderX + 0.032), P.shoulderY - 0.31, -0.022);
       const wr = V(s * (P.shoulderX + P.wristOut), P.shoulderY - 0.565, 0.03);
+      // скат плеча от шеи: плечо переходит в туловище плавно, а не торчит шаром
+      limb(group, V(s * 0.05, yTop - 0.062, -0.004), sh, 0.05 + bulk, ra + (longSleeve ? 0.01 : 0.007), top);
       add(group, ball(ra + (longSleeve ? 0.012 : 0.009)), top, sh, [1, 0.9, 0.92]);
       if (longSleeve) {
         limb(group, sh, el, ra + 0.01, re + 0.01, top);
         limb(group, el, wr, re + 0.01, rw + 0.012, top);
+        ring(group, rw + 0.013, 0.006, 0, top).position.copy(wr);   // манжета
       } else {
         limb(group, sh, el, ra, re, skin);
         limb(group, el, wr, re, rw, skin);
         limb(group, sh, sh.clone().lerp(el, 0.46), ra + 0.009, ra + 0.006, top);   // короткий рукав
       }
+      // кисть: ладонь, четыре чуть согнутых пальца и большой палец вперёд
+      const k = P.hand;
       const dir = V(0, 0, 0).subVectors(wr, el).normalize();
-      const hc = wr.clone().addScaledVector(dir, 0.052 * P.hand);
-      const hand = add(group, ball(0.046 * P.hand, 20, 14), skin, hc, [0.8, 1.2, 0.56]);
-      hand.quaternion.setFromUnitVectors(UP, dir);
-      add(group, ball(0.016 * P.hand, 12, 8), skin, hc.clone().add(V(-s * 0.004, 0.014, 0.026 * P.hand)), [0.9, 1.4, 0.9]);
+      const inw = V(-s, 0, 0), fwd = V(0, 0, 1);
+      const palm = add(group, ball(0.036 * k, 18, 12), skin, wr.clone().addScaledVector(dir, 0.042 * k), [0.46, 1.25, 0.95]);
+      palm.quaternion.setFromUnitVectors(UP, dir);
+      const lens = [0.036, 0.042, 0.039, 0.03], offs = [0.022, 0.0075, -0.007, -0.02];
+      for (let f = 0; f < 4; f++) {
+        const a = wr.clone().addScaledVector(dir, 0.074 * k).addScaledVector(fwd, offs[f] * k).addScaledVector(inw, 0.002);
+        const b = a.clone().addScaledVector(dir, lens[f] * k * 0.55).addScaledVector(inw, lens[f] * k * 0.12);
+        const c = b.clone().addScaledVector(dir, lens[f] * k * 0.42).addScaledVector(inw, lens[f] * k * 0.26);
+        limb(group, a, b, 0.0082 * k, 0.0074 * k, skin, 8);
+        limb(group, b, c, 0.0074 * k, 0.0064 * k, skin, 8);
+      }
+      const ta = wr.clone().addScaledVector(dir, 0.026 * k).addScaledVector(fwd, 0.026 * k);
+      const tb = ta.clone().addScaledVector(dir, 0.026 * k).addScaledVector(fwd, 0.017 * k).addScaledVector(inw, 0.006 * k);
+      limb(group, ta, tb, 0.0105 * k, 0.0088 * k, skin, 8);
+      limb(group, tb, tb.clone().addScaledVector(dir, 0.019 * k).addScaledVector(inw, 0.007 * k), 0.0088 * k, 0.0074 * k, skin, 8);
     }
 
     /* ── Ноги и обувь ── */
@@ -6715,81 +6834,110 @@
     }
 
     /* ── Шея и голова ── */
-    limb(group, V(0, yTop - 0.06, -0.006), V(0, P.headY - 0.075, 0.004), P.neckR, P.neckR * 0.94, skin);
+    limb(group, V(0, yTop - 0.06, -0.006), V(0, P.headY - 0.075, 0.004), P.neckR, P.neckR * 0.94, neckM);
     const head = new THREE.Group();
     head.position.set(0, P.headY, 0.008);
     group.add(head);
     group.userData.head = head;
     /* Голова — одна плавная форма без швов: сфера, нижняя половина которой сужается к подбородку
-       (у женской фигуры — сильнее, лицо уже и мягче), вытягивается вниз и чуть выдвигается вперёд. */
+       (у женской фигуры — сильнее, лицо уже и мягче), вытягивается вниз и чуть выдвигается вперёд.
+       Нос, глазницы, скулы, надбровья и подбородок — рельеф той же поверхности, а не отдельные детали,
+       поэтому на лице нет стыков. Румянец и мягкие тени у глаз, под носом и губой — цвет вершин. */
     const [KX, KY] = P.chin, KZ = 0.1, KF = 0.1;
-    const headGeo = new THREE.SphereGeometry(R, 48, 36);
-    const hp = headGeo.attributes.position;
     const deformHead = (x, y, z) => {
       if (y >= 0) return [x, y, z];
       const t = -y / R;
       return [x * (1 - KX * t * Math.sqrt(t)), y * (1 + KY * t), z * (1 - KZ * t * (z < 0 ? 2 : 0.4)) + KF * R * t];
     };
+    const nk = P.noseK, ey = -R * 0.05, eyeX = R * P.eyeX, er = R * P.eyeR;
+    const G = (x, y, cx, cy, sx, sy) => Math.exp(-(((x - cx) / (sx * R)) ** 2) - (((y - cy) / (sy * R)) ** 2));
+    const relief = (x, y) => {
+      const ax = Math.abs(x);
+      return R * (0.17 * nk * G(x, y, 0, -R * 0.3, 0.085, 0.095)            // кончик носа
+        + 0.07 * nk * G(x, y, 0, -R * 0.06, 0.07, 0.24)                   // спинка
+        + 0.04 * nk * G(ax, y, R * 0.1, -R * 0.36, 0.06, 0.06)            // крылья
+        - 0.045 * G(ax, y, eyeX, ey, 0.24, 0.17)                          // глазницы
+        + P.brow * G(ax, y, R * 0.34, ey + er + R * 0.16, 0.3, 0.09)      // надбровья
+        + 0.035 * G(ax, y, R * 0.5, -R * 0.36, 0.22, 0.2)                 // скулы
+        + 0.03 * G(x, y, 0, -R * 0.68, 0.2, 0.1)                          // губы
+        + 0.03 * G(x, y, 0, -R * 1.02, 0.2, 0.13));                       // подбородок
+    };
+    const HW = 96, HH = 72;
+    const headGeo = new THREE.SphereGeometry(R, HW, HH);
+    const hp = headGeo.attributes.position;
+    const hcol = new Float32Array(hp.count * 3);
     for (let i = 0; i < hp.count; i++) {
       const p = deformHead(hp.getX(i), hp.getY(i), hp.getZ(i));
-      hp.setXYZ(i, p[0], p[1], p[2]);
+      const x = p[0] * HS[0], y = p[1] * HS[1], z = p[2] * HS[2], ax = Math.abs(x);
+      const f = Math.min(1, Math.max(0, (z / (R * HS[2]) - 0.15) / 0.4)), m = f * f * (3 - 2 * f);
+      hp.setXYZ(i, x, y, z + relief(x, y) * m);
+      const blush = m * ((fem ? 0.5 : 0.2) * G(ax, y, R * 0.52, -R * 0.3, 0.22, 0.16) + 0.1 * G(x, y, 0, -R * 0.3, 0.1, 0.09));
+      const shade = m * Math.min(1, 0.55 * G(ax, y, eyeX, ey + er * 0.25, 0.25, 0.16) + 0.3 * G(x, y, 0, -R * 0.45, 0.1, 0.04) + 0.4 * G(x, y, 0, -R * 0.86, 0.16, 0.05));
+      hcol[i * 3] = 1 - shade * 0.26;
+      hcol[i * 3 + 1] = (1 - shade * 0.36) * (1 - blush * 0.4);
+      hcol[i * 3 + 2] = (1 - shade * 0.4) * (1 - blush * 0.36);
     }
+    headGeo.setAttribute('color', new THREE.BufferAttribute(hcol, 3));
     headGeo.computeVertexNormals();
-    smoothSphereNormals(headGeo, 48, 36, true);
-    add(head, headGeo, skin, null, HS);
-    // глубина лица в точке (x, y) — та же формула деформации, решённая обратно
+    smoothSphereNormals(headGeo, HW, HH, true);
+    add(head, headGeo, headSkin);
+    // глубина лица в точке (x, y) — та же формула деформации, решённая обратно, плюс рельеф
     const faceZ = (x, y) => {
       const ys = y / HS[1];
       const y0 = ys < 0 ? (1 - Math.sqrt(1 - 4 * (KY / R) * ys)) / (2 * KY / R) : ys;
       const t = y0 < 0 ? -y0 / R : 0;
       const x0 = x / HS[0] / (1 - KX * t * Math.sqrt(t));
       const q = R * R - x0 * x0 - y0 * y0;
-      return q > 0 ? (Math.sqrt(q) * (1 - KZ * t * 0.4) + KF * R * t) * HS[2] : 0;
+      return q > 0 ? (Math.sqrt(q) * (1 - KZ * t * 0.4) + KF * R * t) * HS[2] + relief(x, y) : 0;
     };
     for (const s of [-1, 1]) {
       add(head, ball(R * 0.25, 16, 12), skin, V(s * R * HS[0] * 0.97, -R * 0.05, -R * 0.05), [0.42, 0.8, 0.62], [0, s * 0.35, 0]);
       if (fem) add(head, ball(0.0075, 10, 8), goldM, V(s * R * HS[0] * 0.99, -R * 0.33, -R * 0.03));
     }
 
-    // глаза: белок, радужка, зрачок, блик и верхнее веко
-    const er = R * P.eyeR, ey = R * 0.07;
+    /* Глаза: крупный белок в глазнице, радужка с рисунком (зрачок, светлое кольцо, тёмный ободок), два блика,
+       верхнее веко и линия ресниц точно по его краю. */
+    const LID_T = Math.PI / 2, LID_TILT = fem ? -0.64 : -0.52, EYE_TURN = 0.2, lidS = [1.05, 0.95, 0.58], lidR = er * 1.07;
     for (const s of [-1, 1]) {
-      const x = s * R * P.eyeX, z0 = faceZ(x, ey) - er * 0.25;
-      add(head, ball(er, 20, 14), eyeWhite, V(x, ey, z0), [1, 0.78, 0.55]);
-      const front = z0 + er * 0.55, ir = er * 0.56;
-      add(head, ball(ir, 16, 12), irisM, V(x, ey - er * 0.04, front - ir * 0.5 + 0.0012), [1, 1, 0.5]);
-      add(head, ball(ir * 0.5, 12, 8), pupilM, V(x, ey - er * 0.04, front - ir * 0.25 + 0.0022), [1, 1, 0.5]);
-      add(head, ball(ir * 0.26, 8, 6), shineM, V(x + ir * 0.35, ey + ir * 0.3, front + 0.003));
-      add(head, new THREE.SphereGeometry(er * 1.1, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.32), skin, V(x, ey, z0), [1, 0.8, 0.58], [0.22, 0, 0]);
-      if (fem) {
-        add(head, new THREE.TorusGeometry(er * 1.06, 0.0021, 6, 18, Math.PI), pupilM, V(x, ey + er * 0.08, z0 + er * 0.3), [1, 0.62, 1], [0.2, 0, 0]);
-        add(head, new THREE.BoxGeometry(0.008, 0.0022, 0.003), pupilM, V(x + s * er * 1.08, ey + er * 0.18, z0 + er * 0.24), null, [0, 0, s * 0.5]);
-      }
+      const x = s * eyeX, z0 = faceZ(x, ey) - er * 0.2, c0 = V(x, ey, z0);
+      // глазное яблоко с веками чуть развёрнуто наружу — по изгибу лица; радужка смотрит прямо
+      const eg = new THREE.Group(); eg.position.copy(c0); eg.rotation.y = s * EYE_TURN; head.add(eg);
+      add(eg, ball(er, 28, 18), eyeWhite, null, [1, 0.9, 0.5]);
+      const ir = er * 0.6, ig = new THREE.Group();
+      ig.position.set(-s * er * 0.1, -er * 0.02, er * 0.485); ig.rotation.y = -s * EYE_TURN; eg.add(ig);
+      add(ig, new THREE.SphereGeometry(ir, 32, 10, 0, Math.PI * 2, 0, Math.PI / 2), irisM, V(0, 0, -ir * 0.24), [1, 0.32, 1], [Math.PI / 2, 0, 0]);
+      add(ig, ball(ir * 0.2, 10, 8), shineM, V(ir * 0.34, ir * 0.36, ir * 0.06), [1, 1, 0.4]);
+      add(ig, ball(ir * 0.09, 8, 6), shineM, V(-ir * 0.3, -ir * 0.32, ir * 0.05), [1, 1, 0.4]);
+      add(eg, new THREE.SphereGeometry(lidR, 28, 10, 0, Math.PI * 2, 0, LID_T), skin, null, lidS, [LID_TILT, 0, 0]);
+      add(eg, new THREE.SphereGeometry(lidR, 28, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), skin, null, lidS, [fem ? 1.0 : 0.92, 0, 0]);   // нижнее веко
+      // край века — окружность на наклонённой «шапочке»; по ней и идёт линия ресниц
+      const ca = Math.cos(LID_TILT), sa = Math.sin(LID_TILT), ct = Math.cos(LID_T), st = Math.sin(LID_T);
+      const lidEdge = (phi, k = 1.012) => V(
+        st * Math.cos(phi) * lidR * lidS[0] * k,
+        (ct * ca - st * Math.sin(phi) * sa) * lidR * lidS[1] * k,
+        (ct * sa + st * Math.sin(phi) * ca) * lidR * lidS[2] * k);
+      const lash = [];
+      for (let i = 0; i <= 6; i++) lash.push(lidEdge(Math.PI * (0.06 + 0.88 * i / 6)));
+      if (s > 0) lash.reverse();           // от внутреннего уголка к внешнему
+      if (fem) lash.push(lash[lash.length - 1].clone().add(V(s * er * 0.16, er * 0.12, -er * 0.04)));   // «стрелка»
+      const lw = fem ? 0.0031 : 0.0019;
+      add(eg, sweepGeo(THREE, lash, (t) => lw * (0.3 + 0.7 * Math.sin(Math.PI * Math.min(1, t * 1.25) * 0.8)), { seg: 20, radial: 6, flat: 0.7 }), lashM);
       // брови: у мужской фигуры прямые и плотные, у женской — тонкие с изгибом
-      const by = R * 0.43;
-      const pts = [V(s * R * 0.14, by + 0.002, 0), V(s * R * 0.33, by + (fem ? 0.012 : 0.006), 0), V(s * R * 0.52, by + (fem ? 0.001 : 0.002), 0)];
-      pts.forEach((p) => { p.z = faceZ(p.x, p.y) + 0.0015; });
-      limb(head, pts[0], pts[1], P.browW * 1.15, P.browW, browM, 8);
-      limb(head, pts[1], pts[2], P.browW, P.browW * 0.65, browM, 8);
+      const by = ey + er + R * (fem ? 0.1 : 0.15), bw = fem ? 0.0052 : 0.0082;
+      const pts = [V(s * R * 0.15, by + 0.001, 0), V(s * R * 0.3, by + (fem ? 0.008 : 0.006), 0), V(s * R * 0.47, by + (fem ? 0.011 : 0.006), 0), V(s * R * 0.63, by - (fem ? 0.001 : 0.003), 0)];
+      pts.forEach((p) => { p.z = faceZ(p.x, p.y) + 0.0012; });
+      add(head, sweepGeo(THREE, pts, (t) => bw * Math.min(1, 0.45 + t * 4) * (1 - 0.72 * t), { seg: 16, radial: 8, flat: 0.45 }), browM);
     }
 
-    // нос: спинка, кончик и крылья
-    const nk = P.noseK;
-    const nTop = V(0, R * 0.22, faceZ(0, R * 0.22) - 0.004), nTip = V(0, -R * 0.2, faceZ(0, -R * 0.2) + 0.012 * nk);
-    limb(head, nTop, nTip, 0.0085 * nk, 0.0135 * nk, skin, 12);
-    add(head, ball(0.0172 * nk, 16, 12), skin, nTip.clone().add(V(0, -0.004, 0.002)), [1.1, 0.9, 0.95]);
-    for (const s of [-1, 1]) add(head, ball(0.0105 * nk, 12, 8), skin, V(s * 0.0135 * nk, nTip.y - 0.007, nTip.z - 0.009), [1.1, 0.85, 0.9]);
-
-    // губы: у мужской фигуры — сдержанная улыбка, у женской — пухлые губы с «луком Купидона»
-    const my = -R * 0.6, mz = faceZ(0, my);
-    if (fem) {
-      for (const s of [-1, 1]) add(head, ball(0.0085, 14, 10), lipM, V(s * 0.0072, my + 0.0055, mz - 0.0035), [1.55, 0.6, 0.6], [0, 0, s * 0.22]);
-      add(head, ball(0.0105, 16, 10), lipM, V(0, my - 0.0045, mz - 0.004), [1.75, 0.68, 0.62]);
-      const blush = mat(0xEE8C8C, 0.6, { transparent: true, opacity: 0.3, depthWrite: false });
-      for (const s of [-1, 1]) add(head, ball(0.024, 16, 10), blush, V(s * R * 0.5, -R * 0.25, faceZ(s * R * 0.5, -R * 0.25) - 0.004), [1, 0.62, 0.3]);
-    } else {
-      const arc = Math.PI * 0.62, rr = R * 0.16;
-      add(head, new THREE.TorusGeometry(rr, 0.0042, 8, 18, arc), lipM, V(0, my + rr * 0.9, mz - 0.003), [1, 1, 0.6], [0, 0, -Math.PI / 2 - arc / 2]);
+    // губы: две плавные дуги с лёгкой улыбкой и тёмная линия смыкания; у женской фигуры — полнее и ярче
+    {
+      const my = -R * 0.68, w = R * (fem ? 0.2 : 0.23), up = fem ? 0.0062 : 0.0034, lo = fem ? 0.0078 : 0.0048;
+      const lp = (kx, dy, dz = 0) => { const x = kx * w, y = my + dy; return V(x, y, faceZ(x, y) - 0.0018 + dz); };
+      const smile = fem ? 0.003 : 0.0036;
+      const full = (t) => Math.pow(Math.sin(Math.PI * t), 0.55);
+      add(head, sweepGeo(THREE, [lp(-1, smile), lp(-0.42, up * 0.95), lp(0, up * 0.55), lp(0.42, up * 0.95), lp(1, smile)], (t) => up * full(t), { seg: 20, radial: 8, flat: 0.65 }), lipM);
+      add(head, sweepGeo(THREE, [lp(-1, smile), lp(-0.5, -lo * 0.75), lp(0, -lo * 1.05), lp(0.5, -lo * 0.75), lp(1, smile)], (t) => lo * full(t), { seg: 20, radial: 8, flat: 0.7 }), lipM);
+      add(head, sweepGeo(THREE, [lp(-1.06, smile + 0.0006, 0.0012), lp(-0.5, 0.0004, 0.003), lp(0, -0.0006, 0.0034), lp(0.5, 0.0004, 0.003), lp(1.06, smile + 0.0006, 0.0012)], (t) => 0.0013 * full(t), { seg: 20, radial: 6, flat: 0.6 }), mouthM);
     }
 
     /* ── Причёска ── */
@@ -6846,13 +6994,36 @@
       }
       return out;
     };
+    /* Пряди: сплюснутые сужающиеся ленты вдоль кривых, все — одной геометрией. Точки — в радиусах головы
+       от её центра; sp(x, y) — точка на «шаре» волос чуть больше головы. */
+    const sp = (x, y, k = 1.1) => [x, y, Math.sqrt(Math.max(0.02, k * k - x * x - y * y))];
+    const locks = (list, width, flat = 0.42) => {
+      const pos = [], uv = [], idx = [];
+      for (const pts of list) {
+        const g = sweepGeo(THREE, pts.map((p) => V(p[0] * R * HS[0], p[1] * R, p[2] * R)),
+          (t) => width * R * Math.pow(Math.sin(Math.PI * Math.min(1, 0.12 + 0.88 * t)), 0.6),
+          { seg: 18, radial: 10, flat, out: (p) => V(p.x, p.y > 0 ? p.y * 0.35 : 0, p.z) });
+        const base = pos.length / 3;
+        for (const v of g.attributes.position.array) pos.push(v);
+        for (const v of g.attributes.uv.array) uv.push(v);
+        for (const v of g.index.array) idx.push(v + base);
+        g.dispose();
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      return add(head, geo, hairM);
+    };
     const hs = cfg.hair;
     if (!fem) {
       if (hs === 'buzz') cap(HAIRLINE.buzz, [1.03, 1.04, 1.04], mat(mix(hairHex, skinHex, 0.28), 0.8));
       if (hs === 'short') {
         // короткая стрижка: объём сверху и мягкая чёлка, зачёсанная набок
         cap(HAIRLINE.short, [1.07, 1.16, 1.09]);
-        add(head, ball(R * 0.34, 24, 16), hairM, V(R * 0.14, R * 0.64, R * 0.7), [1.55, 0.42, 0.62], [-0.85, 0, -0.28]);
+        locks([-0.5, -0.3, -0.1, 0.1, 0.3, 0.5].map((x0, i) =>
+          [sp(x0 * 0.6, 0.98, 1.13), sp(x0 * 0.9 + 0.08, 0.85, 1.13), sp(x0 + 0.2, 0.64, 1.11), sp(x0 + 0.3, 0.47 + 0.03 * avatarRnd(i), 1.08)]), 0.2);
       }
       if (hs === 'quiff') {
         cap(HAIRLINE.short, [1.05, 1.07, 1.06]);
@@ -6869,13 +7040,21 @@
         // прямые длинные волосы до груди, спереди открывают лицо; косая чёлка
         lathe(head, [[R * 0.6, R * 0.85], [R * 0.92, R * 0.4], [R * 1.04, -R * 0.1], [R * 1.1, -R * 0.85], [R * 1.13, -R * 1.6], [R * 1.11, -R * 2.2], [R * 1.02, -R * 2.42], [R * 0.93, -R * 2.46]],
           hairM, 1, 0, Math.PI * 0.3, Math.PI * 1.4).scale.x = 0.98;
-        add(head, ball(R * 0.5, 24, 16), hairM, V(R * 0.2, R * 0.63, R * 0.58), [1.3, 0.42, 0.72], [-0.38, 0, -0.38]);
+        // прямой пробор: пряди от макушки огибают лицо и ложатся на грудь
+        const list = [];
+        for (const s of [-1, 1]) for (const [deg, len] of [[62, 2.45], [80, 2.3], [100, 2.4]]) {
+          const a = deg * Math.PI / 180, sx = s * Math.sin(a), cz = Math.cos(a);
+          list.push([[s * 0.05, 1.06, 0.34 * cz + 0.05], [sx * 0.66 + s * 0.06, 0.9, 0.66 * cz + 0.08], [sx * 1.07, 0.3, 1.07 * cz],
+            [sx * 1.1, -0.6, 1.08 * cz], [sx * 1.08, -len * 0.66, cz + 0.1], [sx * 0.96, -len, 0.9 * cz + 0.1]]);
+        }
+        locks(list, 0.24);
       }
       if (hs === 'bob') {
         // каре до подбородка с прямой чёлкой
         lathe(head, [[R * 0.6, R * 0.85], [R * 0.95, R * 0.35], [R * 1.1, -R * 0.15], [R * 1.16, -R * 0.62], [R * 1.15, -R * 0.9], [R * 1.07, -R * 1.04], [R * 0.97, -R * 1.07]],
           hairM, 1, 0, Math.PI * 0.26, Math.PI * 1.48).scale.x = 0.98;
-        add(head, ball(R * 0.6, 28, 16), hairM, V(0, R * 0.56, R * 0.58), [1.3, 0.38, 0.7], [-0.55, 0, 0]);
+        locks([-0.55, -0.33, -0.11, 0.11, 0.33, 0.55].map((x0, i) =>
+          [sp(x0 * 0.5, 1.0, 1.13), sp(x0 * 0.85, 0.82, 1.13), sp(x0, 0.56, 1.11), sp(x0 * 1.02, 0.34 + 0.03 * avatarRnd(i), 1.08)]), 0.18);
       }
       if (hs === 'ponytail') {
         const base = V(0, R * 0.28, -R * 1.02);
@@ -6907,8 +7086,8 @@
 
   // Свет «студии»: тёплый основной, холодная заливка и два цветных контровых в цветах «Призмы»
   function addAvatarLights(THREE, scene) {
-    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x6A5D57, 0.62));
-    const key = new THREE.DirectionalLight(0xFFF1E4, 1.15); key.position.set(2.2, 3.6, 3.4); scene.add(key);
+    scene.add(new THREE.HemisphereLight(0xFFFFFF, 0x6A5D57, 0.55));
+    const key = new THREE.DirectionalLight(0xFFF1E4, 1.25); key.position.set(2.2, 3.6, 3.4); scene.add(key);
     const fill = new THREE.DirectionalLight(0xD3DCFF, 0.38); fill.position.set(-3, 1.4, 2.2); scene.add(fill);
     const rim = new THREE.DirectionalLight(0xB9A2FF, 0.75); rim.position.set(-2.2, 2.6, -3.4); scene.add(rim);
     const rim2 = new THREE.DirectionalLight(0x86E8F0, 0.4); rim2.position.set(2.6, 1.6, -3); scene.add(rim2);
@@ -6951,7 +7130,7 @@
     let group = null, P = null, mode = framing, aimed = false;
     const aim = () => {
       if (mode === 'bust') { camPos.set(0, P.headY - 0.03, 1.32); camLook.set(0, P.headY - 0.09, 0); }
-      else { camPos.set(0, 1.06, 3.75); camLook.set(0, 0.94, 0); }
+      else { camPos.set(0, 1.07, 3.85); camLook.set(0, 0.95, 0); }
       if (!aimed) { curPos.copy(camPos); curLook.copy(camLook); aimed = true; }
     };
     const setConfig = (c) => {
@@ -7009,18 +7188,40 @@
     return [c.gender, c.skin, c.clothes, c.hair, c.hairColor, c.outfit].join('|');
   }
 
+  /* Снимки делает один общий рендерер: контекст WebGL и шейдеры создаются один раз, а не на каждый аватар.
+     Предыдущая сцена освобождается только после отрисовки следующей — так шейдеры не собираются заново.
+     После 15 секунд простоя рендерер освобождается: число контекстов WebGL у браузера ограничено. */
+  let avatarSnap = null;
+  function avatarSnapshotRender(cfg, size, framing) {
+    const THREE = window.THREE;
+    if (!avatarSnap) {
+      const canvas = document.createElement('canvas');
+      const snap = { canvas, renderer: makeAvatarRenderer(THREE, canvas, true), prev: null, timer: null };
+      canvas.addEventListener('webglcontextlost', () => { if (avatarSnap === snap) avatarSnap = null; });
+      avatarSnap = snap;
+    }
+    const snap = avatarSnap;
+    clearTimeout(snap.timer);
+    snap.renderer.setSize(size, size, false);
+    const av = createAvatarScene(THREE, cfg, { framing });
+    av.animate(0, 0.3, 0);
+    snap.renderer.render(av.scene, av.camera);
+    const dataUrl = snap.canvas.toDataURL('image/png');
+    if (snap.prev) snap.prev.dispose();
+    snap.prev = av;
+    snap.timer = setTimeout(() => {
+      if (avatarSnap === snap) avatarSnap = null;
+      try { snap.prev.dispose(); snap.renderer.dispose(); snap.renderer.forceContextLoss(); } catch {}
+    }, 15000);
+    return dataUrl;
+  }
+
   function getAvatarSnapshotDataURL(cfg, framing = 'full') {
     if (!isThreeAvailable() || !cfg || typeof cfg !== 'object') return null;
     const key = avatarCfgKey(cfg) + '|' + framing;
     if (avatarSnapshotCache.has(key)) return avatarSnapshotCache.get(key);
     try {
-      const size = framing === 'bust' ? 128 : 112;
-      const off = document.createElement('canvas');
-      off.width = size; off.height = size;
-      const ok = renderAvatarToCanvas(off, size, cfg, { framing, still: true, yaw: 0.3 });
-      if (!ok) { avatarSnapshotCache.set(key, null); return null; }
-      const dataUrl = off.toDataURL('image/png');
-      if (off.__avatarStop) { off.__avatarStop(); off.__avatarStop = null; }
+      const dataUrl = avatarSnapshotRender(cfg, framing === 'bust' ? 128 : 112, framing);
       avatarSnapshotCache.set(key, dataUrl);
       return dataUrl;
     } catch (err) {
@@ -8638,7 +8839,7 @@
 
   /* ── Даты в ленте чата ──
      Перед первым сообщением каждого дня — плашка по центру: «Сегодня», «Вчера», «5 октября»,
-     а для прошлых лет — «5 октября 2024». При прокрутке плашка текущего дня держится у верха ленты. */
+     а для прошлых лет — «5 октября 2024». Плашка прокручивается вместе с лентой; у верха при прокрутке висит плавающая дата (см. initChatFloatDate). */
   function chatDayKey(iso) {
     let d = iso ? new Date(iso) : new Date();
     if (isNaN(d)) d = new Date();
@@ -8673,6 +8874,35 @@
       if (!next || !next.classList.contains('chat-msg')) { sep.remove(); changed = true; }
     }
     if (changed && chat && chat.stick) scrollChatToBottom();
+  }
+
+  /* Плавающая дата, как в Telegram: пока ленту листают, у верха висит дата дня, который сейчас на экране.
+     Плашка следующего дня, подъезжая, выталкивает её вверх; через полторы секунды покоя дата гаснет. */
+  function initChatFloatDate(body) {
+    const fl = winBody.querySelector('#chat-date-float');
+    if (!fl) return;
+    const PIN = 2, GAP = 4;
+    let held = null, timer = 0;
+    // плашка в ленте, чьё место заняла плавающая, на это время скрыта — иначе они просвечивают друг сквозь друга
+    const release = () => { if (held) held.classList.remove('is-floating'); held = null; };
+    const hide = () => { fl.classList.remove('is-on'); release(); };
+    body.addEventListener('scroll', () => {
+      const top = body.getBoundingClientRect().top;
+      let cur = null, next = null;
+      for (const sep of body.querySelectorAll(':scope > .chat-date')) {
+        if (sep.getBoundingClientRect().top - top <= PIN) cur = sep; else { next = sep; break; }
+      }
+      clearTimeout(timer);
+      if (!cur) { hide(); return; }
+      if (cur !== held) { release(); held = cur; cur.classList.add('is-floating'); }
+      fl.firstElementChild.textContent = cur.firstElementChild.textContent;
+      const y = next ? Math.min(PIN, next.getBoundingClientRect().top - top - GAP - fl.offsetHeight) : PIN;
+      fl.style.top = (body.offsetTop + y) + 'px';
+      // вытолкнутая часть не должна вылезать на шапку чата
+      fl.style.clipPath = y < 0 ? `inset(${-y}px 0 0 0)` : '';
+      fl.classList.add('is-on');
+      timer = setTimeout(hide, 1500);
+    }, { passive: true });
   }
 
   const mediaUrlCache = new Map(); // путь в Storage → { url, exp }
@@ -8766,6 +8996,7 @@
         ${chat.type === 'match' ? '<div class="match-vote" id="match-vote"></div>' : ''}
         <div class="chat-pin" id="chat-pin" role="button" tabindex="0" hidden></div>
         <div class="support-chat-body" id="chat-view-body">${rows}</div>
+        <div class="chat-date chat-date-float" id="chat-date-float" aria-hidden="true"><span></span></div>
         <div class="chat-rec-preview" id="chat-rec-preview" hidden><video playsinline muted></video><span class="chat-rec-ring"></span></div>
         <form class="support-chat-form chat-composer" id="chat-composer">
           <button type="button" class="chat-tool" data-chat-attach title="Фото, видео или файл" aria-label="Прикрепить фото, видео или файл">${ICON_CLIP}</button>
@@ -8796,6 +9027,7 @@
       if (chat) chat.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
     }, { passive: true });
     syncChatDates(body);
+    initChatFloatDate(body);
     // лента меняется из многих мест (новое сообщение, удаление, перерисовка) — плашки дат следуют за ней
     new MutationObserver(() => syncChatDates(body)).observe(body, { childList: true });
     hydrateChatMedia(body);
