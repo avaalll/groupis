@@ -3179,6 +3179,19 @@
     .pal-opt[aria-pressed="true"] .pal-dot { transform: scale(1.12); box-shadow: 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
     @media (max-width: 360px) { .pal-seg { grid-template-columns: repeat(2, 1fr); } }
 
+    /* ── Карточка «Включить уведомления?» над панелью вкладок ── */
+    .push-ask {
+      position: fixed; z-index: 40; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+      width: min(380px, calc(100% - 24px)); transform: translateX(-50%);
+      display: grid; gap: 14px; padding: 18px 18px 14px; border-radius: 26px;
+      background: var(--win); color: var(--ink); border: 1px solid var(--win-line);
+      box-shadow: 0 30px 70px -20px rgba(8, 8, 14, .5), inset 0 1px 0 var(--rim);
+      animation: push-ask-in .5s var(--spring) both;
+    }
+    .push-ask .modal-text { margin: 0; }
+    body.auth-locked .push-ask { display: none; }
+    @keyframes push-ask-in { from { opacity: 0; transform: translate(-50%, 24px) scale(.95); } }
+
     /* ── Воспоминание: с кем ── */
     .post-with-list { margin-top: 8px; }
     .post-with-list .person-card[role="radio"] .person-check { border-radius: 50%; }
@@ -4343,7 +4356,129 @@
   }
 
   function logout() {
-    supabaseClient.auth.signOut().finally(handleSignedOut);
+    // сначала отвязываем устройство от аккаунта (пока ещё есть права), иначе уведомления приходили бы и после выхода
+    Promise.race([disablePush().catch(() => {}), new Promise((r) => setTimeout(r, 2500))])
+      .finally(() => supabaseClient.auth.signOut().finally(handleSignedOut));
+  }
+
+  /* ═══════ PUSH-УВЕДОМЛЕНИЯ ═══════
+     Уведомления на само устройство — приходят, даже когда приложение закрыто. Сначала спрашиваем сами
+     (карточка «Включить уведомления?»), и только по нажатию — системный запрос разрешения: браузеры
+     показывают его лишь в ответ на действие человека. Дальше устройство подписывается на push,
+     подписка сохраняется в Supabase (supabase_push.sql), а рассылает уведомления функция send-push.
+     На iPhone и iPad push работает только в приложении, добавленном на экран «Домой». */
+  const VAPID_PUBLIC_KEY = 'BCNjRh_ZQGsyESbFGUczG_OAYR1q_ZNSuHGMpjG-pBr0xQHbPm85lYHyNpFQGw1wC3SuwEPujuzgyPkT0J2K9zM';
+  const PUSH_ASKED_KEY = 'push.asked.v1';
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  // Уведомления действительно включены на этом устройстве: настройка + разрешение браузера
+  function pushOn() { return !!settings.notifications && pushSupported() && Notification.permission === 'granted'; }
+  function pushUnsupportedHint() {
+    return IS_IOS
+      ? 'На iPhone и iPad уведомления работают только в приложении на экране «Домой».\n\nОткройте Groupis в Safari, нажмите «Поделиться» → «На экран „Домой“» и включите уведомления уже там.'
+      : 'Этот браузер не поддерживает push-уведомления.';
+  }
+  function vapidKeyBytes() {
+    const b64 = VAPID_PUBLIC_KEY.replace(/-/g, '+').replace(/_/g, '/');
+    return Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), (c) => c.charCodeAt(0));
+  }
+  function pushRegistration() {
+    return Promise.race([navigator.serviceWorker.ready, new Promise((_, rej) => setTimeout(() => rej(new Error('service worker не запущен')), 8000))]);
+  }
+
+  // Разрешение уже есть: подписать устройство и сохранить подписку за текущим аккаунтом
+  async function syncPushSubscription() {
+    if (!currentUser || !pushSupported() || Notification.permission !== 'granted') return false;
+    const reg = await pushRegistration();
+    const opts = { userVisibleOnly: true, applicationServerKey: vapidKeyBytes() };
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      try { sub = await reg.pushManager.subscribe(opts); }
+      catch (err) {
+        // осталась подписка со старым ключом — пересоздаём
+        const old = await reg.pushManager.getSubscription();
+        if (!old) throw err;
+        await old.unsubscribe();
+        sub = await reg.pushManager.subscribe(opts);
+      }
+    }
+    const j = sub.toJSON();
+    const { error } = await supabaseClient.rpc('save_push_subscription', {
+      p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth,
+    });
+    if (error) throw error;
+    return true;
+  }
+
+  // Включить по действию человека: системный запрос разрешения, затем подписка
+  async function enablePush() {
+    if (!pushSupported()) { alert(pushUnsupportedHint()); return false; }
+    let perm = Notification.permission;
+    if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch { perm = Notification.permission; } }
+    if (perm !== 'granted') {
+      if (perm === 'denied') alert('Уведомления запрещены для этого сайта. Разрешите их в настройках браузера (значок слева от адреса) или в настройках телефона и включите снова.');
+      return false;
+    }
+    try { return await syncPushSubscription(); }
+    catch (err) {
+      console.warn('[push] subscribe:', err);
+      const msg = (err && err.message) || String(err);
+      alert('Не удалось включить уведомления: ' + msg
+        + (/save_push_subscription|schema cache|could not find/i.test(msg) ? '\n\nВыполните supabase_push.sql в Supabase.' : ''));
+      return false;
+    }
+  }
+
+  // Выключить на этом устройстве: подписка удаляется и с сервера, и из браузера
+  async function disablePush() {
+    if (!pushSupported()) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (!sub) return;
+    if (currentUser) {
+      const { error } = await supabaseClient.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      if (error) console.warn('[push] delete:', error.message);
+    }
+    await sub.unsubscribe();
+  }
+
+  /* После входа: разрешение уже дано — тихо обновляем подписку; ещё не спрашивали — показываем карточку.
+     «Не сейчас» запоминается: повторно не спрашиваем, включить можно в настройках. */
+  function maybeAskPush() {
+    if (!currentUser || !settings.notifications || !pushSupported()) return;
+    if (Notification.permission === 'granted') { syncPushSubscription().catch((err) => console.warn('[push] sync:', err)); return; }
+    if (Notification.permission === 'denied' || document.querySelector('.push-ask')) return;
+    try { if (localStorage.getItem(PUSH_ASKED_KEY)) return; } catch {}
+    const card = document.createElement('div');
+    card.className = 'push-ask';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', 'Включить уведомления');
+    card.innerHTML = `
+      <div>
+        <h3 class="modal-title">Включить уведомления?</h3>
+        <p class="modal-text">Сообщения, запросы в друзья, приглашения в группы и match будут приходить на это устройство, даже когда Groupis закрыт.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-push-later>Не сейчас</button>
+        <button type="button" class="btn btn-primary" data-push-allow>Включить</button>
+      </div>`;
+    const close = () => { try { localStorage.setItem(PUSH_ASKED_KEY, '1'); } catch {} card.remove(); };
+    card.querySelector('[data-push-later]').addEventListener('click', close);
+    card.querySelector('[data-push-allow]').addEventListener('click', async () => {
+      close();
+      await enablePush();
+      syncSettingsUi();
+    });
+    document.body.appendChild(card);
+  }
+
+  // Нажали на уведомление при открытом приложении — сервис-воркер просит показать нужный раздел
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const d = e.data;
+      if (!d || d.type !== 'push-open' || !currentUser) return;
+      if (d.open === 'messenger' || (d.open && APPS[d.open])) showApp(d.open);
+    });
   }
 
   const authScreen = document.getElementById('auth-screen');
@@ -4956,6 +5091,7 @@
     });
     openAppFromShortcut();
     setTimeout(prefetchChats, 2500);   // когда интерфейс уже на месте
+    setTimeout(maybeAskPush, 4000);
   }
 
   /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings */
@@ -7483,7 +7619,8 @@
   }
   function syncSettingsUi() {
     document.querySelectorAll('.switch[data-setting]').forEach((el) => {
-      el.setAttribute('aria-checked', String(!!settings[el.dataset.setting]));
+      const key = el.dataset.setting;
+      el.setAttribute('aria-checked', String(key === 'notifications' ? pushOn() : !!settings[key]));
     });
   }
   document.getElementById('geo-btn').addEventListener('click', goToUserLocation);
@@ -10164,8 +10301,8 @@
         </div>
         <ul class="rows">
           <li class="row">
-            <div class="row-main"><div class="row-name">Уведомления</div><div class="row-sub">Сообщения и приглашения</div></div>
-            <button class="switch" type="button" role="switch" data-setting="notifications" aria-checked="${!!settings.notifications}"></button>
+            <div class="row-main"><div class="row-name">Уведомления</div><div class="row-sub">Сообщения и приглашения — на это устройство</div></div>
+            <button class="switch" type="button" role="switch" data-setting="notifications" aria-checked="${pushOn()}"></button>
           </li>
           <li class="row">
             <div class="row-main"><div class="row-name">Геопозиция</div><div class="row-sub">Показывать меня на карте</div></div>
@@ -11873,6 +12010,11 @@
     if (key) {
       settings = { ...settings, [key]: next }; saveSettings(settings);
       if (key === 'geolocation') { if (next) startGeolocation(); else stopGeolocation(); }
+      // включение — запрос разрешения; не дали или не поддерживается — переключатель возвращается назад
+      if (key === 'notifications') {
+        if (next) enablePush().then(syncSettingsUi);
+        else disablePush().catch((err) => console.warn('[push] disable:', err));
+      }
     }
   });
 
