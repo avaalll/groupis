@@ -1,12 +1,14 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.1.10';
+const VERSION = 'v1.1.11';
 const CACHE = `groupis-${VERSION}`;
 
 const APP_SHELL = [
   './index.html',
   './three.min.js',
+  './avatars3d/male.glb',
+  './avatars3d/female.glb',
   './img/earth-dark.jpg',
   './manifest.webmanifest',
   './icons/logo.svg',
