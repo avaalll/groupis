@@ -1,7 +1,7 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.1.12';
+const VERSION = 'v1.1.13';
 const CACHE = `groupis-${VERSION}`;
 
 const APP_SHELL = [
@@ -177,4 +177,42 @@ self.addEventListener('fetch', (event) => {
   if (request.headers.has('range')) return;
 
   staleWhileRevalidate(event, request);
+});
+
+/* ── Push-уведомления ──
+   Сервер (функция send-push в Supabase) присылает { title, body, tag, open }.
+   Если приложение открыто и на экране — уведомление не показываем: там всё уже видно.
+   На iPhone показываем всегда: за «тихие» push Safari отзывает подписку. */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : '' }; }
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const ios = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
+    if (!ios && wins.some((c) => c.focused && c.visibilityState === 'visible')) return;
+    await self.registration.showNotification(data.title || 'Groupis', {
+      body: data.body || '',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      tag: data.tag || undefined,
+      renotify: !!data.tag,
+      data: { open: data.open || '' },
+    });
+  })());
+});
+
+// Нажатие на уведомление: открытое приложение выходит вперёд и показывает нужный раздел, иначе — запускается
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const open = (event.notification.data && event.notification.data.open) || '';
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = wins.find((c) => c.url.startsWith(self.registration.scope));
+    if (win) {
+      try { await win.focus(); } catch {}
+      win.postMessage({ type: 'push-open', open });
+      return;
+    }
+    await self.clients.openWindow(open ? `./?open=${encodeURIComponent(open)}` : './');
+  })());
 });
