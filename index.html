@@ -3236,6 +3236,119 @@
       text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
     .pw-link:hover { color: var(--you); text-decoration-color: currentColor; }
     .map-popup .pop-with { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+
+    /* ── Редактирование профиля: секции-карточки в стиле фильтров, главное фото крупно, кнопки прилипают к низу ── */
+    .pe { display: flex; flex-direction: column; gap: 22px; min-height: 100%; padding: 4px 14px 0; }
+    .pe-sec { display: grid; gap: 10px; }
+    .pe-cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; }
+    .pe-cap > span:first-child { font: 500 10.5px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft); }
+    .pe-cap > span:first-child::before {
+      content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 9px 1px 0; border-radius: 2px;
+      background: var(--prism); vertical-align: middle;
+    }
+    .pe-count { font: 500 10.5px var(--font-mono); font-style: normal; letter-spacing: .06em; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .pe-note { margin: 0; padding: 0 4px; font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
+    .pe-card .pe-note { padding: 0; }
+
+    /* фото: главное — плитка 2×2, остальные вокруг */
+    .pe .pe-photos { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: dense; gap: 8px; }
+    .pe .pg-item, .pe .pg-add { border-radius: 20px; }
+    .pe .pg-item { box-shadow: inset 0 0 0 1px var(--win-line); transition: transform .4s var(--spring), filter .2s; }
+    .pe .pg-item:not(.is-main):hover { filter: brightness(1.06); }
+    .pe .pg-item:not(.is-main):active { transform: scale(.94); transition-duration: .08s; }
+    .pe .pg-item.is-main { grid-column: span 2; grid-row: span 2; border-radius: 26px; box-shadow: none; }
+    .pe .pg-item.is-main::after {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
+      background: var(--prism-conic);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+    }
+    .pe .pg-badge {
+      left: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px;
+      background: rgba(12, 12, 16, .5); color: #fff; font: 500 9.5px var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+      -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
+    }
+    .pe .pg-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--prism); }
+    .pe .pg-del {
+      top: 7px; right: 7px; width: 26px; height: 26px; font-size: 15px;
+      background: rgba(12, 12, 16, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      transition: opacity .2s, background .2s, transform .3s var(--spring);
+    }
+    .pe .pg-del:hover { background: var(--hot); }
+    .pe .pg-del:active { transform: scale(.85); }
+    @media (hover: hover) {
+      .pe .pg-del { opacity: 0; }
+      .pe .pg-item:hover .pg-del, .pe .pg-del:focus-visible { opacity: 1; }
+    }
+    .pe .pg-add {
+      gap: 8px; border: 0; background: var(--field); color: var(--ink-soft);
+      font: 500 9.5px var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+      transition: background .2s, color .2s, transform .4s var(--spring), box-shadow .2s;
+    }
+    .pe .pg-add svg {
+      width: 34px; height: 34px; padding: 8px; border-radius: 50%;
+      background: var(--act); color: var(--act-ink); box-shadow: var(--prism-glow);
+      transition: transform .45s var(--spring);
+    }
+    .pe .pg-add:hover { color: var(--ink); box-shadow: inset 0 0 0 1px var(--win-line); }
+    .pe .pg-add:hover svg { transform: rotate(90deg); }
+    .pe .pg-add:active { transform: scale(.93); transition-duration: .08s; }
+
+    /* поля: одна карточка, строки разделены линией, у активной слева загорается спектр */
+    .pe-group { border-radius: 22px; background: var(--field); overflow: hidden; }
+    .pe-field { position: relative; display: grid; gap: 4px; padding: 12px 16px 11px; cursor: text; transition: background .2s; }
+    .pe-field + .pe-field { box-shadow: inset 0 1px 0 var(--win-line); }
+    .pe-field::before {
+      content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2.5px; border-radius: 0 3px 3px 0;
+      background: var(--prism); transform: scaleY(0); transition: transform .35s var(--ease);
+    }
+    .pe-field:focus-within { background: var(--row-hover); }
+    .pe-field:focus-within::before { transform: scaleY(1); }
+    .pe-field.is-invalid::before { background: var(--hot); transform: scaleY(1); }
+    .pe-field.is-invalid .pe-label { color: var(--hot); }
+    .pe-label {
+      display: flex; justify-content: space-between; gap: 8px;
+      font: 500 10px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft);
+      transition: color .2s;
+    }
+    .pe-field:focus-within .pe-label { color: var(--ink); }
+    .pe-input {
+      width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; background: none; outline: none;
+      color: var(--ink); font: 600 15px/1.4 "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+    }
+    .pe-input::placeholder { color: var(--ink-soft); opacity: .6; font-weight: 500; }
+    .pe-handle { display: flex; align-items: baseline; gap: 1px; }
+    .pe-handle i { font-style: normal; font-weight: 600; font-size: 15px; color: var(--ink-soft); }
+    .pe-bio { resize: none; min-height: 42px; max-height: 168px; field-sizing: content; font-weight: 500; }
+
+    /* пол и возраст */
+    .pe-card { display: grid; gap: 18px; padding: 16px; border-radius: 22px; background: var(--field); }
+    .pe-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 18px; background: var(--field); }
+    .pe-seg-opt {
+      display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 8px; border: 0; border-radius: 14px; cursor: pointer;
+      background: transparent; color: var(--ink-soft); font: 700 13px "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      transition: background .25s, color .2s, box-shadow .25s, transform .4s var(--spring);
+    }
+    .pe-seg-opt svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .pe-seg-opt:hover { color: var(--ink); }
+    .pe-seg-opt:active { transform: scale(.95); transition-duration: .08s; }
+    .pe-seg-opt[aria-pressed="true"] { background: var(--win); color: var(--ink); box-shadow: 0 6px 16px -8px var(--glass-shadow), inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--win-line); }
+    .pe-seg-opt[aria-pressed="true"] svg { stroke: url(#prismIcon); }
+    .pe-age { display: grid; gap: 10px; }
+
+    /* кнопки прилипают к низу окна поверх плавного затухания */
+    .pe-foot {
+      position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; margin: auto -14px 0; padding: 22px 14px 16px;
+      background: linear-gradient(to bottom, transparent, var(--win) 38%);
+    }
+    .pe-foot .btn-ghost { background: transparent; color: var(--ink-soft); }
+    .pe-foot .btn-ghost:hover { background: var(--field); color: var(--ink); text-decoration: none; }
+    .pe-foot .btn-primary { flex: 1; padding: 13px 18px; }
+    @media (max-width: 640px) {
+      .pe { padding: 2px 12px 0; gap: 20px; }
+      .pe-foot { margin: auto -12px 0; padding: 20px 12px 14px; }
+      .pe-input, .pe-handle i { font-size: 16px; }
+    }
   </style>
 </head>
 <body class="auth-locked">
@@ -11615,33 +11728,37 @@
       winTitle.textContent = 'Редактировать профиль';
       winBody.scrollTop = 0;
       winBody.innerHTML = `
-        <form class="edit-form" id="edit-form" novalidate>
-          <div class="edit-field">
-            <span class="edit-label">Фото профиля</span>
-            <div class="photo-grid" id="photo-grid"></div>
+        <form class="pe" id="edit-form" novalidate>
+          <section class="pe-sec">
+            <div class="pe-cap"><span>Фото</span><span class="pe-count" id="pe-photo-count"></span></div>
+            <div class="photo-grid pe-photos" id="photo-grid"></div>
             <input type="file" id="avatar-input" accept="image/*" multiple hidden>
-            <span class="edit-hint">Первое фото — главное: его видно на карте и в чатах. Нажмите на другое фото, чтобы сделать его главным. До ${PHOTOS_LIMIT} фото.</span>
-          </div>
-          <label class="edit-field"><span class="edit-label">Имя</span><input class="edit-input" type="text" id="edit-name" maxlength="60" value="${escapeHtml(profile.name)}"></label>
-          <label class="edit-field"><span class="edit-label">Имя пользователя</span><div class="username-wrap"><span class="username-prefix">@</span><input class="edit-input username-input" type="text" id="edit-username" maxlength="20" value="${escapeHtml(profile.handle.replace(/^@/, ''))}"></div></label>
-          <div class="edit-field">
-            <span class="edit-label">Пол</span>
-            <div class="seg" id="edit-gender">
-              <button type="button" class="seg-opt" data-gender="male" aria-pressed="${profile.gender === 'male'}"><span class="seg-emoji">👨</span>Мужской</button>
-              <button type="button" class="seg-opt" data-gender="female" aria-pressed="${profile.gender === 'female'}"><span class="seg-emoji">👩</span>Женский</button>
+            <p class="pe-note">Первое фото — главное: его видно на карте и в чатах. Нажмите на другое, чтобы сделать главным.</p>
+          </section>
+          <section class="pe-sec">
+            <div class="pe-cap"><span>Личное</span></div>
+            <div class="pe-group">
+              <label class="pe-field"><span class="pe-label">Имя</span><input class="pe-input" type="text" id="edit-name" maxlength="60" autocomplete="name" value="${escapeHtml(profile.name)}"></label>
+              <label class="pe-field"><span class="pe-label">Имя пользователя</span><span class="pe-handle"><i>@</i><input class="pe-input" type="text" id="edit-username" maxlength="20" autocomplete="off" spellcheck="false" value="${escapeHtml(profile.handle.replace(/^@/, ''))}"></span></label>
+              <label class="pe-field"><span class="pe-label">О себе <em class="pe-count" id="pe-bio-count"></em></span><textarea class="pe-input pe-bio" id="edit-bio" maxlength="300" rows="2" placeholder="Пара слов о себе">${escapeHtml(profile.bio)}</textarea></label>
             </div>
-          </div>
-          <div class="edit-field">
-            <span class="edit-label">Возраст</span>
-            <div class="filter-range">
-              <input type="range" id="edit-age" min="10" max="100" value="${Number(profile.age) || 18}">
-              <span class="filter-val" id="edit-age-val">${profile.age ? escapeHtml(String(profile.age)) : '—'}</span>
+          </section>
+          <section class="pe-sec">
+            <div class="pe-cap"><span>Пол и возраст</span></div>
+            <div class="pe-card">
+              <div class="pe-seg" id="edit-gender" role="group" aria-label="Пол">
+                <button type="button" class="pe-seg-opt" data-gender="male" aria-pressed="${profile.gender === 'male'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="14" r="5.5"/><path d="M14 10l6-6M15 4h5v5"/></svg>Мужской</button>
+                <button type="button" class="pe-seg-opt" data-gender="female" aria-pressed="${profile.gender === 'female'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M12 14.5V21M9 18h6"/></svg>Женский</button>
+              </div>
+              <div class="pe-age">
+                <div class="flt-big"><span id="edit-age-val">${profile.age ? escapeHtml(String(profile.age)) : '—'}</span><small>лет</small></div>
+                <input class="flt-range" type="range" id="edit-age" min="10" max="100" value="${Number(profile.age) || 18}" aria-label="Возраст">
+              </div>
+              <p class="pe-note">По полу и возрасту считаются состав и средний возраст ваших групп в фильтрах.</p>
             </div>
-            <span class="edit-hint">По полу и возрасту считаются состав и средний возраст ваших групп в фильтрах.</span>
-          </div>
-          <label class="edit-field"><span class="edit-label">О себе</span><textarea class="edit-textarea" id="edit-bio" maxlength="300">${escapeHtml(profile.bio)}</textarea></label>
-          <div class="edit-actions">
-            <button type="button" class="btn" id="edit-cancel">Отмена</button>
+          </section>
+          <div class="pe-foot">
+            <button type="button" class="btn btn-ghost" id="edit-cancel">Отмена</button>
             <button type="submit" class="btn btn-primary">Сохранить</button>
           </div>
         </form>`;
@@ -11650,7 +11767,11 @@
       const nameEl = winBody.querySelector('#edit-name');
       const usernameEl = winBody.querySelector('#edit-username');
       // Фото сохраняются сразу (как в Telegram), не дожидаясь кнопки «Сохранить»
-      const renderPhotoGrid = () => { gridEl.innerHTML = photoGridHtml(); };
+      const photoCountEl = winBody.querySelector('#pe-photo-count');
+      const renderPhotoGrid = () => {
+        gridEl.innerHTML = photoGridHtml();
+        photoCountEl.textContent = `${photosOrAvatar(myPhotos, profile.avatar).length} / ${PHOTOS_LIMIT}`;
+      };
       renderPhotoGrid();
       ensureMyPhotos().then(() => { if (gridEl.isConnected && !gridEl.classList.contains('is-busy')) renderPhotoGrid(); });
       const photoOp = async (fn) => {
@@ -11679,17 +11800,26 @@
         winBody.querySelectorAll('#edit-gender [data-gender]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.gender === editGender)));
       });
       const ageEl = winBody.querySelector('#edit-age');
-      ageEl.addEventListener('input', () => { editAge = Number(ageEl.value); winBody.querySelector('#edit-age-val').textContent = ageEl.value; });
+      const paintAge = () => ageEl.style.setProperty('--p', ((ageEl.value - ageEl.min) / (ageEl.max - ageEl.min) * 100).toFixed(1) + '%');
+      paintAge();
+      ageEl.addEventListener('input', () => { editAge = Number(ageEl.value); winBody.querySelector('#edit-age-val').textContent = ageEl.value; paintAge(); });
+      const bioEl = winBody.querySelector('#edit-bio');
+      const bioCountEl = winBody.querySelector('#pe-bio-count');
+      const paintBio = () => { bioCountEl.textContent = `${bioEl.value.length} / ${bioEl.maxLength}`; };
+      paintBio();
+      bioEl.addEventListener('input', paintBio);
+      usernameEl.addEventListener('input', () => usernameEl.closest('.pe-field').classList.remove('is-invalid'));
       winBody.querySelector('#edit-cancel').addEventListener('click', goBack);
       winBody.querySelector('#edit-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const newName = nameEl.value.trim() || 'Пользователь';
         const newBio = winBody.querySelector('#edit-bio').value.trim();
         const uname = normalizeUsernameInput(usernameEl.value);
-        if (!isValidUsernameInput(uname)) { usernameEl.focus(); return; }
+        if (!isValidUsernameInput(uname)) { usernameEl.closest('.pe-field').classList.add('is-invalid'); usernameEl.focus(); return; }
         const newAvatar = profile.avatar;
         if (uname !== normalizeUsername(profile.handle) && await isUsernameTakenRemote(uname)) {
           alert('Этот username уже занят');
+          usernameEl.closest('.pe-field').classList.add('is-invalid');
           usernameEl.focus();
           return;
         }
