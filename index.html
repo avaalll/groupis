@@ -231,52 +231,53 @@
     .filter-note { font-size: 12px; color: var(--ink-soft); }
     .filter-actions { display: flex; gap: 8px; justify-content: space-between; }
 
+    /* ── Воспоминание на карте: стопка карточек в цвете схемы, под ней — светящаяся точка на ножке ──
+       Карточка — фото в рамке-спектре (--prism), задние карточки выглядывают сверху, уменьшаясь.
+       Глубину карточки задаёт --d (0 — передняя). */
     .memory-marker {
+      --mc: 56px;
       position: relative; cursor: pointer; pointer-events: auto;
-      transform-origin: 50% 100%; transition: transform .18s ease-out;
-      width: 84px; height: 84px;
+      width: 76px; height: 88px;
+      transform-origin: 50% 100%; transition: transform .45s var(--spring, ease);
     }
-    @media (hover: hover) { .memory-marker:hover { transform: scale(1.08); } }
+    @media (hover: hover) { .memory-marker:hover { transform: translateY(-3px) scale(1.06); } }
+    .memory-marker:active { transform: scale(.94); transition-duration: .08s; }
+    /* ножка и точка привязки */
+    .memory-marker::before {
+      content: ""; position: absolute; left: 50%; bottom: 7px; width: 2px; height: 12px; margin-left: -1px;
+      border-radius: 2px; background: linear-gradient(to bottom, var(--c3), var(--c1));
+    }
     .memory-marker::after {
-      content: ""; position: absolute; left: 50%; bottom: -4px;
-      width: 14px; height: 14px; background: var(--you);
-      transform: translateX(-50%) rotate(45deg);
-      border-radius: 3px; box-shadow: 0 0 0 2px #fff; z-index: 0;
+      content: ""; position: absolute; left: 50%; bottom: 0; width: 9px; height: 9px; margin-left: -4.5px;
+      border-radius: 50%; background: var(--act);
+      box-shadow: 0 0 0 2.5px var(--win), 0 0 12px 2px color-mix(in srgb, var(--c2) 70%, transparent);
     }
-    :root[data-theme="dark"] .memory-marker::after { background: var(--you); }
-    .memory-fan { position: relative; width: 100%; height: 100%; transform: rotate(-4deg); }
+    .memory-fan { position: relative; width: 100%; height: 100%; }
     .memory-card {
-      position: absolute; left: 50%; top: 50%;
-      width: 60px; height: 66px; padding: 4px 4px 10px;
-      background: var(--you); border-radius: 4px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.4), 0 6px 14px rgba(21,19,31,.35), 0 0 0 .5px rgba(0,0,0,.15);
-      transform-origin: 50% 100%; overflow: hidden; will-change: transform;
+      --d: 0;
+      position: absolute; left: 50%; top: 14px; width: var(--mc); height: var(--mc);
+      padding: 2.5px; border-radius: 18px; background: var(--prism);
+      transform: translateX(-50%) translateY(calc(var(--d) * -6px)) scale(calc(1 - var(--d) * .11));
+      transform-origin: 50% 0;
+      box-shadow: 0 12px 24px -10px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .18);
+      z-index: calc(10 - var(--d));
     }
-    :root[data-theme="dark"] .memory-card { background: var(--you); }
+    .memory-card.is-back { box-shadow: 0 4px 10px -4px rgba(0, 0, 0, .4); }
     .memory-card .mc-img {
-      width: 100%; height: 100%;
-      background-size: cover; background-position: center;
-      background-color: #DDD; border-radius: 2px;
+      width: 100%; height: 100%; border-radius: 15.5px;
+      background-size: cover; background-position: center; background-color: var(--win-2);
     }
-    .memory-card .mc-img.no-photo {
-      background: rgba(255,255,255,.18); display: grid; place-items: center;
-      color: #fff; font-size: 22px;
-    }
-    .memory-card .mc-img.no-photo::before { content: "📷"; }
-    .memory-card::after {
-      content: ""; position: absolute; left: 8px; right: 8px; bottom: 3px;
-      height: 2px; border-radius: 2px; background: rgba(255,255,255,.55);
-    }
-    :root[data-theme="dark"] .memory-card::after { background: rgba(6, 12, 10, .5); }
+    /* задние карточки темнее — передняя читается сразу */
+    .memory-card.is-back .mc-img { filter: brightness(.62) saturate(.8); }
+    .memory-card .mc-img.no-photo { display: grid; place-items: center; background: var(--win); color: var(--ink-soft); }
+    .memory-card .mc-img.no-photo svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .memory-more {
-      position: absolute; right: -6px; top: -6px;
-      min-width: 22px; height: 22px; padding: 0 5px;
-      border-radius: 11px; background: var(--you); color: #fff;
-      font-size: 12px; font-weight: 700; line-height: 22px; text-align: center;
-      box-shadow: 0 2px 5px rgba(0,0,0,.4), inset 0 0 0 1.5px rgba(255,255,255,.5);
-      z-index: 20;
+      position: absolute; top: 4px; right: 2px; z-index: 20;
+      min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+      background: var(--act); color: var(--act-ink);
+      font: 600 10.5px/22px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; text-align: center; font-variant-numeric: tabular-nums;
+      box-shadow: 0 0 0 2px var(--win), 0 4px 10px -2px rgba(0, 0, 0, .4);
     }
-    :root[data-theme="dark"] .memory-more { background: var(--you); }
 
     /* ── Облако желания над иконкой человека или группы ──
        Контур строит JS под размер текста; кончик хвостика — точка привязки (.wish-anchor) над иконкой.
@@ -940,9 +941,25 @@
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
       cursor: grab; user-select: none; -webkit-user-select: none;
-      touch-action: pan-y;
+      touch-action: pan-x pan-y; overscroll-behavior-x: contain;
     }
     .post-carousel .slides::-webkit-scrollbar { display: none; }
+    .post-carousel .slides.is-dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; }
+    .post-carousel .pc-arrow {
+      position: absolute; top: 50%; z-index: 3; width: 36px; height: 36px; margin-top: -18px; padding: 0; border: 0; border-radius: 50%;
+      display: grid; place-items: center; cursor: pointer; color: #fff;
+      background: rgba(12, 12, 16, .45); -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+      opacity: 0; transition: opacity .2s, background .2s, transform .35s var(--spring, ease);
+    }
+    .post-carousel .pc-arrow.prev { left: 10px; }
+    .post-carousel .pc-arrow.next { right: 10px; }
+    .post-carousel .pc-arrow svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .post-carousel .pc-arrow:hover { background: rgba(12, 12, 16, .7); }
+    .post-carousel .pc-arrow:active { transform: scale(.88); }
+    .post-carousel:hover .pc-arrow, .post-carousel:focus-within .pc-arrow { opacity: 1; }
+    .post-carousel .pc-arrow:disabled { opacity: 0 !important; pointer-events: none; }
+    @media (hover: none) { .post-carousel .pc-arrow { display: none; } }
     .post-carousel .slide {
       flex: 0 0 100%; scroll-snap-align: start;
       aspect-ratio: 4 / 3; background: rgba(0,0,0,.08);
@@ -1756,8 +1773,7 @@
       .modal-backdrop { padding: 12px; }
       .popover { min-width: 180px; }
 
-      .memory-marker { width: 72px; height: 72px; }
-      .memory-card { width: 52px; height: 58px; }
+      .memory-marker { --mc: 50px; width: 68px; height: 82px; }
     }
 
     @media (max-width: 380px) {
@@ -2868,12 +2884,6 @@
     :root[data-theme="dark"] .wish-cloud { --wc-fill: #141419; --wc-ink: #F3F3F5; --wc-edge: #050507; --wc-cap: var(--c3); }
     :root[data-theme="dark"] .wish-cloud.is-group { --wc-cap: var(--c1); }
     .wish-place-dot { background: var(--prism); }
-    /* воспоминания — белые «полароиды» */
-    .memory-card, :root[data-theme="dark"] .memory-card { background: #FFFFFF; }
-    .memory-card::after, :root[data-theme="dark"] .memory-card::after { background: rgba(17, 17, 20, .14); }
-    .memory-card .mc-img.no-photo { background: #EEEDEA; color: #6D6D77; }
-    .memory-marker::after, :root[data-theme="dark"] .memory-marker::after { background: #111114; }
-    .memory-more, :root[data-theme="dark"] .memory-more { background: #111114; }
 
     /* ── Появление интерфейса после входа: капсулы съезжаются к краям ── */
     body.chrome-enter .menubar { animation: chrome-down .8s var(--ease) .05s both; }
@@ -3236,6 +3246,31 @@
       text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
     .pw-link:hover { color: var(--you); text-decoration-color: currentColor; }
     .map-popup .pop-with { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+
+    /* ── Карточка воспоминания на карте: фото, место и кнопка-капсула ── */
+    .map-popup {
+      position: relative; width: 224px; padding: 6px; display: grid; gap: 0;
+      border-radius: 24px; background: var(--win); border: 1px solid var(--win-line);
+      box-shadow: 0 24px 50px -18px rgba(0, 0, 0, .55), inset 0 1px 0 var(--rim);
+      animation: pop-card-in .45s var(--spring) both; transform-origin: 50% 100%;
+    }
+    @keyframes pop-card-in { from { opacity: 0; transform: translateY(8px) scale(.9); } }
+    .map-popup .pop-img { border-radius: 18px; aspect-ratio: 4 / 3; background: var(--field); }
+    .map-popup .pop-text { display: grid; gap: 3px; padding: 10px 8px 2px; }
+    .map-popup .pop-place { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-weight: 700; font-size: 13.5px; line-height: 1.3; letter-spacing: -.01em; color: var(--ink); }
+    .map-popup .pop-place svg { flex: none; width: 15px; height: 15px; margin-top: 1px; fill: none; stroke: url(#prismIcon); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .map-popup .pop-with, .map-popup .pop-caption { margin: 0; padding-left: 21px; }
+    .map-popup .pop-open {
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 40px; margin: 10px 0 0; padding: 0 16px;
+      border: 0; border-radius: 999px; cursor: pointer;
+      background: var(--act); color: var(--act-ink); box-shadow: var(--prism-glow);
+      font: 700 13px "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      transition: transform .4s var(--spring), filter .2s;
+    }
+    .map-popup .pop-open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .4s var(--spring); }
+    .map-popup .pop-open:hover { text-decoration: none; filter: brightness(1.08); }
+    .map-popup .pop-open:hover svg { transform: translateX(3px); }
+    .map-popup .pop-open:active { transform: scale(.95); transition-duration: .08s; }
 
     /* ── Редактирование профиля: секции-карточки в стиле фильтров, главное фото крупно, кнопки прилипают к низу ── */
     .pe { display: flex; flex-direction: column; gap: 22px; min-height: 100%; padding: 4px 14px 0; }
@@ -7778,20 +7813,20 @@
   function buildMemoryMarkerElement(post) {
     const imgs = postImages(post);
     const el = document.createElement('div'); el.className = 'memory-marker';
-    if (!imgs.length) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img no-photo"></div></div></div>`; return el; }
-    if (imgs.length === 1) { el.innerHTML = `<div class="memory-fan"><div class="memory-card" style="transform: translate(-50%, -50%);"><div class="mc-img" style="background-image:url('${safeUrl(imgs[0])}')"></div></div></div>`; return el; }
-    const max = 4, total = Math.min(imgs.length, max);
-    const anglesByCount = { 2:[-12,6], 3:[-14,0,14], 4:[-18,-6,6,18] };
-    const shiftsByCount = { 2:[-11,11], 3:[-16,0,16], 4:[-20,-7,7,20] };
-    const angles = anglesByCount[total] || anglesByCount[4];
-    const shifts = shiftsByCount[total] || shiftsByCount[4];
+    if (!imgs.length) {
+      el.innerHTML = `<div class="memory-fan"><div class="memory-card"><div class="mc-img no-photo"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M8.5 6l1.5-2.5h4L15.5 6"/><circle cx="12" cy="13" r="3.5"/></svg></div></div></div>`;
+      return el;
+    }
+    // стопка: спереди первое фото, за ним выглядывают ещё до двух
+    const depth = Math.min(imgs.length, 3);
     const cards = [];
-    for (let i = 0; i < total; i++) { cards.push({ src: imgs[total - 1 - i] || imgs[0], angle: angles[i], shift: shifts[i], z: i + 1 }); }
-    const hiddenCount = Math.max(0, imgs.length - total);
+    for (let d = depth - 1; d >= 0; d--) {
+      cards.push(`<div class="memory-card ${d ? 'is-back' : ''}" style="--d: ${d}"><div class="mc-img" style="background-image:url('${safeUrl(imgs[d])}')"></div></div>`);
+    }
     el.innerHTML = `
       <div class="memory-fan">
-        ${cards.map((c) => `<div class="memory-card" style="transform: translate(-50%, -50%) translateX(${c.shift}px) rotate(${c.angle}deg); z-index: ${c.z};"><div class="mc-img" style="background-image:url('${safeUrl(c.src)}')"></div></div>`).join('')}
-        ${hiddenCount > 0 ? `<span class="memory-more">+${hiddenCount}</span>` : ''}
+        ${cards.join('')}
+        ${imgs.length > 1 ? `<span class="memory-more">${imgs.length}</span>` : ''}
       </div>`;
     return el;
   }
@@ -7818,10 +7853,12 @@
     const wrap = document.createElement('div'); wrap.className = 'map-popup';
     wrap.innerHTML = `
       ${cover ? `<img class="pop-img" src="${safeUrl(cover)}" alt="">` : ''}
-      <div class="pop-place">📍 ${escapeHtml(post.place || '')}</div>
-      ${postWithLabel(post) ? `<div class="pop-with">${escapeHtml(postWithLabel(post))}</div>` : ''}
-      ${post.caption ? `<div class="pop-caption">${escapeHtml(post.caption)}</div>` : ''}
-      <button type="button" class="pop-open">Открыть воспоминание</button>`;
+      <div class="pop-text">
+        <div class="pop-place"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></svg><span>${escapeHtml(post.place || '')}</span></div>
+        ${postWithLabel(post) ? `<div class="pop-with">${escapeHtml(postWithLabel(post))}</div>` : ''}
+        ${post.caption ? `<div class="pop-caption">${escapeHtml(post.caption)}</div>` : ''}
+      </div>
+      <button type="button" class="pop-open"><span>Открыть</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>`;
     wrap.querySelector('.pop-open').addEventListener('click', (e) => { e.stopPropagation(); closePopup(); showSinglePost(post.id); });
     openPopupMarker = new mapgl.HtmlMarker(map2gis, { coordinates: post.coords, html: wrap, anchor: [0.5, 1], preventMapInteractions: true });
   }
@@ -11036,7 +11073,9 @@
       const imgs = postImages(p);
       const multi = imgs.length > 1;
       const mediaHtml = multi
-        ? `<div class="post-carousel" data-carousel><div class="slides">${imgs.map((src) => `<div class="slide"><img src="${safeUrl(src)}" loading="lazy"></div>`).join('')}</div>
+        ? `<div class="post-carousel" data-carousel tabindex="0"><div class="slides">${imgs.map((src) => `<div class="slide"><img src="${safeUrl(src)}" loading="lazy" draggable="false"></div>`).join('')}</div>
+            <button type="button" class="pc-arrow prev" data-pc-step="-1" aria-label="Предыдущее фото"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button type="button" class="pc-arrow next" data-pc-step="1" aria-label="Следующее фото"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
             <span class="counter"><span data-idx>1</span>/${imgs.length}</span>
             <div class="dots">${imgs.map((_, i) => `<button class="dot ${i === 0 ? 'active' : ''}" type="button"></button>`).join('')}</div></div>`
         : `<img class="post-media" src="${safeUrl(imgs[0])}" loading="lazy">`;
@@ -11082,16 +11121,57 @@
       const slides = el.querySelector('.slides'); if (!slides) return;
       const dots = [...el.querySelectorAll('.dot')];
       const counter = el.querySelector('[data-idx]');
-      const currentIndex = () => Math.max(0, Math.round(slides.scrollLeft / (slides.clientWidth || 1)));
-      const goTo = (i) => slides.scrollTo({ left: i * slides.clientWidth, behavior: 'smooth' });
-      const update = () => {
-        const i = currentIndex();
+      const prev = el.querySelector('.pc-arrow.prev'), next = el.querySelector('.pc-arrow.next');
+      const count = slides.children.length;
+      const clamp = (i) => Math.max(0, Math.min(count - 1, i));
+      const currentIndex = () => clamp(Math.round(slides.scrollLeft / (slides.clientWidth || 1)));
+      let target = 0;   // куда листаем сейчас: при быстрых нажатиях стрелок шаг идёт от него, а не от середины анимации
+      const goTo = (i) => { target = clamp(i); slides.scrollTo({ left: target * slides.clientWidth, behavior: 'smooth' }); paint(target); };
+      const paint = (i) => {
         dots.forEach((d, k) => d.classList.toggle('active', k === i));
         if (counter) counter.textContent = String(i + 1);
+        if (prev) prev.disabled = i === 0;
+        if (next) next.disabled = i === count - 1;
       };
-      slides.addEventListener('scroll', update, { passive: true });
-      dots.forEach((d, i) => d.addEventListener('click', () => goTo(i)));
-      update();
+      let settleTimer = 0, drag = null;
+      slides.addEventListener('scroll', () => {
+        if (drag) return;
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => { target = currentIndex(); paint(target); }, 80);
+      }, { passive: true });
+      dots.forEach((d, i) => d.addEventListener('click', (e) => { e.stopPropagation(); goTo(i); }));
+      [prev, next].forEach((b) => b && b.addEventListener('click', (e) => { e.stopPropagation(); goTo(target + Number(b.dataset.pcStep)); }));
+      el.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault(); e.stopPropagation();
+        goTo(target + (e.key === 'ArrowLeft' ? -1 : 1));
+      });
+
+      // Мышью: зажал и тянешь в сторону. На сенсорных экранах листает сам браузер (scroll-snap).
+      slides.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'mouse' || e.button !== 0) return;
+        drag = { x: e.clientX, left: slides.scrollLeft, from: currentIndex(), moved: false };
+        slides.setPointerCapture(e.pointerId);
+        slides.classList.add('is-dragging');
+      });
+      slides.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x;
+        if (Math.abs(dx) > 4) drag.moved = true;
+        slides.scrollLeft = drag.left - dx;
+      });
+      const endDrag = (e) => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x, from = drag.from;
+        const w = slides.clientWidth || 1;
+        drag = null;
+        slides.classList.remove('is-dragging');
+        // хватает короткого рывка: дальше 15% ширины — следующее фото
+        goTo(Math.abs(dx) > w * 0.15 ? from + (dx < 0 ? 1 : -1) : from);
+      };
+      slides.addEventListener('pointerup', endDrag);
+      slides.addEventListener('pointercancel', endDrag);
+      paint(0);
     });
   }
 
