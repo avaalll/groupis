@@ -3247,6 +3247,21 @@
     .pw-link:hover { color: var(--you); text-decoration-color: currentColor; }
     .map-popup .pop-with { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
 
+    /* ── «Метла» в шапке окна: очистить уведомления ── */
+    .win-head-slot { display: flex; justify-content: flex-end; }
+    .win-clear {
+      width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+      display: grid; place-items: center; background: var(--field); color: var(--ink);
+      transition: background .2s, color .2s, transform .4s var(--spring);
+      animation: fade-in .3s ease both;
+    }
+    .win-clear[hidden] { display: none; }
+    .win-clear svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transform-origin: 80% 20%; }
+    .win-clear:hover { background: var(--row-hover); color: var(--hot); }
+    .win-clear:hover svg { animation: broom-sweep .6s var(--ease); }
+    .win-clear:active { transform: scale(.88); transition-duration: .08s; }
+    @keyframes broom-sweep { 30% { transform: rotate(-14deg); } 65% { transform: rotate(10deg); } }
+
     /* ── Карточка воспоминания на карте: фото, место и кнопка-капсула ── */
     .map-popup {
       position: relative; width: 224px; padding: 6px; display: grid; gap: 0;
@@ -3486,7 +3501,11 @@
         </svg>
       </button>
       <h2 id="win-title" class="win-title"></h2>
-      <span></span>
+      <span class="win-head-slot">
+        <button id="win-clear" class="win-clear" type="button" aria-label="Очистить уведомления" title="Очистить уведомления" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 3.5 13 10"/><path d="M9.6 9.2l5.2 5.2c.5.5.6 1.3.2 1.9l-.5.8c-.9 1.5-2.6 3.3-4 3.9-.5.2-1 0-1.4-.3l-4.4-4.4c-.4-.4-.5-.9-.3-1.4.6-1.4 2.4-3.1 3.9-4l.8-.5c.6-.4 1.4-.3 1.9.2z"/><path d="M8.2 20.7l1.6-3.3M5.3 18.7l3-1.9M3.3 15.8l3.3-1.6"/></svg>
+        </button>
+      </span>
     </div>
     <div id="win-body" class="win-body"></div>
   </section>
@@ -10842,6 +10861,12 @@
     currentBackHandler = (typeof backFn === 'function') ? backFn : null;
     renderFn();
     animateScreen(navDir === 'back' ? 'back' : 'fwd');
+    syncWinClear();
+  }
+  // «Метла» в шапке — только на самом списке уведомлений и только когда есть что очищать
+  function syncWinClear() {
+    const btn = document.getElementById('win-clear');
+    if (btn) btn.hidden = !(openApp === 'notifications' && !currentBackHandler && notifications.length);
   }
   function goBack() {
     if (typeof currentBackHandler === 'function') {
@@ -10857,6 +10882,7 @@
     const nBtn = document.getElementById('notif-btn'); if (nBtn) nBtn.classList.toggle('is-active', openApp === 'notifications');
     const sBtn = document.getElementById('settings-btn'); if (sBtn) sBtn.classList.toggle('is-active', openApp === 'settings');
     const fBtn = document.getElementById('filter-btn'); if (fBtn) fBtn.classList.toggle('is-active', openApp === 'filters');
+    syncWinClear();
     moveDockPill();
   }
 
@@ -11033,12 +11059,35 @@
   function refreshNotifications() {
     updateBadge();
     if (openApp !== 'notifications' || win.hidden) return;
+    syncWinClear();
+    if (currentBackHandler) return;   // открыт вложенный экран — список не трогаем
     const html = APPS.notifications.render();
     if (html === notifListShown) return;
     winBody.classList.remove(...SCREEN_ANIM);
     notifListShown = html;
     winBody.innerHTML = html;
   }
+
+  document.getElementById('win-clear').addEventListener('click', async () => {
+    if (!notifications.length || !currentUser) return;
+    const ok = await confirmModal({
+      title: 'Очистить уведомления?',
+      text: 'Все уведомления будут удалены. Это действие нельзя отменить.',
+      confirmLabel: 'Очистить',
+    });
+    if (!ok) return;
+    const before = notifications;
+    notifications = [];
+    refreshNotifications();
+    const { data, error } = await supabaseClient.from('notifications').delete().eq('user_id', currentUser.id).select('id');
+    // без права на удаление база молча ничего не удаляет — тогда возвращаем список
+    if (error || (data && data.length === 0 && before.length)) {
+      console.error('[notifications] clear:', error || 'нет права на удаление (RLS)');
+      notifications = before;
+      refreshNotifications();
+      alert('Не удалось очистить уведомления' + (error ? ': ' + error.message : ''));
+    }
+  });
 
   function showPlacesScreen() {
     if (openApp !== 'profile') showApp('profile');
