@@ -4675,12 +4675,26 @@
     document.body.appendChild(card);
   }
 
-  // Нажали на уведомление при открытом приложении — сервис-воркер просит показать нужный раздел
+  /* Переход по нажатию на уведомление: chat (dm:<id>, group:<id>, match:<id>) — сразу в этот чат,
+     «Назад» из него ведёт в список чатов; иначе — в раздел open */
+  function openPushTarget(open, chatRef) {
+    const m = /^(dm|group|match):(.+)$/.exec(chatRef || '');
+    if (m) {
+      const [, type, id] = m;
+      showApp('messenger');
+      openChat(type === 'dm' ? { type, peerId: id } : type === 'group' ? { type, groupId: id } : { type, matchId: id });
+      return;
+    }
+    if (open === 'settings') showSettingsScreen();
+    else if (open === 'messenger' || (open && APPS[open])) showApp(open);
+  }
+
+  // Нажали на уведомление при открытом приложении — сервис-воркер просит показать нужный раздел или чат
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (e) => {
       const d = e.data;
       if (!d || d.type !== 'push-open' || !currentUser) return;
-      if (d.open === 'messenger' || (d.open && APPS[d.open])) showApp(d.open);
+      openPushTarget(d.open, d.chat);
     });
   }
 
@@ -5297,16 +5311,17 @@
     setTimeout(maybeAskPush, 4000);
   }
 
-  /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings */
+  /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings;
+     запуск по нажатию на уведомление: ./?open=messenger&chat=dm:<id> */
   function openAppFromShortcut() {
     const params = new URLSearchParams(location.search);
     const target = params.get('open');
-    if (!target) return;
-    params.delete('open');
+    const chatRef = params.get('chat');
+    if (!target && !chatRef) return;
+    params.delete('open'); params.delete('chat');
     const qs = params.toString();
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
-    if (target === 'settings') showSettingsScreen();
-    else if (target === 'messenger' || APPS[target]) showApp(target);
+    openPushTarget(target, chatRef);
   }
 
   /* ═══════ КЕШ НА УСТРОЙСТВЕ ═══════
