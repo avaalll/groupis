@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Groupis",
-  "short_name": "Groupis",
-  "description": "Groupis — карта с друзьями, группами и мессенджером",
+  "name": "GroupIS",
+  "short_name": "GroupIS",
+  "description": "GroupIS — карта с друзьями, группами и мессенджером",
   "lang": "ru",
   "dir": "ltr",
   "start_url": "./",
