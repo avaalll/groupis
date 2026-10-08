@@ -1,38 +1,48 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
-   При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
+   Два кеша:
+   — CACHE (VERSION) — страница и манифесты; при изменении index.html увеличьте VERSION;
+   — STATIC_CACHE (STATIC_VERSION) — тяжёлые файлы, которые меняются редко (3D-модели, three.js, текстуры,
+     иконки, библиотека Supabase, шрифты). Он переживает обновления приложения: иначе каждый выпуск заново
+     качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
+     STATIC_VERSION. */
 
-const VERSION = 'v1.1.20';
+const VERSION = 'v1.1.22';
 const CACHE = `groupis-${VERSION}`;
+const STATIC_VERSION = 's1';
+const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
 
 const APP_SHELL = [
   './index.html',
+  './manifest.webmanifest',
+  './manifest-acid.webmanifest',
+  './manifest-ember.webmanifest',
+  './manifest-frost.webmanifest',
+];
+
+const STATIC_FILES = [
   './three.min.js',
   './avatars3d/male.glb',
   './avatars3d/female.glb',
   './img/earth-dark.jpg',
-  './manifest.webmanifest',
   './icons/logo.svg',
   './icons/wordmark.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
-  // иконки и манифесты остальных цветовых схем
-  './manifest-acid.webmanifest',
+  // иконки остальных цветовых схем
   './icons/acid/logo.svg',
   './icons/acid/wordmark.svg',
   './icons/acid/icon-192.png',
   './icons/acid/icon-512.png',
   './icons/acid/icon-maskable-512.png',
   './icons/acid/apple-touch-icon.png',
-  './manifest-ember.webmanifest',
   './icons/ember/logo.svg',
   './icons/ember/wordmark.svg',
   './icons/ember/icon-192.png',
   './icons/ember/icon-512.png',
   './icons/ember/icon-maskable-512.png',
   './icons/ember/apple-touch-icon.png',
-  './manifest-frost.webmanifest',
   './icons/frost/logo.svg',
   './icons/frost/wordmark.svg',
   './icons/frost/icon-192.png',
@@ -40,6 +50,7 @@ const APP_SHELL = [
   './icons/frost/icon-maskable-512.png',
   './icons/frost/apple-touch-icon.png',
 ];
+const STATIC_PATHS = new Set(STATIC_FILES.map((p) => new URL(p, self.location).pathname));
 
 // Внешние скрипты, без которых приложение не стартует
 const CACHEABLE_EXTERNAL = [
@@ -51,9 +62,6 @@ const FONTS_CSS_ORIGIN = 'https://fonts.googleapis.com';
 const FONTS_FILE_ORIGIN = 'https://fonts.gstatic.com';
 const FONT_SUBSETS = ['cyrillic', 'latin'];   // остальные наборы символов кешируются, если понадобятся
 
-// Сколько ждём страницу из сети, прежде чем показать сохранённую (медленная или «зависшая» связь)
-const NAV_TIMEOUT = 3500;
-
 const SCOPE_PATH = new URL('./', self.location).pathname;
 const isShellPage = (url) => url.pathname === SCOPE_PATH || url.pathname === SCOPE_PATH + 'index.html';
 
@@ -63,9 +71,21 @@ async function cleanResponse(response) {
   return new Response(await response.blob(), { status: response.status, statusText: response.statusText, headers: response.headers });
 }
 
-// Оболочка: мимо HTTP-кеша браузера, чтобы новая версия не собралась из старых файлов
+// Страница и манифесты: мимо HTTP-кеша браузера, чтобы новая версия не собралась из старых файлов
 function precacheShell(cache) {
   return Promise.all(APP_SHELL.map(async (url) => {
+    const response = await fetch(new Request(url, { cache: 'reload' }));
+    if (!response.ok) throw new Error(`${url}: ${response.status}`);
+    await cache.put(url, await cleanResponse(response));
+  }));
+}
+
+// Тяжёлые файлы качаем, только если их ещё нет ни в одном кеше — при обычном обновлении это ноль запросов
+function precacheStatic(cache) {
+  return Promise.all(STATIC_FILES.map(async (url) => {
+    if (await cache.match(url)) return;
+    const old = await caches.match(url);   // лежит в кеше прежней версии — переносим, не скачивая
+    if (old) { await cache.put(url, old); return; }
     const response = await fetch(new Request(url, { cache: 'reload' }));
     if (!response.ok) throw new Error(`${url}: ${response.status}`);
     await cache.put(url, await cleanResponse(response));
@@ -75,6 +95,8 @@ function precacheShell(cache) {
 // Внешнее — по возможности: без сети к CDN установка всё равно проходит
 function precacheExternal(cache) {
   const put = async (url) => {
+    const have = (await cache.match(url)) || (await caches.match(url));
+    if (have) { await cache.put(url, have.clone()).catch(() => {}); return have; }
     const response = await fetch(url, { mode: 'cors' });
     if (response.ok) await cache.put(url, response.clone());
     return response;
@@ -82,7 +104,7 @@ function precacheExternal(cache) {
   const fonts = async () => {
     const response = await put(FONTS_CSS);
     if (!response.ok) return;
-    const css = await response.text();
+    const css = await response.clone().text();
     const files = new Set();
     for (const m of css.matchAll(/\/\*\s*([\w-]+)\s*\*\/\s*@font-face\s*\{[^}]*?url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)) {
       if (FONT_SUBSETS.includes(m[1])) files.add(m[2]);
@@ -94,9 +116,10 @@ function precacheExternal(cache) {
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE)
-      .then((cache) => Promise.all([precacheShell(cache), precacheExternal(cache)]))
-      .then(() => self.skipWaiting())
+    Promise.all([
+      caches.open(CACHE).then(precacheShell),
+      caches.open(STATIC_CACHE).then((cache) => Promise.all([precacheStatic(cache), precacheExternal(cache)])),
+    ]).then(() => self.skipWaiting())
   );
 });
 
@@ -104,7 +127,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('groupis-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('groupis-') && k !== CACHE && k !== STATIC_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -112,20 +135,20 @@ self.addEventListener('activate', (event) => {
 // opaque — ответ на no-cors запрос (<script>, <link>) к CDN, его статус не виден, но он валиден
 const cacheable = (response) => response.ok || response.type === 'opaque';
 
-function fetchAndCache(request) {
+function fetchAndCache(request, cacheName) {
   return fetch(request).then((response) => {
     if (cacheable(response)) {
       const copy = response.clone();
-      return caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {}).then(() => response);
+      return caches.open(cacheName).then((cache) => cache.put(request, copy)).catch(() => {}).then(() => response);
     }
     return response;
   });
 }
 
-function staleWhileRevalidate(event, request) {
+function staleWhileRevalidate(event, request, cacheName) {
   event.respondWith(
     caches.match(request).then((cached) => {
-      const network = fetchAndCache(request);
+      const network = fetchAndCache(request, cacheName);
       if (!cached) return network;
       event.waitUntil(network.catch(() => {}));
       return cached;
@@ -133,30 +156,23 @@ function staleWhileRevalidate(event, request) {
   );
 }
 
-function cacheFirst(event, request) {
-  event.respondWith(caches.match(request).then((cached) => cached || fetchAndCache(request)));
+function cacheFirst(event, request, cacheName) {
+  event.respondWith(caches.match(request).then((cached) => cached || fetchAndCache(request, cacheName)));
 }
 
-/* Страница приложения: свежая из сети, а если сети нет, она не отвечает за NAV_TIMEOUT
-   или сервер вернул ошибку — сохранённая. Так же открываются ярлыки (./?open=…). */
+/* Страница приложения открывается сразу из кеша, без ожидания сети. Свежая версия проверяется в фоне
+   (условный запрос: если страница не менялась, сервер отвечает коротким 304) и откроется при следующем запуске. */
 function shellPage(event, request) {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match('./index.html');
-    const network = fetch(request).then(async (response) => {
-      if (response.ok) {
-        const copy = await cleanResponse(response.clone());
-        await cache.put('./index.html', copy).catch(() => {});
-      }
+    const network = fetch(request, { cache: 'no-cache' }).then(async (response) => {
+      if (response.ok) await cache.put('./index.html', await cleanResponse(response.clone())).catch(() => {});
       return response;
     });
     if (!cached) return network;
     event.waitUntil(network.catch(() => {}));
-    const fresh = await Promise.race([
-      network.catch(() => null),
-      new Promise((resolve) => setTimeout(() => resolve(null), NAV_TIMEOUT)),
-    ]);
-    return fresh && fresh.ok ? fresh : cached;
+    return cached;
   })());
 }
 
@@ -166,8 +182,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (url.origin !== self.location.origin) {
-    if (url.origin === FONTS_FILE_ORIGIN) cacheFirst(event, request);   // файлы шрифтов не меняются
-    else if (url.origin === FONTS_CSS_ORIGIN || CACHEABLE_EXTERNAL.includes(request.url)) staleWhileRevalidate(event, request);
+    if (url.origin === FONTS_FILE_ORIGIN) cacheFirst(event, request, STATIC_CACHE);   // файлы шрифтов не меняются
+    else if (url.origin === FONTS_CSS_ORIGIN || CACHEABLE_EXTERNAL.includes(request.url)) staleWhileRevalidate(event, request, STATIC_CACHE);
     // Остальные внешние запросы (Supabase API, 2ГИС и т. д.) пропускаем как есть
     return;
   }
@@ -176,11 +192,14 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate' && isShellPage(url)) { shellPage(event, request); return; }
   if (request.headers.has('range')) return;
 
-  staleWhileRevalidate(event, request);
+  // Модели, three.js, текстуры и иконки — только из кеша: перекачивать их при каждом запуске незачем
+  if (STATIC_PATHS.has(url.pathname)) { cacheFirst(event, request, STATIC_CACHE); return; }
+
+  staleWhileRevalidate(event, request, CACHE);
 });
 
 /* ── Push-уведомления ──
-   Сервер (функция send-push в Supabase) присылает { title, body, tag, open }.
+   Сервер (функция send-push в Supabase) присылает { title, body, tag, open, chat }.
    Если приложение открыто и на экране — уведомление не показываем: там всё уже видно.
    На iPhone показываем всегда: за «тихие» push Safari отзывает подписку. */
 self.addEventListener('push', (event) => {
