@@ -4606,6 +4606,7 @@
       }
     }
     const j = sub.toJSON();
+    pushEndpoint = j.endpoint;
     const { error } = await supabaseClient.rpc('save_push_subscription', {
       p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth,
     });
@@ -4637,6 +4638,7 @@
     if (!pushSupported()) return;
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = reg && await reg.pushManager.getSubscription();
+    pushEndpoint = null; activeChatSent = null;
     if (!sub) return;
     if (currentUser) {
       const { error } = await supabaseClient.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
@@ -4674,6 +4676,32 @@
     });
     document.body.appendChild(card);
   }
+
+  /* Какой чат сейчас открыт на экране: сервер (send-push) не шлёт push о сообщениях в него на это устройство.
+     Отметка обновляется каждые 30 с; если приложение закрыли и она не снялась, на сервере она быстро устаревает. */
+  let pushEndpoint = null, activeChatSent = null, activeChatAt = 0, activeChatTimer = 0;
+  function reportActiveChat() {
+    clearTimeout(activeChatTimer);
+    activeChatTimer = setTimeout(sendActiveChat, 250);   // выход из чата и вход в другой — одним запросом
+  }
+  async function sendActiveChat() {
+    if (!currentUser || !pushSupported() || Notification.permission !== 'granted') return;
+    const value = chat && !document.hidden ? chatKey(chat) : '';
+    if (value === activeChatSent && (!value || Date.now() - activeChatAt < 25000)) return;
+    if (!pushEndpoint) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg && await reg.pushManager.getSubscription();
+        pushEndpoint = sub ? sub.endpoint : null;
+      } catch {}
+      if (!pushEndpoint) return;
+    }
+    activeChatSent = value; activeChatAt = Date.now();
+    const { error } = await supabaseClient.rpc('set_push_active_chat', { p_endpoint: pushEndpoint, p_chat: value });
+    if (error) { console.warn('[push] active chat:', error.message); activeChatSent = null; }
+  }
+  setInterval(() => { if (chat && !document.hidden) sendActiveChat(); }, 30000);
+  document.addEventListener('visibilitychange', reportActiveChat);
 
   /* Переход по нажатию на уведомление: chat (dm:<id>, group:<id>, match:<id>) — сразу в этот чат,
      «Назад» из него ведёт в список чатов; иначе — в раздел open */
@@ -10370,6 +10398,7 @@
   function leaveChat() {
     if (chatRec) stopChatRecording(true);
     chat = null;
+    reportActiveChat();
   }
 
   /* Чат открывается сразу из переписки, сохранённой на устройстве; свежая версия с сервера
@@ -10391,6 +10420,7 @@
       c.winTitle = g ? g.name : 'Групповой чат';
     }
     chat = c;
+    reportActiveChat();
     const show = () => setScreen(() => {
       winTitle.textContent = c.winTitle;
       winBody.scrollTop = 0;
