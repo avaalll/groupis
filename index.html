@@ -2611,13 +2611,7 @@
     .win-back { width: 40px; height: 40px; border-radius: 50%; background: var(--field); color: var(--ink); }
     .win-back:hover { background: var(--row-hover); color: var(--ink); }
     .win-back svg { width: 20px; height: 20px; }
-    /* заголовок «расшифровывается»: буквы перебираются и встают на место (текст в DOM при этом не меняется) */
     .win-title { position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .win-title.is-scrambling { color: transparent; }
-    .win-title.is-scrambling::after {
-      content: attr(data-scramble); position: absolute; inset: 0; color: var(--ink);
-      white-space: nowrap; overflow: hidden;
-    }
 
     /* ── Смена экранов: вперёд — справа, назад — слева, открытие — снизу; строки списков — лесенкой ── */
     .win-body:is(.scr-fwd, .scr-back, .scr-open) > * { animation: scr-in .5s var(--ease) both; }
@@ -11014,33 +11008,6 @@
     ring.addEventListener('animationend', () => ring.remove(), { once: true });
     setTimeout(() => ring.remove(), 1200);   // на случай, если анимация не запустилась
   }, { passive: true, capture: true });
-
-  /* ── Заголовок окна «расшифровывается»: буквы перебираются и встают на место ──
-     Перебор рисуется поверх (::after по data-scramble) — сам текст заголовка не меняется,
-     поэтому проверки вида winTitle.textContent === '…' продолжают работать. */
-  const SCRAMBLE_CHARS = 'абвгдежзиклмнопрстуфхцчшэюя0123456789';
-  let scrambleRaf = 0, scrambleLast = '';
-  function scrambleTitle() {
-    const target = winTitle.textContent;
-    if (reduceMotion || target === scrambleLast || win.hidden) { scrambleLast = target; return; }
-    scrambleLast = target;
-    cancelAnimationFrame(scrambleRaf);
-    const start = performance.now(), dur = 360 + Math.min(240, target.length * 14);
-    winTitle.classList.add('is-scrambling');
-    const step = (now) => {
-      const t = Math.min(1, (now - start) / dur);
-      const fixed = Math.floor(t * t * target.length);
-      let s = target.slice(0, fixed);
-      for (let i = fixed; i < target.length; i++) {
-        s += /\s/.test(target[i]) ? target[i] : SCRAMBLE_CHARS[(Math.random() * SCRAMBLE_CHARS.length) | 0];
-      }
-      winTitle.dataset.scramble = s;
-      if (t < 1) scrambleRaf = requestAnimationFrame(step);
-      else { winTitle.classList.remove('is-scrambling'); delete winTitle.dataset.scramble; }
-    };
-    scrambleRaf = requestAnimationFrame(step);
-  }
-  new MutationObserver(scrambleTitle).observe(winTitle, { childList: true, characterData: true, subtree: true });
 
   // Интерфейс «съезжается» к краям — после входа и при запуске с уже открытой сессией
   function playChromeEnter() {
