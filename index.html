@@ -5302,11 +5302,14 @@
   }
 
   async function enterAppAfterLogin() {
+    const returning = authScreen.hidden;   // открыли приложение с уже сохранённым входом
     document.body.classList.remove('auth-locked');
     ensureMapStarted();
     if (openApp === null) showMapApp();   // на карте активна вкладка «Карта» — капсула панели встаёт на место
     // Данные с прошлого запуска — сразу в память: экраны открываются мгновенно, а сервер потом обновит их на месте
     await hydrateStateFromCache();
+    // открыли по нажатию на уведомление — нужный чат показываем сразу, не дожидаясь загрузки остального
+    if (returning) openAppFromShortcut();
     // Данные грузятся по сети, пока камера летит к Земле (это не нагружает анимацию)
     const loading = Promise.all([
       loadMyAvatarConfig(),
@@ -5334,8 +5337,8 @@
       refreshGroupsList(); refreshFriendsList(); refreshNotifications();
       if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
     });
-    openAppFromShortcut();
-    setTimeout(prefetchChats, 2500);   // когда интерфейс уже на месте
+    if (!returning) openAppFromShortcut();
+    setTimeout(prefetchChats, 8000);   // когда интерфейс уже на месте и первые данные загрузились
     setTimeout(maybeAskPush, 4000);
   }
 
@@ -5430,6 +5433,8 @@
     if (!groupInvites.length && Array.isArray(s.groupInvites)) groupInvites = s.groupInvites;
     if (myPhotos === null && Array.isArray(s.myPhotos)) myPhotos = s.myPhotos;
     if (!groupStats.size && Array.isArray(s.groupStats)) groupStats = new Map(s.groupStats);
+    const chatList = await KV.get('chatlist:' + uid);
+    if (!chatsListShown && typeof chatList === 'string' && currentUser && currentUser.id === uid) chatsListShown = chatList;
     // ссылки на файлы чатов, подписанные в прошлый раз, ещё действуют — вложения показываются без запроса к серверу
     const signed = await KV.get('signed:' + uid);
     if (Array.isArray(signed) && currentUser && currentUser.id === uid) {
@@ -5569,17 +5574,30 @@
   let friends = [];
 
   /* ═══════ ЗАГРУЗКИ ИЗ SUPABASE ═══════ */
-  async function loadPostsFromDB() {
-    const { data, error } = await supabaseClient.from('posts').select('*').order('ts', { ascending: false }).limit(500);
-    if (error) { console.warn('[posts] load:', error.message); return; }
-    posts = (data || []).map((r) => ({
+  function mapPostRow(r) {
+    return {
       id: r.id, authorId: r.author_id, author: r.author_name,
       images: Array.isArray(r.images) ? r.images : [],
       place: r.place, caption: r.caption,
       coords: Array.isArray(r.coords) ? r.coords : null,
       companions: r.companions && typeof r.companions === 'object' ? r.companions : null,
       ts: r.ts, time: r.ts ? new Date(r.ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '',
-    }));
+    };
+  }
+
+  /* Фото воспоминаний лежат прямо в записи, поэтому весь список весит мегабайты. После публикации воспоминание
+     не меняется — сначала спрашиваем только номера, а целиком скачиваем лишь те, которых ещё нет на устройстве */
+  async function loadPostsFromDB() {
+    const { data: heads, error } = await supabaseClient.from('posts').select('id').order('ts', { ascending: false }).limit(500);
+    if (error) { console.warn('[posts] load:', error.message); return; }
+    const known = new Map(posts.map((p) => [p.id, p]));
+    const missing = (heads || []).map((h) => h.id).filter((id) => !known.has(id));
+    for (let i = 0; i < missing.length; i += 50) {
+      const { data, error: rowsErr } = await supabaseClient.from('posts').select('*').in('id', missing.slice(i, i + 50));
+      if (rowsErr) { console.warn('[posts] load rows:', rowsErr.message); return; }
+      for (const r of (data || [])) known.set(r.id, mapPostRow(r));
+    }
+    posts = (heads || []).map((h) => known.get(h.id)).filter(Boolean);
     scheduleStateSave();
   }
 
@@ -9010,6 +9028,7 @@
       listEl.innerHTML = html;
       listEl.dataset.filled = '1';
       chatsListShown = html;
+      if (currentUser) KV.set('chatlist:' + currentUser.id, html);   // при следующем запуске список покажется сразу
     };
     const gs = myGroups();
     const ms = myAcceptedMatches();
@@ -9022,11 +9041,13 @@
     const lastByPeer = new Map();
     const lastByGroup = new Map();
     const lastByMatch = new Map();
-    if (ms.length) {
+    // три запроса — одновременно, а не по очереди
+    const loadMatches = async () => {
+      if (!ms.length) return;
       try {
         const { data, error } = await supabaseClient.from('match_messages').select('*')
           .in('match_id', ms.map((m) => Number(m.id)))
-          .order('created_at', { ascending: false }).limit(500);
+          .order('created_at', { ascending: false }).limit(300);
         if (error) console.warn('[match chat] list:', error.message);
         else for (const r of (data || [])) {
           const m = normMatchRow(r);
@@ -9034,25 +9055,28 @@
           if (!lastByMatch.has(m.matchId)) lastByMatch.set(m.matchId, m);
         }
       } catch (err) { console.warn('[match chat] list exception:', err); }
-    }
-    try {
-      const { data, error } = await supabaseClient.from('dm_messages').select('*')
-        .or(`from_id.eq.${myId},to_id.eq.${myId}`)
-        .order('created_at', { ascending: false }).limit(500);
-      if (!error) {
-        for (const r of (data || [])) {
-          const m = normDmRow(r);
-          if (isHiddenMsg('dm', m.id)) continue;
-          const peer = m.fromId === myId ? m.toId : m.fromId;
-          if (friendIds.includes(peer) && !lastByPeer.has(peer)) lastByPeer.set(peer, m);
+    };
+    const loadDms = async () => {
+      try {
+        const { data, error } = await supabaseClient.from('dm_messages').select('*')
+          .or(`from_id.eq.${myId},to_id.eq.${myId}`)
+          .order('created_at', { ascending: false }).limit(300);
+        if (!error) {
+          for (const r of (data || [])) {
+            const m = normDmRow(r);
+            if (isHiddenMsg('dm', m.id)) continue;
+            const peer = m.fromId === myId ? m.toId : m.fromId;
+            if (friendIds.includes(peer) && !lastByPeer.has(peer)) lastByPeer.set(peer, m);
+          }
         }
-      }
-    } catch (err) { console.warn('[dm] list load exception:', err); }
-    if (gs.length) {
+      } catch (err) { console.warn('[dm] list load exception:', err); }
+    };
+    const loadGroupChats = async () => {
+      if (!gs.length) return;
       try {
         const { data, error } = await supabaseClient.from('group_messages').select('*')
           .in('group_id', gs.map((g) => g.id))
-          .order('created_at', { ascending: false }).limit(500);
+          .order('created_at', { ascending: false }).limit(300);
         if (error) console.warn('[group chat] list:', error.message);
         else for (const r of (data || [])) {
           const m = normGroupRow(r);
@@ -9060,7 +9084,8 @@
           if (!lastByGroup.has(String(m.groupId))) lastByGroup.set(String(m.groupId), m);
         }
       } catch (err) { console.warn('[group chat] list exception:', err); }
-    }
+    };
+    await Promise.all([loadMatches(), loadDms(), loadGroupChats()]);
     if (!winBody.contains(listEl)) return; // пока грузили, открыли другой экран
 
     const previewOf = (last, fallback, withAuthor) => {
@@ -10035,14 +10060,21 @@
 
   /* После входа, в фоне: переписки всех чатов и вложения последних сообщений — на устройство.
      Тогда любой чат, даже тот, что ещё не открывали, появляется сразу и с фото. */
+  /* Работа фоновая, поэтому она уступает дорогу: не чаще раза в 30 минут, только 20 чатов, и пока человек
+     сидит в каком-то чате или приложение свёрнуто — ждёт, чтобы не отнимать сеть у того, что он смотрит. */
   let chatsPrefetching = false;
+  const PREFETCH_EVERY = 30 * 60 * 1000;
   async function prefetchChats() {
     if (chatsPrefetching || !currentUser) return;
-    chatsPrefetching = true;
     const uid = currentUser.id;
+    const stampKey = 'chat.prefetch.v1:' + uid;
+    try { if (Date.now() - Number(localStorage.getItem(stampKey) || 0) < PREFETCH_EVERY) return; } catch {}
+    chatsPrefetching = true;
     const mine = () => currentUser && currentUser.id === uid;
+    const idle = async () => { while (mine() && (chat || document.hidden)) await new Promise((r) => setTimeout(r, 3000)); };
     try {
-      for (const { spec } of forwardTargets().slice(0, 60)) {
+      for (const { spec } of forwardTargets().slice(0, 20)) {
+        await idle();
         if (!mine()) return;
         const key = chatKey(spec);
         if (chat && chatKey(chat) === key) continue;   // открытый чат обновляет себя сам
@@ -10053,9 +10085,10 @@
           chatHistoryCache.set(key, list);
           KV.set(`chat:${uid}:${key}`, list);
         } else list = chatHistoryCache.get(key) || (await KV.get(`chat:${uid}:${key}`));
-        if (Array.isArray(list)) await prefetchChatMedia(list);
+        if (Array.isArray(list)) { await idle(); await prefetchChatMedia(list, 12); }
       }
       KV.mediaPrune(MEDIA_KEEP);
+      try { localStorage.setItem(stampKey, String(Date.now())); } catch {}
     } catch (err) { console.warn('[chat prefetch]', err); }
     finally { chatsPrefetching = false; }
   }
@@ -12511,23 +12544,31 @@
   }
 
   async function bootApp() {
-    let user = null;
-    try {
-      const { data, error } = await supabaseClient.auth.getSession();
-      user = data && data.session ? data.session.user : null;
-      // Без сети просроченный токен не обновить, но вход остаётся в силе: открываем приложение
-      // по сохранённой сессии, токен обновится сам, когда связь вернётся
-      if (!user && error) user = storedSessionUser();
-    } catch (err) {
-      console.warn('[auth] сессия:', err);
-      user = storedSessionUser();
+    /* Вход с прошлого раза сохранён на устройстве — приложение открывается сразу по нему, не дожидаясь сервера.
+       Просроченный токен supabase-js обновит сам; если сессию отозвали, придёт SIGNED_OUT и откроется экран входа. */
+    let user = storedSessionUser();
+    if (!user) {
+      try {
+        const { data } = await supabaseClient.auth.getSession();
+        user = data && data.session ? data.session.user : null;
+      } catch (err) { console.warn('[auth] сессия:', err); }
     }
     if (user) {
       currentUser = user;
-      // Профиль с прошлого запуска — на случай, если сервер недоступен
-      let row = await loadProfileRow(currentUser.id);
-      if (row) KV.set('profile:' + currentUser.id, row); else row = (await KV.get('profile:' + currentUser.id)) || null;
-      applyUserToProfileFromRow(row, currentUser.email);
+      const uid = user.id;
+      // Профиль — сразу из кеша на устройстве; свежий с сервера подменяет его, когда придёт
+      const freshRow = loadProfileRow(uid).then((r) => { if (r) KV.set('profile:' + uid, r); return r; }, () => null);
+      let row = await KV.get('profile:' + uid);
+      const fromCache = !!row;
+      if (!row) row = await freshRow;
+      applyUserToProfileFromRow(row || null, currentUser.email);
+      if (fromCache) {
+        freshRow.then((r) => {
+          if (!r || !currentUser || currentUser.id !== uid) return;
+          applyUserToProfileFromRow(r, currentUser.email);
+          refreshMyMarker();
+        });
+      }
       document.body.classList.remove('auth-locked');
       authScreen.hidden = true;
       ensureMapStarted();
@@ -12663,6 +12704,16 @@
   if (window.ResizeObserver) new ResizeObserver(relayoutApp).observe(document.getElementById('map'));
 
   if ('serviceWorker' in navigator) {
+    /* Вышла новая версия: страница открывается из кеша мгновенно, а свежая подгружается в фоне. Чтобы
+       не перезагружать приложение на глазах, новая версия включается, когда его свернут. */
+    const hadController = !!navigator.serviceWorker.controller;
+    let updateReady = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return;   // первая установка — перезагружать незачем
+      updateReady = true;
+      if (document.hidden) location.reload();
+    });
+    document.addEventListener('visibilitychange', () => { if (updateReady && document.hidden) location.reload(); });
     addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then((reg) => {
         // Установленное приложение подолгу не закрывают: проверяем обновление при каждом возвращении в него
