@@ -1,7 +1,7 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    При изменении файлов увеличьте номер версии, чтобы обновить кеш. */
 
-const VERSION = 'v1.1.18';
+const VERSION = 'v1.1.19';
 const CACHE = `groupis-${VERSION}`;
 
 const APP_SHELL = [
@@ -196,23 +196,27 @@ self.addEventListener('push', (event) => {
       badge: './icons/icon-192.png',
       tag: data.tag || undefined,
       renotify: !!data.tag,
-      data: { open: data.open || '' },
+      data: { open: data.open || '', chat: data.chat || '' },
     });
   })());
 });
 
-// Нажатие на уведомление: открытое приложение выходит вперёд и показывает нужный раздел, иначе — запускается
+// Нажатие на уведомление: открытое приложение выходит вперёд и показывает нужный раздел или чат, иначе — запускается
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const open = (event.notification.data && event.notification.data.open) || '';
+  const { open = '', chat = '' } = event.notification.data || {};
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const win = wins.find((c) => c.url.startsWith(self.registration.scope));
     if (win) {
       try { await win.focus(); } catch {}
-      win.postMessage({ type: 'push-open', open });
+      win.postMessage({ type: 'push-open', open, chat });
       return;
     }
-    await self.clients.openWindow(open ? `./?open=${encodeURIComponent(open)}` : './');
+    const params = new URLSearchParams();
+    if (open) params.set('open', open);
+    if (chat) params.set('chat', chat);
+    const qs = params.toString();
+    await self.clients.openWindow(qs ? `./?${qs}` : './');
   })());
 });
