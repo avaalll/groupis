@@ -6,9 +6,9 @@
      качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v1.1.23';
+const VERSION = 'v1.1.24';
 const CACHE = `groupis-${VERSION}`;
-const STATIC_VERSION = 's1';
+const STATIC_VERSION = 's2';
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
 
 const APP_SHELL = [
@@ -80,12 +80,11 @@ function precacheShell(cache) {
   }));
 }
 
-// Тяжёлые файлы качаем, только если их ещё нет ни в одном кеше — при обычном обновлении это ноль запросов
+// Тяжёлые файлы качаем, только если их ещё нет в STATIC_CACHE — при обычном обновлении это ноль запросов.
+// Из кешей прежних версий не берём: новая STATIC_VERSION как раз значит, что файлы изменились.
 function precacheStatic(cache) {
   return Promise.all(STATIC_FILES.map(async (url) => {
     if (await cache.match(url)) return;
-    const old = await caches.match(url);   // лежит в кеше прежней версии — переносим, не скачивая
-    if (old) { await cache.put(url, old); return; }
     const response = await fetch(new Request(url, { cache: 'reload' }));
     if (!response.ok) throw new Error(`${url}: ${response.status}`);
     await cache.put(url, await cleanResponse(response));
@@ -209,7 +208,7 @@ self.addEventListener('push', (event) => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const ios = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
     if (!ios && wins.some((c) => c.focused && c.visibilityState === 'visible')) return;
-    await self.registration.showNotification(data.title || 'Groupis', {
+    await self.registration.showNotification(data.title || 'GroupIS', {
       body: data.body || '',
       icon: './icons/icon-192.png',
       badge: './icons/icon-192.png',
