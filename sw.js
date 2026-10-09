@@ -6,7 +6,7 @@
      качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v1.1.29';
+const VERSION = 'v1.1.30';
 const CACHE = `groupis-${VERSION}`;
 const STATIC_VERSION = 's2';
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
@@ -21,6 +21,7 @@ const APP_SHELL = [
 
 const STATIC_FILES = [
   './three.min.js',
+  './supabase.min.js',
   './avatars3d/male.glb',
   './avatars3d/female.glb',
   './img/earth-dark.jpg',
@@ -52,10 +53,9 @@ const STATIC_FILES = [
 ];
 const STATIC_PATHS = new Set(STATIC_FILES.map((p) => new URL(p, self.location).pathname));
 
-// Внешние скрипты, без которых приложение не стартует
-const CACHEABLE_EXTERNAL = [
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-];
+// Внешние скрипты, без которых приложение не стартует. Сейчас таких нет: библиотека Supabase лежит
+// рядом (supabase.min.js) — сторонний CDN у части мобильных операторов недоступен
+const CACHEABLE_EXTERNAL = [];
 // Таблица шрифтов — адрес тот же, что в <link> в index.html
 const FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap';
 const FONTS_CSS_ORIGIN = 'https://fonts.googleapis.com';
