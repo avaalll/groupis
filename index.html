@@ -3085,6 +3085,43 @@
       .dock-pill::after { bottom: 2px; }
     }
 
+    /* ── Непрочитанное: счётчик на вкладке «Чаты», на вкладках списка и в строке чата ── */
+    .unread-pill {
+      flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      background: var(--prism); color: var(--prism-ink);
+      font-family: inherit; font-size: 10.5px; font-weight: 800; line-height: 18px; letter-spacing: 0; text-align: center;
+    }
+    .unread-pill[hidden] { display: none !important; }
+    .dock-badge { position: absolute; top: 3px; left: 50%; margin-left: 3px; box-shadow: 0 0 0 2px var(--win); pointer-events: none; }
+    /* ── Список чатов: вкладки «Личные» и «Групповые» ── */
+    .chat-tabs { flex: 1; display: flex; gap: 4px; padding: 3px; border-radius: 14px; background: var(--field); }
+    .chat-tab {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+      height: 34px; padding: 0 8px; border: 0; border-radius: 11px;
+      background: transparent; color: var(--ink-soft);
+      font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .chat-tab[aria-selected="true"] { background: var(--win); color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .14); }
+    .chats-list[data-tab="dm"] .chats-pane[data-pane="group"],
+    .chats-list[data-tab="group"] .chats-pane[data-pane="dm"] { display: none; }
+    /* непрочитанное в списке: имя жирнее, а текст сообщения переливается спектром — пока чат не откроют */
+    .chat-row.has-unread .chat-name { font-weight: 800; }
+    .chat-row.has-unread .chat-last {
+      font-weight: 700; color: var(--ink);
+      background: linear-gradient(100deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1)) 0 0 / 300% 100%;
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      animation: unread-shine 3.2s linear infinite;
+    }
+    @keyframes unread-shine { to { background-position: -300% 0; } }
+    @media (prefers-reduced-motion: reduce) { .chat-row.has-unread .chat-last { animation: none; } }
+    /* ── Личный чат: «Прочитано» у последнего своего сообщения, которое собеседник прочитал ── */
+    #chat-view-body.reads-on .chat-msg.me.is-read-last .chat-ticks::after { content: "Прочитано"; margin-left: 6px; font-weight: 700; }
+    /* ── Групповой чат: кто прочитал сообщение ── */
+    .readers-list { list-style: none; margin: 4px -8px 14px; padding: 0; max-height: min(52vh, 360px); overflow: auto; }
+    .readers-list .person-card { padding: 8px 10px; cursor: default; }
+    .readers-none { color: var(--ink-soft); font-size: 13px; margin: 0 0 14px; }
+
     /* ── Чат: меню сообщения, выбор нескольких, закреплённое ── */
     .chat-msg { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: opacity .2s ease, box-shadow .2s ease; }
     .chat-view.is-selecting .chat-msg { cursor: pointer; }
@@ -3528,6 +3565,7 @@
             <circle class="ic-fill" cx="18" cy="17.8" r="2.4"/>
           </svg>
           <span class="dock-label">Чаты</span>
+          <span class="unread-pill dock-badge" id="chats-badge" hidden></span>
         </button>
       </li>
       <li class="dock-item">
@@ -4535,6 +4573,8 @@
     userLocationsById.clear(); userAvatarCfgById.clear(); groupMemberProfiles.clear();
     posts = []; wishes = []; groups = []; notifications = []; friends = [];
     leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = []; chatsListShown = '';
+    peerReads.clear(); myServerReads.clear(); chatReadsReady = false;
+    chatLast.clear(); chatUnread.clear(); chatSummaryLoaded = false; chatSummarySeq++; clearTimeout(chatSummaryTimer); updateChatBadges();
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     groupMatches = []; groupMatchOutcome.clear(); groupInvites = []; groupInviteOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
     groupStats = new Map();
@@ -5329,7 +5369,8 @@
       refreshMyMarker(); // если я лидер группы — облако желания группы над моим аватаром
       // экран, открытый по данным из кеша, обновляем свежими — на месте, без анимации
       refreshGroupsList(); refreshFriendsList(); refreshNotifications();
-      if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
+      // последние сообщения и непрочитанное — сразу: счётчик на вкладке «Чаты» виден, даже если её не открывали
+      loadChatSummaries().then((ok) => { if (ok) paintChatsList(); preheatChats(); });
     });
     if (!returning) openAppFromShortcut();
     setTimeout(prefetchChats, 8000);   // когда интерфейс уже на месте и первые данные загрузились
@@ -5427,7 +5468,7 @@
     if (!groupInvites.length && Array.isArray(s.groupInvites)) groupInvites = s.groupInvites;
     if (myPhotos === null && Array.isArray(s.myPhotos)) myPhotos = s.myPhotos;
     if (!groupStats.size && Array.isArray(s.groupStats)) groupStats = new Map(s.groupStats);
-    const chatList = await KV.get('chatlist:' + uid);
+    const chatList = await KV.get('chatlist2:' + uid);
     if (!chatsListShown && typeof chatList === 'string' && currentUser && currentUser.id === uid) chatsListShown = chatList;
     // ссылки на файлы чатов, подписанные в прошлый раз, ещё действуют — вложения показываются без запроса к серверу
     const signed = await KV.get('signed:' + uid);
@@ -5525,10 +5566,10 @@
     return [...new Set(list.filter((m) => m.mediaPath && !m.localUrl && KEEP_KINDS.includes(m.kind)).slice(-max).map((m) => m.mediaPath))];
   }
   // Перед показом чата: файлы последних сообщений, уже лежащие на устройстве, — в память (это быстро)
-  async function warmChatMedia(list, max = 40) {
+  async function warmChatMedia(list, max = 40, wait = 300) {
     const paths = keepablePaths(list, max).filter((p) => !mediaBlobUrls.has(p));
     if (!paths.length) return;
-    await Promise.race([Promise.all(paths.map(cachedMediaUrl)), new Promise((r) => setTimeout(r, 300))]);
+    await Promise.race([Promise.all(paths.map(cachedMediaUrl)), new Promise((r) => setTimeout(r, wait))]);
   }
   // В фоне: скачать на устройство вложения последних сообщений, которых там ещё нет
   async function prefetchChatMedia(list, max = 30) {
@@ -6041,6 +6082,11 @@
     const chMatchMsg = supabaseClient.channel('rt:match_messages')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_messages' }, (payload) => handleChatRealtime(payload, 'match', normMatchRow)).subscribe();
     rtChannels.push(chMatchMsg);
+
+    // Отметки «прочитано»: RLS пропускает мои, собеседников в личных чатах и участников моих групп
+    const chReads = supabaseClient.channel('rt:chat_reads')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reads' }, (payload) => onChatReadRow(payload.new)).subscribe();
+    rtChannels.push(chReads);
 
     // Голоса в совместном чате — счётчик обновляется у всех сразу
     const chMatchVotes = supabaseClient.channel('rt:match_votes')
@@ -8974,14 +9020,19 @@
     winTitle.textContent = 'Сообщения';
     winBody.scrollTop = 0;
 
+    // последние сообщения уже в памяти — список рисуется сразу по ним, без запроса к серверу
+    if (chatSummaryLoaded) chatsListShown = chatsListHtml();
+    const tabBtn = (tab, label) => `
+          <button type="button" class="chat-tab" role="tab" data-chats-tab="${tab}" aria-selected="${chatsTab === tab}">${label}<span class="unread-pill" data-tab-unread="${tab}" hidden></span></button>`;
     winBody.innerHTML = `
       <div class="sub-toolbar">
-        <span class="sub-toolbar-title">Мои чаты</span>
-        <span class="sub-toolbar-spacer"></span>
+        <div class="chat-tabs" role="tablist" aria-label="Вид чатов">${tabBtn('dm', 'Личные')}${tabBtn('group', 'Групповые')}
+        </div>
       </div>
-      <div class="chats-list" id="chats-list" ${chatsListShown ? 'data-filled="1"' : ''}>
+      <div class="chats-list" id="chats-list" data-tab="${chatsTab}" ${chatsListShown ? 'data-filled="1"' : ''}>
         ${chatsListShown || '<div class="empty-msg">Загружаем чаты…</div>'}
       </div>`;
+    updateChatBadges();
 
     win.hidden = false;
     const wr = win.getBoundingClientRect();
@@ -9010,78 +9061,293 @@
     }
   }
 
-  /* Список чатов запоминаем: при повторном открытии он показывается сразу, без «Загружаем…»,
-     а после загрузки заменяется, только если что-то изменилось */
-  let chatsListShown = '';
-  async function renderChatsList() {
-    const listEl = winBody.querySelector('#chats-list');
-    if (!listEl) return;
-    const put = (html) => {
-      if (listEl.dataset.filled && html === chatsListShown) return;
-      if (listEl.dataset.filled) winBody.classList.remove(...SCREEN_ANIM);   // обновление, а не первое появление
-      listEl.innerHTML = html;
-      listEl.dataset.filled = '1';
-      chatsListShown = html;
-      if (currentUser) KV.set('chatlist:' + currentUser.id, html);   // при следующем запуске список покажется сразу
-    };
-    const gs = myGroups();
-    const ms = myAcceptedMatches();
-    if (!currentUser || (!friends.length && !gs.length && !ms.length)) {
-      put(`<div class="empty-msg">Пока нет чатов.<br>Добавьте друзей или создайте группу.</div>`);
-      return;
-    }
-    const myId = currentUser.id;
-    const friendIds = friends.map((f) => f.id);
-    const lastByPeer = new Map();
-    const lastByGroup = new Map();
-    const lastByMatch = new Map();
-    // три запроса — одновременно, а не по очереди
-    const loadMatches = async () => {
-      if (!ms.length) return;
-      try {
-        const { data, error } = await supabaseClient.from('match_messages').select('*')
-          .in('match_id', ms.map((m) => Number(m.id)))
-          .order('created_at', { ascending: false }).limit(300);
-        if (error) console.warn('[match chat] list:', error.message);
-        else for (const r of (data || [])) {
-          const m = normMatchRow(r);
-          if (isHiddenMsg('match', m.id)) continue;
-          if (!lastByMatch.has(m.matchId)) lastByMatch.set(m.matchId, m);
-        }
-      } catch (err) { console.warn('[match chat] list exception:', err); }
-    };
-    const loadDms = async () => {
-      try {
-        const { data, error } = await supabaseClient.from('dm_messages').select('*')
-          .or(`from_id.eq.${myId},to_id.eq.${myId}`)
-          .order('created_at', { ascending: false }).limit(300);
-        if (!error) {
-          for (const r of (data || [])) {
-            const m = normDmRow(r);
-            if (isHiddenMsg('dm', m.id)) continue;
-            const peer = m.fromId === myId ? m.toId : m.fromId;
-            if (friendIds.includes(peer) && !lastByPeer.has(peer)) lastByPeer.set(peer, m);
-          }
-        }
-      } catch (err) { console.warn('[dm] list load exception:', err); }
-    };
-    const loadGroupChats = async () => {
-      if (!gs.length) return;
-      try {
-        const { data, error } = await supabaseClient.from('group_messages').select('*')
-          .in('group_id', gs.map((g) => g.id))
-          .order('created_at', { ascending: false }).limit(300);
-        if (error) console.warn('[group chat] list:', error.message);
-        else for (const r of (data || [])) {
-          const m = normGroupRow(r);
-          if (isHiddenMsg('group', m.id)) continue;
-          if (!lastByGroup.has(String(m.groupId))) lastByGroup.set(String(m.groupId), m);
-        }
-      } catch (err) { console.warn('[group chat] list exception:', err); }
-    };
-    await Promise.all([loadMatches(), loadDms(), loadGroupChats()]);
-    if (!winBody.contains(listEl)) return; // пока грузили, открыли другой экран
+  /* ── Список чатов: две вкладки, последние сообщения и непрочитанное ──
+     Последнее сообщение и число непрочитанных по каждому чату держим в памяти: их заполняет один запрос
+     после входа, а дальше обновляет realtime. Поэтому список открывается сразу, а счётчики видны везде.
+     «Прочитано» — отметка времени на этом устройстве: до какого сообщения чат уже открывали. */
+  const chatLast = new Map();     // ключ чата → последнее сообщение
+  const chatUnread = new Map();   // ключ чата → сколько непрочитанных
+  let chatSummaryLoaded = false, chatSummarySeq = 0, chatSummaryTimer = 0;
+  let chatsListShown = '';        // показанный список: при следующем запуске он появляется сразу, без «Загружаем…»
 
+  let chatsTab = 'dm';
+  try { if (localStorage.getItem('chats.tab') === 'group') chatsTab = 'group'; } catch {}
+  function setChatsTab(tab) {
+    chatsTab = tab === 'group' ? 'group' : 'dm';
+    try { localStorage.setItem('chats.tab', chatsTab); } catch {}
+    const listEl = winBody.querySelector('#chats-list');
+    if (listEl) { listEl.dataset.tab = chatsTab; listEl.scrollTop = 0; }
+    winBody.querySelectorAll('[data-chats-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.chatsTab === chatsTab)));
+  }
+
+  function msgChatKey(m) {
+    return m.matchId !== null ? 'match:' + m.matchId
+      : m.groupId !== null ? 'group:' + m.groupId
+      : 'dm:' + (String(m.fromId) === String(currentUser.id) ? m.toId : m.fromId);
+  }
+  const msgTs = (m) => (m && Date.parse(m.createdAt)) || 0;
+
+  let chatReadState = null;   // { uid, base, at: { ключ чата: время } }
+  function chatReads() {
+    const uid = currentUser ? currentUser.id : '';
+    if (chatReadState && chatReadState.uid === uid) return chatReadState;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('chat.read.v1:' + uid) || 'null'); } catch {}
+    // первый запуск: всё, что написано раньше, считается прочитанным
+    chatReadState = { uid, base: (saved && saved.base) || Date.now(), at: (saved && saved.at) || {} };
+    if (!saved) saveChatReads();
+    return chatReadState;
+  }
+  function saveChatReads() {
+    const s = chatReadState;
+    try { localStorage.setItem('chat.read.v1:' + s.uid, JSON.stringify({ base: s.base, at: s.at })); } catch {}
+  }
+  function isUnreadMsg(m, key) {
+    const s = chatReads();
+    return !isMyMsg(m) && msgTs(m) > (s.at[key] || s.base);
+  }
+  // Чат на экране — всё, что в нём есть, прочитано
+  function markChatRead(c) {
+    if (!c || !currentUser || document.hidden) return;
+    const key = chatKey(c), s = chatReads();
+    let top = chatLast.get(key) || null;
+    for (const m of c.messages) if (!m.pending && msgTs(m) >= msgTs(top)) top = m;
+    const at = msgTs(top);
+    if (at > (s.at[key] || s.base)) { s.at[key] = at; saveChatReads(); }
+    pushChatRead(c, key, top);   // собеседник и участники группы увидят, что сообщение прочитано
+    if (chatUnread.get(key)) {
+      chatUnread.delete(key);
+      if (winBody.querySelector('#chats-list')) paintChatsList(); else updateChatBadges();
+    }
+  }
+
+  /* ── Кто что прочитал ──
+     Таблица chat_reads (supabase_chat_reads.sql): у каждого человека по строке на чат — до какого сообщения
+     он дочитал. По ней в личном чате видно «Прочитано», в групповом — список прочитавших сообщение,
+     а мои собственные отметки общие для всех моих устройств. Без таблицы всё это просто не показывается. */
+  const peerReads = new Map();       // ключ чата → Map(id человека → время, до которого он дочитал)
+  const myServerReads = new Map();   // ключ чата → моя отметка, уже сохранённая на сервере
+  let chatReadsMissing = false, chatReadsReady = false;
+  const chatReadTarget = (c) => String(c.type === 'dm' ? c.peerId : c.type === 'match' ? c.matchId : c.groupId);
+  function chatReadsError(error) {
+    if (isMissingTableError(error) || /schema cache|does not exist|could not find/i.test(error.message || '')) {
+      if (!chatReadsMissing) console.warn('[chat reads] нет таблицы — выполните supabase_chat_reads.sql в Supabase');
+      chatReadsMissing = true;
+    } else console.warn('[chat reads]', error.message);
+  }
+  // Строка таблицы → в память. Возвращает ключ чата, если отметка продвинулась
+  function applyReadRow(r) {
+    if (!currentUser || !r || !r.user_id) return null;
+    const myId = String(currentUser.id), uid = String(r.user_id), ts = Date.parse(r.read_at) || 0;
+    const key = r.chat_kind !== 'dm' ? r.chat_kind + ':' + r.chat_id
+      : uid === myId ? 'dm:' + r.chat_id
+      : String(r.chat_id) === myId ? 'dm:' + uid : null;
+    if (!key || !ts) return null;
+    if (uid === myId) {
+      if (ts <= (myServerReads.get(key) || 0)) return null;
+      myServerReads.set(key, ts);
+      const s = chatReads();
+      if (ts > (s.at[key] || s.base)) { s.at[key] = ts; saveChatReads(); }
+      return key;
+    }
+    let map = peerReads.get(key);
+    if (!map) peerReads.set(key, (map = new Map()));
+    if (ts <= (map.get(uid) || 0)) return null;
+    map.set(uid, ts);
+    return key;
+  }
+  async function loadMyChatReads() {
+    if (chatReadsMissing || !currentUser) return;
+    try {
+      const { data, error } = await supabaseClient.from('chat_reads').select('user_id, chat_kind, chat_id, read_at').eq('user_id', currentUser.id);
+      if (error) { chatReadsError(error); return; }
+      (data || []).forEach(applyReadRow);
+      chatReadsReady = true;
+    } catch (err) { console.warn('[chat reads] load:', err); }
+  }
+  // Отметки собеседника (личный чат) или всех участников (групповой) для открытого чата
+  async function loadChatReads(c) {
+    if (chatReadsMissing || !currentUser) return;
+    let q = supabaseClient.from('chat_reads').select('user_id, chat_kind, chat_id, read_at').eq('chat_kind', c.type);
+    q = c.type === 'dm' ? q.eq('user_id', c.peerId).eq('chat_id', String(currentUser.id)) : q.eq('chat_id', chatReadTarget(c));
+    try {
+      const { data, error } = await q;
+      if (error) { chatReadsError(error); return; }
+      (data || []).forEach(applyReadRow);
+      chatReadsReady = true;
+      if (chat === c) syncChatReadMarks();
+    } catch (err) { console.warn('[chat reads] load:', err); }
+  }
+  function pushChatRead(c, key, m) {
+    if (chatReadsMissing || !currentUser || !m) return;
+    const ts = msgTs(m), prev = myServerReads.get(key) || 0;
+    if (ts <= prev) return;
+    myServerReads.set(key, ts);
+    supabaseClient.from('chat_reads')
+      .upsert({ user_id: currentUser.id, chat_kind: c.type, chat_id: chatReadTarget(c), read_at: m.createdAt }, { onConflict: 'user_id,chat_kind,chat_id' })
+      .then(({ error }) => {
+        if (!error) return;
+        if (myServerReads.get(key) === ts) myServerReads.set(key, prev);
+        chatReadsError(error);
+      }, (err) => console.warn('[chat reads] save:', err));
+  }
+  // Realtime: кто-то дочитал чат (или я — на другом устройстве)
+  function onChatReadRow(r) {
+    if (!currentUser || !r) return;
+    const mine = String(r.user_id) === String(currentUser.id);
+    const key = applyReadRow(r);
+    if (!key) return;
+    chatReadsReady = true;
+    if (mine) { if (chatUnread.get(key)) refreshChatSummariesSoon(); }
+    else if (chat && chatKey(chat) === key) syncChatReadMarks();
+  }
+  // Личный чат: «Прочитано» у последнего моего сообщения, которое собеседник прочитал
+  function syncChatReadMarks() {
+    const c = chat, body = winBody.querySelector('#chat-view-body');
+    if (!c || !body) return;
+    const on = chatReadsReady && !chatReadsMissing && c.type === 'dm';
+    body.classList.toggle('reads-on', on);
+    if (!on) return;
+    const reads = peerReads.get(chatKey(c));
+    const at = (reads && reads.get(String(c.peerId))) || 0;
+    const mine = body.querySelectorAll(':scope > .chat-msg.me[data-ts]');
+    let lastRead = null;
+    for (const el of mine) {
+      const read = at > 0 && Number(el.dataset.ts) <= at;
+      el.classList.toggle('is-read', read);
+      if (read) lastRead = el;
+    }
+    for (const el of mine) el.classList.toggle('is-read-last', el === lastRead);
+  }
+  // Имя и аватар участника чата
+  function chatPersonById(id) {
+    const sid = String(id);
+    const known = friends.find((f) => String(f.id) === sid) || groupMemberProfiles.get(id) || groupMemberProfiles.get(sid);
+    if (known) return { id: sid, name: known.name || known.handle || 'Участник', handle: known.handle || '', avatar: known.avatar || '' };
+    for (const g of groups) {
+      const mem = (g.members || []).find((x) => String(x.id) === sid);
+      if (mem) return { id: sid, name: mem.name || mem.handle || 'Участник', handle: mem.handle || '', avatar: mem.avatar || '' };
+    }
+    return { id: sid, name: 'Участник', handle: '', avatar: '' };
+  }
+  // Кто в открытом чате прочитал сообщение: первыми — те, кто прочитал раньше
+  function chatReaders(m) {
+    if (!chat || !currentUser) return [];
+    const reads = peerReads.get(chatKey(chat));
+    if (!reads) return [];
+    const ts = msgTs(m), myId = String(currentUser.id);
+    return [...reads].filter(([uid, at]) => uid !== myId && at >= ts).sort((a, b) => a[1] - b[1]).map(([uid]) => chatPersonById(uid));
+  }
+  function readersLabel(list) {
+    if (!list.length) return 'Пока никто не прочитал';
+    return `Прочитали: ${escapeHtml(list[0].name)}${list.length > 1 ? ' + ' + (list.length - 1) : ''}`;
+  }
+  function openReadersModal(m) {
+    const list = chatReaders(m);
+    const back = document.createElement('div');
+    back.className = 'modal-backdrop';
+    back.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3 class="modal-title">${list.length ? `Прочитали (${list.length})` : 'Прочитали'}</h3>
+        ${list.length ? `<ul class="readers-list">${list.map((p) => `
+          <li class="person-card">
+            ${avatarCircleHtml(p, 36)}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(p.name)}</div>
+              ${p.handle ? `<div class="person-handle">${escapeHtml(p.handle)}</div>` : ''}
+            </div>
+          </li>`).join('')}</ul>` : '<p class="readers-none">Это сообщение пока никто не прочитал.</p>'}
+        <div class="modal-actions"><button type="button" class="btn btn-primary" data-close>Закрыть</button></div>
+      </div>`;
+    win.appendChild(back);
+    back.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.target === back || e.target.closest('[data-close]')) back.remove();
+    });
+  }
+
+  // В скольких личных и групповых чатах есть непрочитанное
+  function unreadChats() {
+    const has = (key) => (chatUnread.get(key) > 0 ? 1 : 0);
+    let dm = 0, group = 0;
+    if (currentUser) {
+      for (const f of friends) dm += has('dm:' + f.id);
+      for (const g of myGroups()) group += has('group:' + g.id);
+      for (const m of myAcceptedMatches()) group += has('match:' + m.id);
+    }
+    return { dm, group };
+  }
+  function updateChatBadges() {
+    const n = unreadChats();
+    const put = (el, count) => { if (el) { el.textContent = count > 99 ? '99+' : String(count); el.hidden = !(count > 0); } };
+    put(document.getElementById('chats-badge'), n.dm + n.group);
+    put(winBody.querySelector('[data-tab-unread="dm"]'), n.dm);
+    put(winBody.querySelector('[data-tab-unread="group"]'), n.group);
+  }
+
+  // Последние сообщения всех чатов — тремя запросами одновременно
+  async function loadChatSummaries() {
+    if (!currentUser) return false;
+    const myId = currentUser.id, seq = ++chatSummarySeq;
+    const gs = myGroups(), ms = myAcceptedMatches();
+    const last = new Map(), unread = new Map(), done = new Set(), got = [];
+    const load = async (kind, norm, query) => {
+      try {
+        const { data, error } = query ? await query().order('created_at', { ascending: false }).limit(300) : { data: [] };
+        if (error) { console.warn(`[${kind} chat] list:`, error.message); return; }
+        for (const r of (data || [])) {
+          const m = norm(r);
+          if (!isHiddenMsg(kind, m.id)) got.push(m);
+        }
+        done.add(kind);
+      } catch (err) { console.warn(`[${kind} chat] list exception:`, err); }
+    };
+    await Promise.all([
+      loadMyChatReads(),   // что прочитано на других моих устройствах — до подсчёта непрочитанного
+      load('match', normMatchRow, ms.length && (() => supabaseClient.from('match_messages').select('*').in('match_id', ms.map((m) => Number(m.id))))),
+      load('dm', normDmRow, () => supabaseClient.from('dm_messages').select('*').or(`from_id.eq.${myId},to_id.eq.${myId}`)),
+      load('group', normGroupRow, gs.length && (() => supabaseClient.from('group_messages').select('*').in('group_id', gs.map((g) => g.id)))),
+    ]);
+    if (seq !== chatSummarySeq || !currentUser || currentUser.id !== myId) return false;
+    for (const m of got) {
+      const key = msgChatKey(m);
+      if (!last.has(key)) last.set(key, m);
+      if (isUnreadMsg(m, key)) unread.set(key, (unread.get(key) || 0) + 1);
+    }
+    // запрос не удался (нет сети) — по этим чатам остаётся то, что уже знаем
+    for (const map of [chatLast, chatUnread]) {
+      for (const key of [...map.keys()]) if (done.has(key.split(':')[0])) map.delete(key);
+    }
+    last.forEach((m, key) => chatLast.set(key, m));
+    unread.forEach((n, key) => chatUnread.set(key, n));
+    chatSummaryLoaded = true;
+    if (chat) markChatRead(chat);
+    updateChatBadges();
+    return true;
+  }
+  // Вернулись в приложение: открытый чат прочитан, а счётчики сверяем с сервером — в фоне realtime мог молчать
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !currentUser) return;
+    if (chat) markChatRead(chat);
+    refreshChatSummariesSoon();
+  });
+  function refreshChatSummariesSoon() {
+    clearTimeout(chatSummaryTimer);
+    chatSummaryTimer = setTimeout(async () => { if (await loadChatSummaries()) paintChatsList(); }, 600);
+  }
+
+  // Новое сообщение (пришло по realtime или отправлено мной): строка чата и счётчики обновляются без запроса к серверу
+  function noteChatMessage(m, seen) {
+    if (!currentUser || m.pending) return;
+    const key = msgChatKey(m);
+    if (msgTs(m) >= msgTs(chatLast.get(key))) chatLast.set(key, m);
+    if (!seen && isUnreadMsg(m, key)) chatUnread.set(key, (chatUnread.get(key) || 0) + 1);
+    paintChatsList();
+  }
+
+  function chatsListHtml() {
+    const gs = myGroups(), ms = myAcceptedMatches();
+    const myId = currentUser && currentUser.id;
     const previewOf = (last, fallback, withAuthor) => {
       if (!last) return fallback;
       let text = chatPreviewText(last);
@@ -9089,50 +9355,117 @@
       const who = last.fromId === myId ? 'Вы: ' : (withAuthor && last.authorName ? last.authorName + ': ' : '');
       return who + text;
     };
-    const rowHtml = ({ attr, avatar, name, preview, last }) => `
-      <div class="chat-row" ${attr} role="button" tabindex="0">
+    const rowHtml = ({ key, attr, avatar, name, fallback, withAuthor }) => {
+      const last = chatLast.get(key), n = chatUnread.get(key) || 0;
+      return `
+      <div class="chat-row ${n ? 'has-unread' : ''}" ${attr} role="button" tabindex="0">
         ${avatar}
         <div class="chat-main">
           <div class="chat-name">${escapeHtml(name)}</div>
-          <div class="chat-last">${escapeHtml(preview)}</div>
+          <div class="chat-last">${escapeHtml(previewOf(last, fallback, withAuthor))}</div>
         </div>
         <div class="chat-side">
           ${last ? `<span class="chat-time">${escapeHtml(fmtTime(last.createdAt))}</span>` : ''}
+          ${n ? `<span class="unread-pill" aria-label="Непрочитанных: ${n}">${n > 99 ? '99+' : n}</span>` : ''}
         </div>
       </div>`;
+    };
+    const dms = [], grs = [];
+    if (myId) {
+      for (const g of gs) {
+        const key = 'group:' + g.id;
+        const avatar = g.photo
+          ? `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background-image:url('${safeUrl(g.photo)}')"></span>`
+          : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+        grs.push({
+          ts: msgTs(chatLast.get(key)),
+          html: rowHtml({ key, attr: `data-open-group-chat="${escapeHtml(g.id)}"`, avatar, name: g.name || 'Группа', fallback: 'Групповой чат', withAuthor: true }),
+        });
+      }
+      for (const m of ms) {
+        const key = 'match:' + m.id;
+        grs.push({
+          ts: msgTs(chatLast.get(key)) || Date.parse(m.createdAt) || 0,
+          html: rowHtml({
+            key, attr: `data-open-match-chat="${escapeHtml(m.id)}"`,
+            avatar: `<span class="avatar group-chat-avatar match-chat-avatar" style="width:44px;height:44px">${featMarkHtml(m.voteState)}</span>`,
+            name: matchTitle(m), fallback: 'Match! Напишите первыми', withAuthor: true,
+          }),
+        });
+      }
+      for (const f of friends) {
+        const key = 'dm:' + f.id;
+        const name = f.name || f.handle || 'Пользователь';
+        dms.push({
+          ts: msgTs(chatLast.get(key)),
+          html: rowHtml({ key, attr: `data-open-dm="${escapeHtml(f.id)}"`, avatar: avatarCircleHtml({ name, avatar: f.avatar }, 44), name, fallback: 'Начните диалог', withAuthor: false }),
+        });
+      }
+    }
+    // свежие диалоги сверху
+    const pane = (id, items, empty) => `<div class="chats-pane" data-pane="${id}">${
+      items.length ? items.sort((a, b) => b.ts - a.ts).map((x) => x.html).join('') : `<div class="empty-msg">${empty}</div>`}</div>`;
+    return pane('dm', dms, 'Пока нет личных чатов.<br>Добавьте друзей — и переписка появится здесь.')
+      + pane('group', grs, 'Пока нет групповых чатов.<br>Создайте группу или вступите в неё.');
+  }
 
-    const items = [];
-    for (const g of gs) {
-      const last = lastByGroup.get(String(g.id));
-      const avatar = g.photo
-        ? `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background-image:url('${safeUrl(g.photo)}')"></span>`
-        : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
-      items.push({
-        ts: last ? Date.parse(last.createdAt) : 0,
-        html: rowHtml({ attr: `data-open-group-chat="${escapeHtml(g.id)}"`, avatar, name: g.name || 'Группа', preview: previewOf(last, 'Групповой чат', true), last }),
-      });
-    }
-    for (const m of ms) {
-      const last = lastByMatch.get(m.id);
-      items.push({
-        ts: last ? Date.parse(last.createdAt) : Date.parse(m.createdAt) || 0,
-        html: rowHtml({
-          attr: `data-open-match-chat="${escapeHtml(m.id)}"`,
-          avatar: `<span class="avatar group-chat-avatar match-chat-avatar" style="width:44px;height:44px">${featMarkHtml(m.voteState)}</span>`,
-          name: matchTitle(m), preview: previewOf(last, 'Match! Напишите первыми', true), last,
-        }),
-      });
-    }
-    for (const f of friends) {
-      const last = lastByPeer.get(f.id);
-      const name = f.name || f.handle || 'Пользователь';
-      items.push({
-        ts: last ? Date.parse(last.createdAt) : 0,
-        html: rowHtml({ attr: `data-open-dm="${escapeHtml(f.id)}"`, avatar: avatarCircleHtml({ name, avatar: f.avatar }, 44), name, preview: previewOf(last, 'Начните диалог', false), last }),
-      });
-    }
-    items.sort((a, b) => b.ts - a.ts); // свежие диалоги сверху
-    put(items.map((x) => x.html).join(''));
+  // Перерисовать открытый список (только если он изменился) и счётчики
+  function paintChatsList() {
+    updateChatBadges();
+    const listEl = winBody.querySelector('#chats-list');
+    if (!listEl) return;
+    const html = chatsListHtml();
+    if (listEl.dataset.filled && html === chatsListShown) return;
+    if (listEl.dataset.filled) winBody.classList.remove(...SCREEN_ANIM);   // обновление, а не первое появление
+    listEl.innerHTML = html;
+    listEl.dataset.filled = '1';
+    chatsListShown = html;
+    if (currentUser) KV.set('chatlist2:' + currentUser.id, html);   // при следующем запуске список покажется сразу
+  }
+
+  async function renderChatsList() {
+    if (!winBody.querySelector('#chats-list')) return;
+    if (chatSummaryLoaded || !currentUser) paintChatsList();
+    if (await loadChatSummaries()) paintChatsList();
+    preheatChats();
+  }
+
+  /* Переписки верхних чатов списка — заранее в память (с устройства, а если там пусто или не хватает
+     последнего сообщения — с сервера), вместе с их вложениями. Тогда чат открывается без ожидания. */
+  let chatsPreheating = false;
+  async function preheatChats() {
+    if (chatsPreheating || !currentUser) return;
+    chatsPreheating = true;
+    const uid = currentUser.id;
+    const mine = () => currentUser && currentUser.id === uid;
+    try {
+      const specs = forwardTargets().map((t) => t.spec)
+        .sort((a, b) => msgTs(chatLast.get(chatKey(b))) - msgTs(chatLast.get(chatKey(a)))).slice(0, 15);
+      for (const spec of specs) {
+        if (!mine()) return;
+        const key = chatKey(spec);
+        if (chat && chatKey(chat) === key) continue;   // открытый чат обновляет себя сам
+        let list = chatHistoryCache.get(key);
+        if (!list) {
+          const saved = await KV.get(`chat:${uid}:${key}`);
+          if (!mine()) return;
+          list = chatHistoryCache.get(key) || (Array.isArray(saved) ? saved : null);
+          if (list) chatHistoryCache.set(key, list);
+        }
+        const last = chatLast.get(key);
+        if (!list || (last && !list.some((m) => String(m.id) === String(last.id)))) {
+          const fresh = await loadChatHistory(spec);
+          if (!mine()) return;
+          if (fresh && !(chat && chatKey(chat) === key)) {
+            list = fresh;
+            chatHistoryCache.set(key, list);
+            KV.set(`chat:${uid}:${key}`, list);
+          }
+        }
+        if (list) await warmChatMedia(list);
+      }
+    } catch (err) { console.warn('[chat preheat]', err); }
+    finally { chatsPreheating = false; }
   }
 
   /* ═══════ ТЕХПОДДЕРЖКА ═══════ */
@@ -9218,6 +9551,7 @@
      Текст, фото, видео, голосовые и видеокружки. Файлы лежат в приватном бакете
      Storage «chat-media» и показываются по временным подписанным ссылкам. */
   const CHAT_BUCKET = 'chat-media';
+  const CHAT_KEEP = 300;   // сколько последних сообщений чата загружаем и держим на устройстве
   const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
   const MAX_VOICE_SEC = 300;
   const MAX_CIRCLE_SEC = 60;
@@ -9268,9 +9602,10 @@
       : c.type === 'match'
         ? supabaseClient.from('match_messages').select('*').eq('match_id', Number(c.matchId))
         : supabaseClient.from('group_messages').select('*').eq('group_id', c.groupId);
-    const { data, error } = await q.order('created_at', { ascending: true }).limit(500);
+    // последние CHAT_KEEP сообщений: берём с конца и разворачиваем — столько же хранится на устройстве
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(CHAT_KEEP);
     if (error) { console.warn('[chat] load:', error.message); return null; }
-    return (data || []).map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow)
+    return (data || []).reverse().map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow)
       .filter((m) => !isHiddenMsg(c.type, m.id));
   }
 
@@ -9376,8 +9711,10 @@
     const body = isMedia
       ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
       : escapeHtml(m.content);
-    const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + fmtTime(m.createdAt);
-    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}">${author}${body}<span class="chat-msg-time">${time}</span></div>`;
+    // у своих сообщений в личном чате — место под «Прочитано» (его расставляет syncChatReadMarks)
+    const ticks = mine && !m.pending && chat && chat.type === 'dm';
+    const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + fmtTime(m.createdAt) + (ticks ? '<span class="chat-ticks" aria-hidden="true"></span>' : '');
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${ticks ? `data-ts="${msgTs(m)}"` : ''}>${author}${body}<span class="chat-msg-time">${time}</span></div>`;
   }
 
   /* ── Даты в ленте чата ──
@@ -9531,8 +9868,10 @@
     box.replaceWith(a);
   }
 
+  const chatEmptyHtml = () => `<div class="empty-msg">${chat && chat.loading ? 'Загружаем сообщения…' : 'Начните диалог.'}</div>`;
+
   function renderChatView() {
-    const rows = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : `<div class="empty-msg">Начните диалог.</div>`;
+    const rows = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : chatEmptyHtml();
     winBody.innerHTML = `
       <div class="support-chat chat-view" style="height:100%">
         <div class="support-chat-head">${escapeHtml(chat.headTitle)}</div>
@@ -9572,7 +9911,8 @@
     syncChatDates(body);
     initChatFloatDate(body);
     // лента меняется из многих мест (новое сообщение, удаление, перерисовка) — плашки дат следуют за ней
-    new MutationObserver(() => syncChatDates(body)).observe(body, { childList: true });
+    new MutationObserver(() => { syncChatDates(body); syncChatReadMarks(); }).observe(body, { childList: true });
+    syncChatReadMarks();
     hydrateChatMedia(body);
     scrollChatToBottom();
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
@@ -9753,7 +10093,7 @@
       if (error) throw error;
       // своё фото, голосовое или кружок сразу остаётся на устройстве — при следующем открытии чата не скачивается
       if (blob && ['image', 'voice', 'circle'].includes(kind)) rememberMediaBlob(mediaPath, blob, localUrl);
-      if (data) { data.localUrl = localUrl; finalizeChatMessage(c, tmp.id, data); }
+      if (data) { data.localUrl = localUrl; finalizeChatMessage(c, tmp.id, data); noteChatMessage(data, true); }
       saveChatCache(c);
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
@@ -9789,10 +10129,12 @@
           : m.groupId !== null && String(m.groupId) === String(c.groupId));
     if (!belongs) {
       rememberIncomingMessage(m);
-      if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
+      noteChatMessage(m, false);
       return;
     }
     if (c.messages.some((x) => x.id === m.id)) return;
+    // чат открыт, но приложение свёрнуто — сообщение ещё не видели; отметка снимется при возврате
+    noteChatMessage(m, !document.hidden);
     if (String(m.fromId) === String(currentUser.id)) {
       // Своё сообщение может прийти раньше ответа на insert — заменяем черновик, а не дублируем
       const tmp = c.messages.find((x) => x.pending && x.kind === m.kind &&
@@ -9808,6 +10150,7 @@
     c.messages.push(m);
     appendChatBubble(m);
     saveChatCache(c);
+    markChatRead(c);
   }
 
   function sendChatText() {
@@ -10030,26 +10373,33 @@
   }
 
   /* ── Сообщения: кеш переписки, закрепление, выбор, удаление, пересылка ── */
-  const chatHistoryCache = new Map();   // ключ чата → сообщения (последние 200)
+  const chatHistoryCache = new Map();   // ключ чата → сообщения (последние CHAT_KEEP)
   function chatKey(c) { return c.type === 'dm' ? 'dm:' + c.peerId : c.type === 'match' ? 'match:' + c.matchId : 'group:' + c.groupId; }
   function saveChatCache(c) {
     if (!currentUser || !c) return;
-    const list = c.messages.filter((m) => !m.pending).slice(-200).map(({ localUrl, pending, ...m }) => m);
+    const list = c.messages.filter((m) => !m.pending).slice(-CHAT_KEEP).map(({ localUrl, pending, ...m }) => m);
     const key = chatKey(c);
     chatHistoryCache.set(key, list);
     KV.set(`chat:${currentUser.id}:${key}`, list);
   }
-  function rememberIncomingMessage(m) {
+  // Сообщение в чат, который сейчас не открыт: дописываем в его сохранённую переписку —
+  // когда чат откроют, оно уже будет на месте, а не появится после ответа сервера
+  async function rememberIncomingMessage(m) {
     if (!currentUser) return;
-    const key = m.matchId !== null ? 'match:' + m.matchId
-      : m.groupId !== null ? 'group:' + m.groupId
-      : 'dm:' + (String(m.fromId) === String(currentUser.id) ? m.toId : m.fromId);
-    const list = chatHistoryCache.get(key);
-    if (list && !list.some((x) => String(x.id) === String(m.id))) {
-      list.push(m);
-      KV.set(`chat:${currentUser.id}:${key}`, list.slice(-200));
-    }
+    const uid = currentUser.id, key = msgChatKey(m);
     prefetchChatMedia([m]);
+    let list = chatHistoryCache.get(key);
+    if (!list) {
+      const saved = await KV.get(`chat:${uid}:${key}`);
+      if (!currentUser || currentUser.id !== uid) return;
+      list = chatHistoryCache.get(key) || (Array.isArray(saved) ? saved : null);
+      if (!list) return;   // переписки на устройстве нет — её целиком загрузит preheatChats или сам чат
+      chatHistoryCache.set(key, list);
+    }
+    if (list.some((x) => String(x.id) === String(m.id))) return;
+    list.push(m);
+    if (list.length > CHAT_KEEP) list.splice(0, list.length - CHAT_KEEP);
+    KV.set(`chat:${uid}:${key}`, list);
   }
 
   /* После входа, в фоне: переписки всех чатов и вложения последних сообщений — на устройство.
@@ -10075,7 +10425,6 @@
         let list = await loadChatHistory(spec);
         if (!mine()) return;
         if (list && !(chat && chatKey(chat) === key)) {
-          list = list.slice(-200);
           chatHistoryCache.set(key, list);
           KV.set(`chat:${uid}:${key}`, list);
         } else list = chatHistoryCache.get(key) || (await KV.get(`chat:${uid}:${key}`));
@@ -10130,7 +10479,7 @@
     const body = winBody.querySelector('#chat-view-body');
     if (!body || !chat) return;
     const stick = chat.stick !== false;
-    body.innerHTML = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : `<div class="empty-msg">Начните диалог.</div>`;
+    body.innerHTML = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : chatEmptyHtml();
     hydrateChatMedia(body);
     if (stick) scrollChatToBottom();
     syncChatPinBar();
@@ -10143,6 +10492,7 @@
     if (payload.eventType === 'DELETE') {
       const id = payload.old && payload.old.id;
       if (id != null) removeChatMessagesLocal(kind, [id]);
+      refreshChatSummariesSoon();   // удалённое могло быть последним или непрочитанным
       return;
     }
     const r = payload.new;
@@ -10262,7 +10612,9 @@
     pop.className = 'popover msg-menu';
     const item = (act, label, danger = false) =>
       `<button class="pop-item ${danger ? 'danger' : ''}" type="button" data-msg-act="${act}" data-msg-id="${escapeHtml(m.id)}">${label}</button>`;
-    pop.innerHTML = item('pin', m.pinned ? 'Открепить' : 'Закрепить')
+    // своё сообщение в групповом чате: кто его прочитал — «Sasha + 3», по нажатию весь список
+    const readers = isMyMsg(m) && chat.type !== 'dm' && chatReadsReady && !chatReadsMissing ? item('readers', readersLabel(chatReaders(m))) : '';
+    pop.innerHTML = readers + item('pin', m.pinned ? 'Открепить' : 'Закрепить')
       + ((m.content || '').trim() ? item('copy', 'Копировать текст') : '')
       + item('forward', 'Переслать')
       + item('select', 'Выбрать')
@@ -10458,7 +10810,6 @@
       winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
       (backFn || showMessengerScreen)();
     });
-    const sign = (list) => list.map((m) => m.id + (m.pinned ? '*' : '')).join(',');
 
     const key = chatKey(c);
     let cached = chatHistoryCache.get(key);
@@ -10469,26 +10820,56 @@
     }
     if (cached) {
       c.messages = cached.filter((m) => !isHiddenMsg(c.type, m.id));
-      await warmChatMedia(c.messages);
+      await warmChatMedia(c.messages, 40, 120);
       if (chat !== c) return;
-      show();
-    }
+    } else c.loading = true;   // переписки на устройстве нет — экран открывается сразу, лента подставится следом
+    show();
+    markChatRead(c);
+    loadChatReads(c);   // кто дочитал чат — для «Прочитано» и списка прочитавших
 
     const fresh = await loadChatHistory(c);
     if (chat !== c) return; // пока грузили, пользователь ушёл
-    if (!cached) {
-      c.messages = fresh || [];
-      await warmChatMedia(c.messages);
-      if (chat !== c) return;
-      show();
+    if (c.loading) {
+      c.loading = false;
+      if (fresh) {
+        // то, что успели отправить или получить за время загрузки, остаётся в конце ленты
+        const ids = new Set(fresh.map((m) => String(m.id)));
+        c.messages = [...fresh, ...c.messages.filter((m) => m.pending || !ids.has(String(m.id)))];
+        await warmChatMedia(c.messages, 40, 120);
+        if (chat !== c) return;
+      }
+      rerenderChatBody();
     }
-    else if (fresh) {
-      // то, что ещё отправляется, остаётся в конце ленты
-      const sending = c.messages.filter((m) => m.pending);
-      const before = sign(c.messages.filter((m) => !m.pending));
-      if (sign(fresh) !== before) { c.messages = [...fresh, ...sending]; rerenderChatBody(); }
-    }
+    else if (fresh) mergeFreshHistory(c, fresh);
     if (fresh) saveChatCache(c);
+    markChatRead(c);
+  }
+
+  /* Свежая переписка с сервера поверх показанной из кеша. Обычно отличие — несколько новых сообщений
+     в конце: их дописываем, не трогая остальную ленту (иначе она мигает и заново грузит вложения).
+     Перерисовываем целиком, только если что-то удалили или изменили. */
+  function mergeFreshHistory(c, fresh) {
+    const id = (m) => String(m.id);
+    const sign = (list) => list.map((m) => m.id + (m.pinned ? '*' : '')).join(',');
+    const sending = c.messages.filter((m) => m.pending);
+    const old = c.messages.filter((m) => !m.pending);
+    const freshIds = new Set(fresh.map(id)), oldIds = new Set(old.map(id));
+    const added = fresh.filter((m) => !oldIds.has(id(m)));
+    const gone = old.filter((m) => !freshIds.has(id(m)));
+    const same = sign(old.filter((m) => freshIds.has(id(m)))) === sign(fresh.filter((m) => oldIds.has(id(m))));
+    if (same && !added.length && !gone.length) return;
+    const body = winBody.querySelector('#chat-view-body');
+    const firstFresh = msgTs(fresh[0]), lastOld = msgTs(old[old.length - 1]);
+    // «пропавшие» старше загруженного окна — они не удалены, просто не попали в последние CHAT_KEEP
+    const tailOnly = same && body && old.length && !sending.length
+      && (fresh.length >= CHAT_KEEP ? gone.every((m) => msgTs(m) < firstFresh) : !gone.length)
+      && added.every((m) => msgTs(m) >= lastOld);
+    if (!tailOnly) { c.messages = [...fresh, ...sending]; rerenderChatBody(); return; }
+    c.messages = [...gone, ...fresh];
+    if (!added.length) return;
+    body.insertAdjacentHTML('beforeend', added.map(chatBubbleHtml).join(''));
+    hydrateChatMedia(body);
+    if (c.stick) scrollChatToBottom();
   }
 
   function showDmScreen(peerId) { return openChat({ type: 'dm', peerId }); }
@@ -12101,7 +12482,8 @@
       closePostMenus();
       const m = chatMsgById(id);
       if (!m) return;
-      if (act === 'pin') setChatMessagePinned(id, !m.pinned);
+      if (act === 'readers') openReadersModal(m);
+      else if (act === 'pin') setChatMessagePinned(id, !m.pinned);
       else if (act === 'copy') { try { await navigator.clipboard.writeText(m.content || ''); } catch (err) { console.warn('[copy]', err); } }
       else if (act === 'forward') openForwardPicker([id]);
       else if (act === 'select') toggleChatSelected(id);
@@ -12152,6 +12534,8 @@
     if (voicePlay) { toggleVoice(voicePlay.closest('[data-voice]')); return; }
     const voiceSeek = e.target.closest('[data-voice-seek]');
     if (voiceSeek) { seekVoice(voiceSeek.closest('[data-voice]'), e.clientX); return; }
+    const chatsTabBtn = e.target.closest('[data-chats-tab]');
+    if (chatsTabBtn) { setChatsTab(chatsTabBtn.dataset.chatsTab); return; }
     const groupChatBtn = e.target.closest('[data-open-group-chat]');
     if (groupChatBtn) {
       const gid = groupChatBtn.dataset.openGroupChat;
@@ -12607,7 +12991,7 @@
         if (!same()) return;
         refreshMyMarker();
         refreshGroupsList(); refreshFriendsList(); refreshNotifications();
-        if (openApp === 'messenger' && winBody.querySelector('#chats-list')) renderChatsList();
+        refreshChatSummariesSoon();
       } catch (err) { console.warn('[сеть] обновление после возврата связи:', err); }
     }, 1500);
   });
