@@ -3157,6 +3157,13 @@
       font-size: 15px; font-weight: 700; opacity: .35; transform: scale(.7); transition: opacity .15s, transform .25s var(--spring, ease);
     }
     #chat-view-body .chat-msg.is-swipe-ready::after { opacity: 1; transform: scale(1); }
+    /* ── «Печатает…» в шапке чата: вместо «Чат с …», пока собеседник пишет, записывает или отправляет файл ── */
+    .support-chat-head.is-typing { color: var(--you); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 16px; padding-right: 16px; }
+    .typing-dots { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: middle; }
+    .typing-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: typing-dot 1.2s ease-in-out infinite; }
+    .typing-dots i:nth-child(2) { animation-delay: .15s; }
+    .typing-dots i:nth-child(3) { animation-delay: .3s; }
+    @keyframes typing-dot { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
     /* ── Групповой чат: кто прочитал сообщение ── */
     .readers-list { list-style: none; margin: 4px -8px 14px; padding: 0; max-height: min(52vh, 360px); overflow: auto; }
     .readers-list .person-card { padding: 8px 10px; cursor: default; }
@@ -10110,10 +10117,13 @@
     scrollChatToBottom();
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
     winBody.querySelector('#chat-file').addEventListener('change', onChatFilesPicked);
+    const c = chat;
+    winBody.querySelector('#chat-text').addEventListener('input', () => sendTyping(c, typingNowKind(c)));
     if (chat.type === 'match') refreshMatchVotePanel();
     syncChatPinBar();
     syncChatSelectionUi();
     syncChatReplyBar();
+    paintTyping(chat);
   }
 
   /* ── Ответ на сообщение: пункт «Ответить» в меню или свайп сообщения влево ── */
@@ -10332,6 +10342,9 @@
     if (reply) { tmp.reply = reply; c.replyTo = null; if (chat === c) syncChatReplyBar(); }
     c.messages.push(tmp);
     if (chat === c) appendChatBubble(tmp);
+    // фото, видео и документы, пока грузятся, — у собеседника «отправляет файл» (голосовые и кружки уходят быстро)
+    const showsUpload = !!blob && ['image', 'video', 'file'].includes(kind);
+    if (showsUpload) typingUpload(c, 1);
     try {
       if (blob) {
         const { error: upErr } = await supabaseClient.storage.from(CHAT_BUCKET)
@@ -10352,6 +10365,8 @@
       // Документы требуют миграции: без неё хранилище не примет тип файла, а таблица — kind='file'
       const needsSql = kind === 'file' && /mime|file_name|file_size|kind_check|check constraint/i.test(msg);
       alert('Не удалось отправить: ' + msg + (needsSql ? '\n\nВыполните supabase_chat_files.sql в Supabase.' : ''));
+    } finally {
+      if (showsUpload) typingUpload(c, -1);
     }
   }
 
@@ -10381,6 +10396,8 @@
       noteChatMessage(m, false);
       return;
     }
+    // сообщение пришло — подпись «печатает» у его автора снимаем сразу
+    if (c.typing && c.typing.delete(String(m.fromId))) paintTyping(c);
     if (c.messages.some((x) => x.id === m.id)) return;
     // чат открыт, но приложение свёрнуто — сообщение ещё не видели; отметка снимется при возврате
     noteChatMessage(m, !document.hidden);
@@ -10408,6 +10425,7 @@
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
+    sendTyping(chat, typingNowKind(chat));
     sendChatMessage({ kind: 'text', content: text });
   }
 
@@ -10504,12 +10522,14 @@
     // который потом не воспроизводится. Весь файл придёт одним куском при stop().
     recorder.start();
     setRecordingUi(true, kind, stream);
+    sendTyping(c, kind);
 
     const maxSec = kind === 'voice' ? MAX_VOICE_SEC : MAX_CIRCLE_SEC;
     rec.timer = setInterval(() => {
       const sec = (Date.now() - rec.startedAt) / 1000;
       const t = winBody.querySelector('#chat-rec-time');
       if (t) t.textContent = fmtDuration(sec);
+      sendTyping(c, kind);   // подтверждение для собеседника — не чаще раза в 3 с
       if (sec >= maxSec) stopChatRecording(false);
     }, 250);
   }
@@ -10519,6 +10539,7 @@
     rec.stream.getTracks().forEach((t) => t.stop());
     if (chatRec === rec) chatRec = null;
     setRecordingUi(false);
+    sendTyping(rec.chat, typingNowKind(rec.chat));
   }
 
   function stopChatRecording(discard) {
@@ -11023,8 +11044,104 @@
   }
 
   /* ── Открытие / закрытие чата ── */
+  /* ── «Печатает», «записывает голосовое сообщение», «отправляет файл» ──
+     Сигнал уходит по закрытому каналу Supabase Realtime только участникам этого чата и в базу не пишется.
+     Кто может слушать канал, решает правило в базе (supabase_chat_typing.sql): без него канал не откроется,
+     подписи просто не будет — переписка работает как прежде. У собеседника подпись живёт 6 с, пока мы
+     её подтверждаем каждые 3 с; закрыли приложение — она исчезнет сама. */
+  const TYPING_ONE = { text: 'печатает', voice: 'записывает голосовое сообщение', circle: 'записывает голосовое сообщение', file: 'отправляет файл' };
+  const TYPING_MANY = { text: 'печатают', voice: 'записывают голосовые сообщения', circle: 'записывают голосовые сообщения', file: 'отправляют файлы' };
+  const TYPING_TTL = 6000, TYPING_EVERY = 3000;
+  let typingWarned = false;
+
+  function typingTopic(c) {
+    if (c.type === 'dm') return 'typing:dm:' + [String(currentUser.id), String(c.peerId)].sort().join(':');
+    return c.type === 'match' ? 'typing:match:' + c.matchId : 'typing:group:' + c.groupId;
+  }
+  function joinTyping(c) {
+    if (!currentUser) return;
+    c.typing = new Map();                 // id участника → { kind, until }
+    c.typingSent = { kind: '', at: 0 };
+    const ch = supabaseClient.channel(typingTopic(c), { config: { private: true, broadcast: { self: false } } });
+    ch.on('broadcast', { event: 'typing' }, ({ payload }) => onTypingSignal(c, payload));
+    ch.subscribe((status) => {
+      c.typingOk = status === 'SUBSCRIBED' && c.typingChannel === ch;
+      if (c.typingOk) sendTyping(c, typingNowKind(c));   // уже начали печатать, пока канал открывался
+      if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !typingWarned) {
+        typingWarned = true;
+        console.warn('[typing] канал не открылся — выполните supabase_chat_typing.sql в Supabase');
+      }
+    });
+    c.typingChannel = ch;
+  }
+  function leaveTyping(c) {
+    if (!c || !c.typingChannel) return;
+    const ch = c.typingChannel, wasActive = c.typingOk && c.typingSent.kind;
+    c.typingChannel = null; c.typingOk = false;
+    clearInterval(c.typingTimer); c.typingTimer = 0;
+    clearInterval(c.uploadTimer); c.uploadTimer = 0;
+    const drop = () => { try { supabaseClient.removeChannel(ch); } catch {} };
+    // собеседник сразу перестаёт видеть подпись, а не через 6 секунд
+    if (wasActive && currentUser) ch.send({ type: 'broadcast', event: 'typing', payload: { uid: String(currentUser.id), kind: '' } }).then(drop, drop);
+    else drop();
+  }
+  // Чем я сейчас занят в этом чате: запись важнее отправки файла, отправка — важнее набора текста
+  function typingNowKind(c) {
+    if (chatRec && chatRec.chat === c) return chatRec.kind;
+    if (c.uploads) return 'file';
+    const input = chat === c && winBody.querySelector('#chat-text');
+    return input && input.value.trim() ? 'text' : '';
+  }
+  // kind: text | voice | circle | file, '' — перестал. Одно и то же — не чаще раза в 3 с
+  function sendTyping(c, kind) {
+    if (!c || !c.typingOk || !c.typingChannel || !currentUser) return;
+    const now = Date.now(), last = c.typingSent;
+    if (kind === last.kind && (!kind || now - last.at < TYPING_EVERY)) return;
+    c.typingSent = { kind, at: now };
+    c.typingChannel.send({ type: 'broadcast', event: 'typing', payload: { uid: String(currentUser.id), kind } }).catch(() => {});
+  }
+  function typingUpload(c, delta) {
+    c.uploads = Math.max(0, (c.uploads || 0) + delta);
+    clearInterval(c.uploadTimer); c.uploadTimer = 0;
+    if (c.uploads) c.uploadTimer = setInterval(() => sendTyping(c, typingNowKind(c)), 1000);
+    sendTyping(c, typingNowKind(c));
+  }
+  function onTypingSignal(c, p) {
+    if (!p || chat !== c || !currentUser || String(p.uid) === String(currentUser.id)) return;
+    if (TYPING_ONE[p.kind]) c.typing.set(String(p.uid), { kind: p.kind, until: Date.now() + TYPING_TTL });
+    else c.typing.delete(String(p.uid));
+    paintTyping(c);
+  }
+  // Подпись в шапке чата вместо «Чат с …»: в личном — «печатает», в групповом — с именем
+  function paintTyping(c) {
+    if (!c || !c.typing) return;
+    const now = Date.now();
+    for (const [uid, t] of c.typing) if (t.until <= now) c.typing.delete(uid);
+    const list = [...c.typing];
+    if (list.length && !c.typingTimer) c.typingTimer = setInterval(() => paintTyping(c), 1000);
+    if (!list.length && c.typingTimer) { clearInterval(c.typingTimer); c.typingTimer = 0; }
+    const head = chat === c && winBody.querySelector('.chat-view .support-chat-head');
+    if (!head) return;
+    if (!list.length) {
+      if (head.classList.contains('is-typing')) { head.classList.remove('is-typing'); head.textContent = c.headTitle; }
+      return;
+    }
+    const firstName = (uid) => (chatPersonById(uid).name || 'Участник').trim().split(/\s+/)[0];
+    const [[uid0, t0]] = list;
+    const text = c.type === 'dm' ? TYPING_ONE[t0.kind]
+      : list.length === 1 ? `${firstName(uid0)} ${TYPING_ONE[t0.kind]}`
+      : list.length === 2 ? `${firstName(uid0)} и ${firstName(list[1][0])} ${TYPING_MANY[t0.kind]}`
+      : `${firstName(uid0)} и ещё ${list.length - 1} ${TYPING_MANY[t0.kind]}`;
+    if (head.dataset.typing === text && head.classList.contains('is-typing')) return;
+    head.dataset.typing = text;
+    head.classList.add('is-typing');
+    head.textContent = text;
+    head.insertAdjacentHTML('beforeend', '<span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>');
+  }
+
   function leaveChat() {
     if (chatRec) stopChatRecording(true);
+    leaveTyping(chat);
     chat = null;
     reportActiveChat();
   }
@@ -11049,6 +11166,7 @@
     }
     chat = c;
     reportActiveChat();
+    joinTyping(c);
     const show = () => setScreen(() => {
       winTitle.textContent = c.winTitle;
       winBody.scrollTop = 0;
