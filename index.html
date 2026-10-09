@@ -2,6 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
+  <!-- Три запрета, которые не касаются загрузки скриптов, карты и данных: на странице не может появиться
+       встроенный объект (плагин), подменённый базовый адрес или форма, отправляющая введённое на чужой сервер -->
+  <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
@@ -52,8 +55,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Manrope — текст, Unbounded — заголовки, JetBrains Mono — мелкие подписи «как на дисплее» -->
-  <!-- media="print" → "all": шрифты не задерживают первый показ страницы, если их сервер в этой сети не отвечает -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap">
 
   <style>
     /* Палитра GroupIS «Сигнал»: сигнальный красно-оранжевый (--you) + сонарная мята (--lime)
@@ -4782,6 +4784,10 @@
     const m = /^(dm|group|match):(.+)$/.exec(chatRef || '');
     if (m) {
       const [, type, id] = m;
+      // адрес чата приходит из ссылки — пропускаем только настоящий id, а не произвольный текст
+      const idOk = type === 'dm' ? /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)
+        : type === 'match' ? /^\d+$/.test(id) : /^[\w-]+$/.test(id);
+      if (!idOk) { showApp('messenger'); return; }
       showApp('messenger');
       openChat(type === 'dm' ? { type, peerId: id } : type === 'group' ? { type, groupId: id } : { type, matchId: id });
       return;
@@ -11406,18 +11412,19 @@
   function profileAvatarHtml(size = 84) {
     if (profile.avatar) return `<span class="avatar-preview" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(profile.avatar)}')"></span>`;
     const letter = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
-    return `<span class="avatar-preview" style="width:${size}px;height:${size}px">${letter}</span>`;
+    return `<span class="avatar-preview" style="width:${size}px;height:${size}px">${escapeHtml(letter)}</span>`;
   }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
   /* URL картинки для вставки в HTML-шаблон (src="…" или url('…')).
-     Пропускает только data:image/…;base64 и https-ссылки, остальное — пустая строка. */
+     Пропускает только data:image/…;base64 и ссылки на наш Supabase, остальное — пустая строка.
+     Чужой адрес не пропускаем: картинка с постороннего сервера выдала бы его владельцу IP каждого, кто её увидел. */
   function safeUrl(u) {
     const s = String(u || '').trim();
     if (/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(s)) return s;
-    if (/^https:\/\/[^\s"'()<>\\]+$/i.test(s)) return s;
+    if (s.startsWith(SUPABASE_URL + '/') && /^https:\/\/[^\s"'()<>\\]+$/i.test(s)) return s;
     return '';
   }
   function normalizeUsernameInput(raw) { return String(raw).trim().replace(/^@+/, '').toLowerCase(); }
