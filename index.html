@@ -5235,7 +5235,7 @@
           <label class="auth-field"><span class="auth-label">Пароль</span><input class="auth-input" type="password" id="reg-pwd" autocomplete="new-password" placeholder="Минимум 6 символов"></label>
           <label class="auth-field"><span class="auth-label">Повторите пароль</span><input class="auth-input" type="password" id="reg-pwd2" autocomplete="new-password" placeholder="Ещё раз"></label>`;
       } else if (step === 'age') {
-        body.innerHTML = `<div class="auth-age-row"><input type="range" id="reg-age" min="10" max="100" value="${draft.age}"><span class="auth-age-value" id="reg-age-value">${draft.age}</span></div>`;
+        body.innerHTML = `<div class="auth-age-row"><input type="range" id="reg-age" min="18" max="100" value="${draft.age}"><span class="auth-age-value" id="reg-age-value">${draft.age}</span></div>`;
         const r = authCard.querySelector('#reg-age');
         const v = authCard.querySelector('#reg-age-value');
         r.addEventListener('input', () => { v.textContent = r.value; draft.age = Number(r.value); });
@@ -5894,10 +5894,14 @@
   const FILTERS_KEY = 'map.filters.v1';
   const DEFAULT_FILTERS = { ageOn: false, age: 20, spread: 2, comp: 'all' };
   const COMP_LABELS = { all: 'Любой', male: 'Только парни', female: 'Только девушки', mixed: 'Смешанный' };
+  const FILTER_AGE_MIN = 18, FILTER_AGE_MAX = 70;
   function loadFilters() {
     try {
       const raw = localStorage.getItem(FILTERS_KEY);
-      return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+      const f = raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : { ...DEFAULT_FILTERS };
+      // порог 18+ : старое сохранённое значение ниже 18 подтягиваем к 18, чтобы ползунок и число совпадали
+      f.age = Math.min(FILTER_AGE_MAX, Math.max(FILTER_AGE_MIN, Number(f.age) || DEFAULT_FILTERS.age));
+      return f;
     } catch { return { ...DEFAULT_FILTERS }; }
   }
   function saveFilters() { try { localStorage.setItem(FILTERS_KEY, JSON.stringify(mapFilters)); } catch {} }
@@ -11219,7 +11223,7 @@
               </div>
               <div class="flt-age-body">
                 <div class="flt-big" id="flt-age-val"></div>
-                <input type="range" class="flt-range" id="flt-age" min="14" max="70" value="${f.age}" aria-label="Средний возраст">
+                <input type="range" class="flt-range" id="flt-age" min="18" max="70" value="${f.age}" aria-label="Средний возраст">
                 <div class="flt-spread"><span class="flt-spread-label">Разброс</span>${[0, 2, 5, 10].map(spreadOpt).join('')}</div>
               </div>
             </section>
@@ -12553,8 +12557,8 @@
                 <button type="button" class="pe-seg-opt" data-gender="female" aria-pressed="${profile.gender === 'female'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M12 14.5V21M9 18h6"/></svg>Женский</button>
               </div>
               <div class="pe-age">
-                <div class="flt-big"><span id="edit-age-val">${profile.age ? escapeHtml(String(profile.age)) : '—'}</span><small>лет</small></div>
-                <input class="flt-range" type="range" id="edit-age" min="10" max="100" value="${Number(profile.age) || 18}" aria-label="Возраст">
+                <div class="flt-big"><span id="edit-age-val">${profile.age ? escapeHtml(String(Math.max(18, profile.age))) : '—'}</span><small>лет</small></div>
+                <input class="flt-range" type="range" id="edit-age" min="18" max="100" value="${Math.max(18, Number(profile.age) || 18)}" aria-label="Возраст">
               </div>
               <p class="pe-note">По полу и возрасту считаются состав и средний возраст ваших групп в фильтрах.</p>
             </div>
@@ -12595,7 +12599,8 @@
         if (files.length) photoOp(() => addMyPhotos(files));
       });
       let editGender = profile.gender || '';
-      let editAge = Number(profile.age) || null;
+      // возраст 18+ : старое значение ниже 18 подтягиваем к 18 (но пустой возраст оставляем пустым)
+      let editAge = profile.age ? Math.max(18, Number(profile.age)) : null;
       winBody.querySelector('#edit-gender').addEventListener('click', (e) => {
         const b = e.target.closest('[data-gender]'); if (!b) return;
         editGender = b.dataset.gender;
