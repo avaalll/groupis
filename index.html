@@ -52,7 +52,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Manrope — текст, Unbounded — заголовки, JetBrains Mono — мелкие подписи «как на дисплее» -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <!-- media="print" → "all": шрифты не задерживают первый показ страницы, если их сервер в этой сети не отвечает -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap" media="print" onload="this.media='all'">
 
   <style>
     /* Палитра GroupIS «Сигнал»: сигнальный красно-оранжевый (--you) + сонарная мята (--lime)
@@ -3638,7 +3639,7 @@
   </nav>
 
   <script src="./three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase.min.js"></script>
 
   <script>
   'use strict';
@@ -4809,6 +4810,13 @@
     `;
   }
   function showAuthError(el, msg) { el.textContent = msg; el.hidden = false; }
+  // Запрос не дошёл до сервера (нет сети или адрес Supabase недоступен у оператора) — это не «неверный пароль»
+  const NO_SERVER_TEXT = 'Нет связи с сервером. Проверьте интернет; если он есть — сервер недоступен в этой сети, попробуйте Wi‑Fi или VPN.';
+  function isNetworkError(error) {
+    if (!error) return false;
+    return error.name === 'AuthRetryableFetchError' || error.status === 0
+      || /failed to fetch|networkerror|load failed|network request failed|fetch/i.test(error.message || '');
+  }
   // Ширина карточки под содержимое: 'sm' — одно поле, 'md' — несколько полей
   function setAuthCardSize(size) { authCard.dataset.size = size; }
 
@@ -5041,7 +5049,7 @@
         const { data: foundEmail, error: rpcErr } = await supabaseClient.rpc('get_email_by_username', { uname });
         if (rpcErr || !foundEmail) {
           console.error('[rpc get_email_by_username]', rpcErr);
-          showAuthError(err, 'Пользователь с таким username не найден.');
+          showAuthError(err, isNetworkError(rpcErr) ? NO_SERVER_TEXT : 'Пользователь с таким username не найден.');
           return;
         }
         email = foundEmail;
@@ -5052,7 +5060,7 @@
       submit.disabled = false;
       if (error) {
         console.error('[signIn]', error);
-        showAuthError(err, 'Неверная почта/username или пароль.');
+        showAuthError(err, isNetworkError(error) ? NO_SERVER_TEXT : 'Неверная почта/username или пароль.');
         return;
       }
 
