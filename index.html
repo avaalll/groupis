@@ -3117,7 +3117,7 @@
     @media (prefers-reduced-motion: reduce) { .chat-row.has-unread .chat-last { animation: none; } }
     /* ── Личный чат: «Прочитано» у последнего своего сообщения, которое собеседник прочитал ── */
     #chat-view-body.reads-on .chat-msg.me.is-read-last .chat-ticks::after { content: "Прочитано"; margin-left: 6px; font-weight: 700; }
-    /* ── Ответ на сообщение: цитата в сообщении, плашка над полем ввода, свайп вправо ── */
+    /* ── Ответ на сообщение: цитата в сообщении, плашка над полем ввода, свайп влево ── */
     .chat-reply {
       display: grid; gap: 1px; margin: 0 0 5px; padding: 4px 8px; max-width: 100%; min-width: 0;
       border-left: 3px solid currentColor; border-radius: 6px; background: rgba(127, 127, 140, .2);
@@ -3134,7 +3134,7 @@
     #chat-view-body .chat-msg { touch-action: pan-y; }
     #chat-view-body .chat-msg:not(.is-swiping) { transition: opacity .2s ease, box-shadow .2s ease, transform .28s var(--spring, ease); }
     #chat-view-body .chat-msg.is-swiping::after {
-      content: "↩"; position: absolute; top: 50%; left: -40px; width: 28px; height: 28px; margin-top: -14px;
+      content: "↩"; position: absolute; top: 50%; right: -40px; width: 28px; height: 28px; margin-top: -14px;
       display: grid; place-items: center; border-radius: 50%; background: var(--field); color: var(--ink);
       font-size: 15px; font-weight: 700; opacity: .35; transform: scale(.7); transition: opacity .15s, transform .25s var(--spring, ease);
     }
@@ -9952,7 +9952,7 @@
     syncChatReplyBar();
   }
 
-  /* ── Ответ на сообщение: пункт «Ответить» в меню или свайп сообщения вправо ── */
+  /* ── Ответ на сообщение: пункт «Ответить» в меню или свайп сообщения влево ── */
   function msgAuthorName(m) {
     if (isMyMsg(m)) return profile.name || 'Вы';
     return m.authorName || chatPersonById(m.fromId).name;
@@ -12940,19 +12940,20 @@
     msgPressDone();
     if (chat && chat.selecting) toggleChatSelected(el.dataset.msgId); else openMsgMenu(el.dataset.msgId, e.clientX, e.clientY);
   });
-  /* Свайп сообщения вправо — ответить на него. Сообщение едет за пальцем; дотянули до отметки — слева
+  /* Свайп сообщения влево — ответить на него. Сообщение едет за пальцем; дотянули до отметки — справа
      загорается стрелка, отпустили — над полем ввода появляется цитата. Работает пальцем на экране,
-     мышью (зажать и потянуть вправо) и двумя пальцами на тачпаде. */
+     мышью (зажать и потянуть влево) и двумя пальцами на тачпаде.
+     dx везде ниже — на сколько сообщение сдвинули влево (положительное число). */
   const SWIPE_REPLY = 56, SWIPE_MAX = 84;
   const swipePaint = (el, dx) => {
     el.classList.add('is-swiping');
-    el.style.transform = `translateX(${dx}px)`;
+    el.style.transform = `translateX(${-dx}px)`;
     const ready = dx >= SWIPE_REPLY;
     if (ready && !el.classList.contains('is-swipe-ready') && navigator.vibrate) { try { navigator.vibrate(8); } catch {} }
     el.classList.toggle('is-swipe-ready', ready);
   };
   const swipeReset = (el) => { el.classList.remove('is-swiping', 'is-swipe-ready'); el.style.transform = ''; };
-  // Жест начался: тянут вправо и заметно сильнее, чем по вертикали (иначе это прокрутка ленты)
+  // Жест начался: тянут влево и заметно сильнее, чем по вертикали (иначе это прокрутка ленты)
   const swipeStarts = (dx, dy) => dx >= 12 && dx >= Math.abs(dy) * 1.5;
   const swipeTarget = (e) => {
     if (!chat || chat.selecting) return null;
@@ -12970,7 +12971,7 @@
   winBody.addEventListener('touchmove', (e) => {
     const s = msgSwipe;
     if (!s) return;
-    const dx = e.touches[0].clientX - s.x, dy = e.touches[0].clientY - s.y;
+    const dx = s.x - e.touches[0].clientX, dy = e.touches[0].clientY - s.y;
     if (!s.lock) {
       if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { msgSwipe = null; return; }
       if (!swipeStarts(dx, dy)) return;
@@ -12991,7 +12992,7 @@
   winBody.addEventListener('touchend', () => endMsgSwipe(true));
   winBody.addEventListener('touchcancel', () => endMsgSwipe(false));
 
-  // ── мышью: зажать сообщение левой кнопкой и потянуть вправо ──
+  // ── мышью: зажать сообщение левой кнопкой и потянуть влево ──
   let mouseSwipe = null;
   winBody.addEventListener('pointerdown', (e) => {
     mouseSwipe = null;
@@ -13004,7 +13005,7 @@
     const s = mouseSwipe;
     if (!s || e.pointerType !== 'mouse') return;
     if (!(e.buttons & 1)) { endMouseSwipe(false); return; }   // кнопку отпустили за пределами окна
-    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    const dx = s.x - e.clientX, dy = e.clientY - s.y;
     if (!s.lock) {
       if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { mouseSwipe = null; return; }
       if (!swipeStarts(dx, dy)) return;
@@ -13026,8 +13027,8 @@
   // фото в сообщении не «вытаскивается» из ленты, пока его тянут мышью
   winBody.addEventListener('dragstart', (e) => { if (chatMsgAt(e.target)) e.preventDefault(); });
 
-  /* ── тачпадом: два пальца вправо по сообщению ──
-     Тачпад присылает прокрутку (wheel): движение пальцев вправо — отрицательный deltaX. Ответ включается сразу,
+  /* ── тачпадом: два пальца влево по сообщению ──
+     Тачпад присылает прокрутку (wheel): движение пальцев влево — положительный deltaX. Ответ включается сразу,
      как только сообщение дотянули до отметки; остаток жеста и его инерция гасятся, пока прокрутка не стихнет. */
   let wheelSwipe = null;
   const endWheelSwipe = () => {
@@ -13038,7 +13039,7 @@
   winBody.addEventListener('wheel', (e) => {
     let s = wheelSwipe;
     if (!s) {
-      if (e.ctrlKey || e.deltaX >= 0 || Math.abs(e.deltaX) < Math.abs(e.deltaY) * 1.5) return;
+      if (e.ctrlKey || e.deltaX <= 0 || Math.abs(e.deltaX) < Math.abs(e.deltaY) * 1.5) return;
       const el = swipeTarget(e);
       if (!el) return;
       s = wheelSwipe = { el, dx: 0, done: false, timer: 0 };
@@ -13048,7 +13049,7 @@
     s.timer = setTimeout(endWheelSwipe, 180);
     if (s.done) return;
     const step = e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX;
-    s.dx = Math.max(0, Math.min(SWIPE_MAX, s.dx - step));
+    s.dx = Math.max(0, Math.min(SWIPE_MAX, s.dx + step));
     swipePaint(s.el, s.dx);
     if (s.dx >= SWIPE_REPLY) {
       s.done = true;
