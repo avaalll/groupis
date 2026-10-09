@@ -3105,6 +3105,21 @@
     .chat-tab[aria-selected="true"] { background: var(--win); color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .14); }
     .chats-list[data-tab="dm"] .chats-pane[data-pane="group"],
     .chats-list[data-tab="group"] .chats-pane[data-pane="dm"] { display: none; }
+    /* строка чата сдвигается свайпом влево и открывает кнопки «Уведомления» и «Удалить» */
+    .chat-swipe { position: relative; overflow: hidden; border-radius: 18px; -webkit-user-select: none; user-select: none; }
+    .chat-swipe-actions {
+      position: absolute; top: 0; right: 0; bottom: 0; display: flex; border-radius: 18px; overflow: hidden;
+      transform: translateX(100%); transition: transform .28s var(--ease);
+    }
+    .chat-swipe-actions .group-action-btn { width: 64px; }
+    .chat-swipe-actions .group-action-btn svg { fill: none; }
+    .chat-swipe .chat-row { touch-action: pan-y; transition: background .2s, transform .28s var(--ease); }
+    .chat-swipe.revealed .chat-swipe-actions { transform: none; }
+    .chat-swipe.revealed .chat-row, .chat-swipe.revealed .chat-row:active { transform: translateX(-134px); }
+    .chat-muted { display: inline-block; vertical-align: -2px; margin-left: 6px; color: var(--ink-soft); }
+    .chat-muted svg { display: block; width: 14px; height: 14px; }
+    .chat-row.is-muted .unread-pill { background: var(--field); color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--win-line); }
+    .chat-row.is-muted.has-unread .chat-last { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--ink-soft); }
     /* непрочитанное в списке: имя жирнее, а текст сообщения переливается спектром — пока чат не откроют */
     .chat-row.has-unread .chat-name { font-weight: 800; }
     .chat-row.has-unread .chat-last {
@@ -4596,6 +4611,7 @@
     posts = []; wishes = []; groups = []; notifications = []; friends = [];
     leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = []; chatsListShown = '';
     peerReads.clear(); myServerReads.clear(); chatReadsReady = false;
+    chatPrefs.clear(); chatPrefsUid = null;
     chatLast.clear(); chatUnread.clear(); chatSummaryLoaded = false; chatSummarySeq++; clearTimeout(chatSummaryTimer); updateChatBadges();
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     groupMatches = []; groupMatchOutcome.clear(); groupInvites = []; groupInviteOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
@@ -9288,9 +9304,126 @@
     });
   }
 
+  /* ── Настройки чата: выключенные уведомления и «удалить чат у себя» ──
+     Хранятся на устройстве и в таблице chat_prefs (supabase_chat_prefs.sql) — тогда они общие для всех моих
+     устройств, а функция send-push не шлёт push по чату, пока уведомления выключены.
+     «Удалить чат» — отметка времени: всё, что написано раньше, у меня скрыто; у остальных переписка остаётся. */
+  const ICON_BELL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.75 16.25V11a5.25 5.25 0 0 1 10.5 0v5.25"/><path d="M4.75 16.25h14.5M10.4 19.5a1.8 1.8 0 0 0 3.2 0"/></svg>`;
+  const ICON_BELL_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.25 13.5V11a5.25 5.25 0 0 0-8.3-4.27M6.75 11v5.25"/><path d="M4.75 16.25h10.5M10.4 19.5a1.8 1.8 0 0 0 3.2 0M4 4l16 16"/></svg>`;
+  const MUTE_FOREVER = Date.UTC(2999, 0, 1);
+  const chatPrefs = new Map();   // ключ чата → { mutedUntil, clearedAt } (время в мс, 0 — нет)
+  let chatPrefsUid = null, chatPrefsMissing = false, chatPrefsWarned = false;
+  function chatPref(key) {
+    const uid = currentUser ? String(currentUser.id) : '';
+    if (chatPrefsUid !== uid) {
+      chatPrefs.clear();
+      chatPrefsUid = uid;
+      try {
+        const saved = JSON.parse(localStorage.getItem('chat.prefs.v1:' + uid) || '{}');
+        for (const [k, v] of Object.entries(saved)) chatPrefs.set(k, { mutedUntil: Number(v.mutedUntil) || 0, clearedAt: Number(v.clearedAt) || 0 });
+      } catch {}
+    }
+    return chatPrefs.get(key) || { mutedUntil: 0, clearedAt: 0 };
+  }
+  function setChatPref(key, patch) {
+    chatPrefs.set(key, { ...chatPref(key), ...patch });
+    try { localStorage.setItem('chat.prefs.v1:' + chatPrefsUid, JSON.stringify(Object.fromEntries(chatPrefs))); } catch {}
+  }
+  const isChatMuted = (key) => chatPref(key).mutedUntil > Date.now();
+  const chatClearedAt = (key) => chatPref(key).clearedAt;
+  function chatPrefsError(error) {
+    if (isMissingTableError(error) || /schema cache|does not exist|could not find/i.test(error.message || '')) chatPrefsMissing = true;
+    console.warn('[chat prefs]', error.message);
+  }
+  async function loadChatPrefs() {
+    if (chatPrefsMissing || !currentUser) return;
+    const uid = currentUser.id;
+    try {
+      const { data, error } = await supabaseClient.from('chat_prefs').select('chat_kind, chat_id, muted_until, cleared_at').eq('user_id', uid);
+      if (error) { chatPrefsError(error); return; }
+      if (!currentUser || currentUser.id !== uid) return;
+      for (const r of (data || [])) {
+        const key = r.chat_kind + ':' + r.chat_id;
+        setChatPref(key, {
+          mutedUntil: (r.muted_until && Date.parse(r.muted_until)) || 0,
+          clearedAt: Math.max(chatClearedAt(key), (r.cleared_at && Date.parse(r.cleared_at)) || 0),
+        });
+      }
+    } catch (err) { console.warn('[chat prefs] load:', err); }
+  }
+  // Сохранить настройки чата на сервере; false — таблицы нет или запрос не прошёл (на устройстве они уже сохранены)
+  async function pushChatPref(key) {
+    if (chatPrefsMissing || !currentUser) return false;
+    const i = key.indexOf(':'), p = chatPref(key);
+    const iso = (ms) => (ms ? new Date(ms).toISOString() : null);
+    try {
+      const { error } = await supabaseClient.from('chat_prefs').upsert({
+        user_id: currentUser.id, chat_kind: key.slice(0, i), chat_id: key.slice(i + 1),
+        muted_until: iso(p.mutedUntil), cleared_at: iso(p.clearedAt),
+      }, { onConflict: 'user_id,chat_kind,chat_id' });
+      if (error) { chatPrefsError(error); return false; }
+      return true;
+    } catch (err) { console.warn('[chat prefs] save:', err); return false; }
+  }
+
+  async function setChatMute(key, mode) {
+    const until = mode === 'hour' ? Date.now() + 3600 * 1000 : mode === 'day' ? Date.now() + 24 * 3600 * 1000 : mode === 'forever' ? MUTE_FOREVER : 0;
+    setChatPref(key, { mutedUntil: until });
+    paintChatsList();
+    const ok = await pushChatPref(key);
+    // без таблицы на сервере push-уведомления продолжат приходить — говорим об этом один раз
+    if (!ok && until && chatPrefsMissing && !chatPrefsWarned) {
+      chatPrefsWarned = true;
+      alert('Уведомления выключены только в самом приложении. Чтобы перестали приходить и push-уведомления, выполните supabase_chat_prefs.sql в Supabase и обновите функцию send-push.');
+    }
+  }
+  function openChatMuteMenu(key, anchorEl) {
+    closePostMenus();
+    const muted = isChatMuted(key), k = escapeHtml(key);
+    const item = (mode, label) => `<button class="pop-item" type="button" data-mute-set="${mode}" data-mute-key="${k}">${label}</button>`;
+    const pop = document.createElement('div');
+    pop.className = 'popover msg-menu';
+    pop.innerHTML = (muted ? item('off', 'Включить уведомления') : '')
+      + item('hour', 'Выключить на час') + item('day', 'Выключить на сутки') + item('forever', 'Выключить навсегда');
+    winBody.appendChild(pop);
+    const r = winBody.getBoundingClientRect(), a = anchorEl.getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(a.right - r.left - pop.offsetWidth, r.width - pop.offsetWidth - 8)) + 'px';
+    pop.style.top = Math.max(8, Math.min(a.bottom - r.top + 6, r.height - pop.offsetHeight - 8)) + 'px';
+    const onDocDown = (ev) => {
+      if (pop.contains(ev.target)) return;
+      pop.remove();
+      document.removeEventListener('pointerdown', onDocDown, true);
+    };
+    setTimeout(() => document.addEventListener('pointerdown', onDocDown, true), 0);
+  }
+
+  async function deleteChatForMe(key) {
+    const ok = await confirmModal({
+      title: 'Удалить чат?',
+      text: 'Переписка исчезнет только у вас — у собеседников она останется. Чат вернётся в список, когда в нём появится новое сообщение.',
+      confirmLabel: 'Удалить',
+    });
+    if (!ok || !currentUser) return;
+    // отметка не раньше последнего сообщения — даже если часы устройства отстают от сервера
+    setChatPref(key, { clearedAt: Math.max(Date.now(), msgTs(chatLast.get(key)) + 1) });
+    chatLast.delete(key);
+    chatUnread.delete(key);
+    chatHistoryCache.set(key, []);
+    KV.set(`chat:${currentUser.id}:${key}`, []);
+    paintChatsList();
+    await pushChatPref(key);
+  }
+
+  /* Свайп строки чата влево открывает кнопки, вправо — прячет; открыта может быть одна строка.
+     Мышью: потянуть строку влево или нажать правой кнопкой. */
+  function closeChatSwipes(except = null) {
+    winBody.querySelectorAll('.chat-swipe.revealed').forEach((el) => { if (el !== except) el.classList.remove('revealed'); });
+  }
+
   // В скольких личных и групповых чатах есть непрочитанное
   function unreadChats() {
-    const has = (key) => (chatUnread.get(key) > 0 ? 1 : 0);
+    // чаты с выключенными уведомлениями в общий счётчик не идут — цифра остаётся только в их строке
+    const has = (key) => (chatUnread.get(key) > 0 && !isChatMuted(key) ? 1 : 0);
     let dm = 0, group = 0;
     if (currentUser) {
       for (const f of friends) dm += has('dm:' + f.id);
@@ -9326,6 +9459,7 @@
     };
     await Promise.all([
       loadMyChatReads(),   // что прочитано на других моих устройствах — до подсчёта непрочитанного
+      loadChatPrefs(),     // выключенные уведомления и удалённые у себя чаты
       load('match', normMatchRow, ms.length && (() => supabaseClient.from('match_messages').select('*').in('match_id', ms.map((m) => Number(m.id))))),
       load('dm', normDmRow, () => supabaseClient.from('dm_messages').select('*').or(`from_id.eq.${myId},to_id.eq.${myId}`)),
       load('group', normGroupRow, gs.length && (() => supabaseClient.from('group_messages').select('*').in('group_id', gs.map((g) => g.id)))),
@@ -9333,6 +9467,7 @@
     if (seq !== chatSummarySeq || !currentUser || currentUser.id !== myId) return false;
     for (const m of got) {
       const key = msgChatKey(m);
+      if (msgTs(m) <= chatClearedAt(key)) continue;   // чат удалён у меня — старые сообщения не в счёт
       if (!last.has(key)) last.set(key, m);
       if (isUnreadMsg(m, key)) unread.set(key, (unread.get(key) || 0) + 1);
     }
@@ -9379,16 +9514,26 @@
     };
     const rowHtml = ({ key, attr, avatar, name, fallback, withAuthor }) => {
       const last = chatLast.get(key), n = chatUnread.get(key) || 0;
+      // удалённый у себя чат не показываем, пока в нём не появится новое сообщение
+      if (!last && chatClearedAt(key)) return '';
+      const muted = isChatMuted(key), k = escapeHtml(key);
+      // строка сдвигается свайпом влево и открывает кнопки «Уведомления» и «Удалить»
       return `
-      <div class="chat-row ${n ? 'has-unread' : ''}" ${attr} role="button" tabindex="0">
-        ${avatar}
-        <div class="chat-main">
-          <div class="chat-name">${escapeHtml(name)}</div>
-          <div class="chat-last">${escapeHtml(previewOf(last, fallback, withAuthor))}</div>
+      <div class="chat-swipe">
+        <div class="chat-swipe-actions">
+          <button class="group-action-btn settings" type="button" data-chat-mute="${k}" aria-label="Уведомления чата" title="Уведомления">${muted ? ICON_BELL_OFF : ICON_BELL}</button>
+          <button class="group-action-btn danger" type="button" data-chat-delete="${k}" aria-label="Удалить чат" title="Удалить чат">${ICON_TRASH}</button>
         </div>
-        <div class="chat-side">
-          ${last ? `<span class="chat-time">${escapeHtml(fmtTime(last.createdAt))}</span>` : ''}
-          ${n ? `<span class="unread-pill" aria-label="Непрочитанных: ${n}">${n > 99 ? '99+' : n}</span>` : ''}
+        <div class="chat-row ${n ? 'has-unread' : ''} ${muted ? 'is-muted' : ''}" ${attr} role="button" tabindex="0">
+          ${avatar}
+          <div class="chat-main">
+            <div class="chat-name">${escapeHtml(name)}${muted ? `<span class="chat-muted" title="Уведомления выключены">${ICON_BELL_OFF}</span>` : ''}</div>
+            <div class="chat-last">${escapeHtml(previewOf(last, fallback, withAuthor))}</div>
+          </div>
+          <div class="chat-side">
+            ${last ? `<span class="chat-time">${escapeHtml(fmtTime(last.createdAt))}</span>` : ''}
+            ${n ? `<span class="unread-pill" aria-label="Непрочитанных: ${n}">${n > 99 ? '99+' : n}</span>` : ''}
+          </div>
         </div>
       </div>`;
     };
@@ -9425,7 +9570,7 @@
       }
     }
     // свежие диалоги сверху
-    const pane = (id, items, empty) => `<div class="chats-pane" data-pane="${id}">${
+    const pane = (id, all, empty, items = all.filter((x) => x.html)) => `<div class="chats-pane" data-pane="${id}">${
       items.length ? items.sort((a, b) => b.ts - a.ts).map((x) => x.html).join('') : `<div class="empty-msg">${empty}</div>`}</div>`;
     return pane('dm', dms, 'Пока нет личных чатов.<br>Добавьте друзей — и переписка появится здесь.')
       + pane('group', grs, 'Пока нет групповых чатов.<br>Создайте группу или вступите в неё.');
@@ -9631,8 +9776,9 @@
     // последние CHAT_KEEP сообщений: берём с конца и разворачиваем — столько же хранится на устройстве
     const { data, error } = await q.order('created_at', { ascending: false }).limit(CHAT_KEEP);
     if (error) { console.warn('[chat] load:', error.message); return null; }
+    const cleared = chatClearedAt(chatKey(c));
     return (data || []).reverse().map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow)
-      .filter((m) => !isHiddenMsg(c.type, m.id));
+      .filter((m) => !isHiddenMsg(c.type, m.id) && msgTs(m) > cleared);
   }
 
   function fmtDuration(sec) {
@@ -10904,7 +11050,8 @@
       if (Array.isArray(cached)) chatHistoryCache.set(key, cached); else cached = null;
     }
     if (cached) {
-      c.messages = cached.filter((m) => !isHiddenMsg(c.type, m.id));
+      const cleared = chatClearedAt(key);
+      c.messages = cached.filter((m) => !isHiddenMsg(c.type, m.id) && msgTs(m) > cleared);
       await warmChatMedia(c.messages, 40, 120);
       if (chat !== c) return;
     } else c.loading = true;   // переписки на устройстве нет — экран открывается сразу, лента подставится следом
@@ -12623,6 +12770,13 @@
     if (voicePlay) { toggleVoice(voicePlay.closest('[data-voice]')); return; }
     const voiceSeek = e.target.closest('[data-voice-seek]');
     if (voiceSeek) { seekVoice(voiceSeek.closest('[data-voice]'), e.clientX); return; }
+    // ── список чатов: кнопки под свайпом строки ──
+    const chatMuteSet = e.target.closest('[data-mute-set]');
+    if (chatMuteSet) { closePostMenus(); closeChatSwipes(); await setChatMute(chatMuteSet.dataset.muteKey, chatMuteSet.dataset.muteSet); return; }
+    const chatMuteBtn = e.target.closest('[data-chat-mute]');
+    if (chatMuteBtn) { openChatMuteMenu(chatMuteBtn.dataset.chatMute, chatMuteBtn); return; }
+    const chatDelBtn = e.target.closest('[data-chat-delete]');
+    if (chatDelBtn) { closeChatSwipes(); await deleteChatForMe(chatDelBtn.dataset.chatDelete); return; }
     const chatsTabBtn = e.target.closest('[data-chats-tab]');
     if (chatsTabBtn) { setChatsTab(chatsTabBtn.dataset.chatsTab); return; }
     const groupChatBtn = e.target.closest('[data-open-group-chat]');
@@ -13058,6 +13212,46 @@
       setChatReply(id);
     }
   }, { passive: false });
+
+  /* ── Список чатов: свайп строки влево открывает «Уведомления» и «Удалить», вправо — прячет ── */
+  let chatRowSwipe = null, chatRowSwipedAt = 0;
+  winBody.addEventListener('pointerdown', (e) => {
+    chatRowSwipe = null;
+    const row = e.target.closest && e.target.closest('#chats-list .chat-row');
+    const wrap = row ? row.parentElement : (e.target.closest && e.target.closest('.chat-swipe'));
+    if (!e.target.closest || !e.target.closest('.popover')) closeChatSwipes(wrap);   // нажали мимо — открытая строка закрывается
+    if (!row || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    chatRowSwipe = { wrap, x: e.clientX, y: e.clientY, horizontal: null };
+  });
+  addEventListener('pointermove', (e) => {
+    const s = chatRowSwipe;
+    if (!s) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (s.horizontal === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.horizontal = Math.abs(dx) > Math.abs(dy);
+      if (!s.horizontal) { chatRowSwipe = null; return; }   // это прокрутка списка
+    }
+    if (dx < -24) { s.wrap.classList.add('revealed'); chatRowSwipedAt = Date.now(); }
+    else if (dx > 24) { s.wrap.classList.remove('revealed'); chatRowSwipedAt = Date.now(); }
+  });
+  ['pointerup', 'pointercancel'].forEach((type) => addEventListener(type, () => { chatRowSwipe = null; }));
+  winBody.addEventListener('contextmenu', (e) => {
+    const row = e.target.closest && e.target.closest('#chats-list .chat-row');
+    if (!row) return;
+    e.preventDefault();
+    row.parentElement.classList.toggle('revealed');
+    chatRowSwipedAt = Date.now();
+  });
+  // после свайпа отпускание — не нажатие; нажатие по сдвинутой строке только закрывает её
+  winBody.addEventListener('click', (e) => {
+    const row = e.target.closest && e.target.closest('#chats-list .chat-row');
+    if (!row) return;
+    const open = row.parentElement.classList.contains('revealed');
+    if (!open && Date.now() - chatRowSwipedAt > 450) return;
+    e.preventDefault(); e.stopPropagation();
+    if (open && Date.now() - chatRowSwipedAt > 450) row.parentElement.classList.remove('revealed');
+  }, true);
 
   // На погружении — раньше остальных обработчиков: в режиме выбора нажатие не открывает фото и файлы
   winBody.addEventListener('click', (e) => {
