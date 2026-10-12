@@ -3177,9 +3177,11 @@
     .chat-date span {
       display: block; padding: 4px 11px; border-radius: 999px;
       background: var(--glass); border: 1px solid var(--glass-edge);
-      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
       color: var(--ink-soft); font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
     }
+    /* размытие под плашкой нужно только плавающей — она лежит поверх сообщений; у плашек в ленте под ними
+       ровный фон окна, а размытие на каждой из них заметно тормозит прокрутку на ноутбуках */
+    .chat-date-float span { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
     /* Плавающая дата у верха ленты: видна, пока листают; её выталкивает плашка следующего дня */
     .chat-date-float { position: absolute; left: 50%; top: 0; z-index: 2; margin: 0; transform: translateX(-50%); opacity: 0; transition: opacity .2s ease; }
     .chat-date-float.is-on { opacity: 1; }
@@ -3210,6 +3212,68 @@
     .fwd-list { list-style: none; margin: 4px -8px 14px; padding: 0; max-height: min(46vh, 320px); overflow: auto; }
     .fwd-list .person-card { padding: 8px 10px; cursor: pointer; }
     .del-actions { flex-wrap: wrap; }
+    /* Меню сообщения, как в Telegram: сверху ряд реакций (стрелка раскрывает все), под ним — короткий список действий,
+       остальное — в «Ещё» */
+    .popover.msg-ctx {
+      display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; width: max-content; max-width: calc(100% - 16px);
+      padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+    }
+    .msg-ctx > .msg-reacts, .msg-ctx > .msg-menu-list {
+      border-radius: 18px; background: var(--win); border: 1px solid var(--win-line);
+      box-shadow: 0 24px 50px -16px rgba(0, 0, 0, .35), inset 0 1px 0 var(--rim, transparent);
+    }
+    .msg-menu-list { padding: 6px; min-width: 200px; align-self: flex-start; }
+    .msg-reacts { padding: 4px; align-self: flex-start; }
+    .msg-reacts-row { display: flex; align-items: center; gap: 2px; }
+    .msg-reacts-all { display: grid; grid-template-columns: repeat(7, 38px); gap: 2px; max-height: 196px; overflow-y: auto; overscroll-behavior: contain; }
+    .msg-react-opt, .msg-react-more {
+      width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer;
+      display: grid; place-items: center; font-size: 23px; line-height: 1; color: var(--ink);
+      transition: transform .3s var(--spring, ease), background .15s;
+    }
+    .msg-react-opt:hover, .msg-react-more:hover { background: var(--row-hover); }
+    .msg-react-opt:hover { transform: scale(1.18); }
+    .msg-react-opt:active { transform: scale(.9); }
+    .msg-react-opt.is-on { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--ink); }
+    .msg-react-more { width: 32px; height: 32px; margin-left: 2px; background: var(--field); }
+    .msg-react-more svg { width: 18px; height: 18px; transition: transform .25s var(--ease, ease); }
+    .msg-react-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+    .msg-menu-list .pop-chev { margin-left: auto; font-size: 18px; line-height: 1; opacity: .55; }
+    .msg-menu-list .pop-back { color: var(--ink-soft); }
+    .msg-menu-list .pop-back .pop-chev { margin: 0 2px 0 0; }
+    /* Реакции под сообщением: нажатие на свою снимает её, на чужую — ставит такую же */
+    .chat-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .chat-msg.has-media .chat-reacts { margin: 6px 4px 0; }
+    .chat-msg.is-circle .chat-reacts { margin-top: 4px; }
+    .chat-react {
+      display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px;
+      border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 15px; line-height: 1;
+      background: var(--field); color: inherit; box-shadow: inset 0 0 0 1px var(--win-line);
+      transition: transform .3s var(--spring, ease), background .2s;
+    }
+    .chat-react b { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .chat-react.is-mine { background: var(--act); color: var(--act-ink); box-shadow: none; }
+    .chat-msg.me .chat-react { background: var(--me-card); box-shadow: none; }
+    .chat-msg.me .chat-react.is-mine { background: var(--act-ink); color: var(--act); }
+    .chat-react:active { transform: scale(.88); }
+    .chat-react.is-pop { animation: react-pop .5s var(--spring, ease); }
+    @keyframes react-pop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } }
+    .chat-edited { opacity: .8; font-style: italic; }
+    /* Редактирование: плашка над полем ввода, кнопка отправки — галочка */
+    .chat-reply-bar.is-edit .chat-pin-cap { color: var(--you); }
+
+    /* ── Экранная клавиатура на телефонах (см. syncKeyboard): окно ужимается до видимой над клавиатурой части,
+       панель вкладок и кнопка «моё место» на это время прячутся ── */
+    html.kb-open .window {
+      top: calc(var(--kb-top, 0px) + max(8px, env(safe-area-inset-top, 0px)));
+      bottom: calc(100% - var(--kb-top, 0px) - var(--kb-h, 100%) + 8px);
+      height: auto; max-height: 680px;
+    }
+    html.kb-open .dock-wrap, html.kb-open .geo-btn { visibility: hidden; }
+    /* iPhone увеличивает страницу, если шрифт поля меньше 16px, — и после этого кнопка «Отправить» уезжает за край */
+    @media (pointer: coarse) {
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select { font-size: max(16px, 1em); }
+    }
 
     /* ── Кнопка «моё место» — в правом нижнем углу, на одной линии с панелью вкладок ── */
     .geo-btn { right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
@@ -9527,6 +9591,16 @@
     paintChatsList();
   }
 
+  // Время последнего сообщения в списке чатов: сегодня — часы и минуты, раньше — дата (12.10), в прошлые годы — с годом (12.10.25)
+  function fmtChatListTime(iso) {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) return '';
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return fmtTime(iso);
+    return d.toLocaleDateString('ru-RU', d.getFullYear() === now.getFullYear()
+      ? { day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }
+
   function chatsListHtml() {
     const gs = myGroups(), ms = myAcceptedMatches();
     const myId = currentUser && currentUser.id;
@@ -9556,7 +9630,7 @@
             <div class="chat-last">${escapeHtml(previewOf(last, fallback, withAuthor))}</div>
           </div>
           <div class="chat-side">
-            ${last ? `<span class="chat-time">${escapeHtml(fmtTime(last.createdAt))}</span>` : ''}
+            ${last ? `<span class="chat-time">${escapeHtml(fmtChatListTime(last.createdAt))}</span>` : ''}
             ${n ? `<span class="unread-pill" aria-label="Непрочитанных: ${n}">${n > 99 ? '99+' : n}</span>` : ''}
           </div>
         </div>
@@ -9752,6 +9826,7 @@
   const ICON_MIC = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>`;
   const ICON_CIRCLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16z"/><path fill="currentColor" d="M8 9.5h5.5a1 1 0 0 1 1 1v.7l2-1.2v4l-2-1.2v.7a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/></svg>`;
   const ICON_SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6V10l12.6 2-12.6 2z"/></svg>`;
+  const ICON_CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
 
   // Открытый чат: { type: 'dm' | 'group', peerId, groupId, headTitle, winTitle, messages: [] }
   let chat = null;
@@ -9760,21 +9835,32 @@
     if (!v || typeof v !== 'object' || v.id == null) return null;
     return { id: String(v.id), name: String(v.name || ''), text: String(v.text || '') };
   }
+  /* Реакции хранятся в колонке reactions (supabase_chat_reactions.sql): { id пользователя: эмодзи } —
+     у каждого одна реакция на сообщение, как в Telegram. Пусто — null */
+  function normReactions(v) {
+    if (!v || typeof v !== 'object') return null;
+    const out = {};
+    for (const [uid, emoji] of Object.entries(v)) if (typeof emoji === 'string' && emoji) out[uid] = emoji;
+    return Object.keys(out).length ? out : null;
+  }
   function normDmRow(r) {
     return { id: r.id, fromId: r.from_id, toId: r.to_id, groupId: null, matchId: null, authorName: null,
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply) };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply),
+      reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
   function normGroupRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: r.group_id, matchId: null, authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply) };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply),
+      reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
   // Совместный чат двух групп после match
   function normMatchRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: null, matchId: String(r.match_id), authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply) };
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply),
+      reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
 
   function chatPreviewText(m) {
@@ -9910,10 +9996,121 @@
       : escapeHtml(m.content);
     // у своих сообщений в личном чате — место под «Прочитано» (его расставляет syncChatReadMarks)
     const ticks = mine && !m.pending && chat && chat.type === 'dm';
-    const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + fmtTime(m.createdAt) + (ticks ? '<span class="chat-ticks" aria-hidden="true"></span>' : '');
+    const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '')
+      + fmtTime(m.createdAt) + (ticks ? '<span class="chat-ticks" aria-hidden="true"></span>' : '');
     // цитата сообщения, на которое ответили: нажатие перематывает ленту к нему
     const quote = m.reply ? `<div class="chat-reply" data-reply-to="${escapeHtml(m.reply.id)}" role="button"><b>${escapeHtml(m.reply.name || 'Сообщение')}</b><span>${escapeHtml(m.reply.text || 'Сообщение')}</span></div>` : '';
-    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${ticks ? `data-ts="${msgTs(m)}"` : ''}>${author}${quote}${body}<span class="chat-msg-time">${time}</span></div>`;
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${ticks ? `data-ts="${msgTs(m)}"` : ''}>${author}${quote}${body}${chatReactsHtml(m)}<span class="chat-msg-time">${time}</span></div>`;
+  }
+
+  /* ── Реакции ──
+     Долгое нажатие (правая кнопка мыши) — ряд эмодзи над меню, двойное нажатие на сообщение — QUICK_REACTION.
+     Нажатие на плашку под сообщением: своя реакция снимается, чужая — ставится такая же. */
+  const QUICK_REACTION = '❤️';
+  const REACTS_TOP = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+  const REACTS_MORE = ['👎', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '🎉', '🤩', '🙏', '👌', '🕊', '🤡', '🥱', '🥴', '😍', '🐳',
+    '❤️‍🔥', '🌚', '💯', '🤣', '⚡', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻', '👀',
+    '🎃', '🙈', '😇', '😨', '🤝', '✍️', '🤗', '🫡', '🎅', '🎄', '☃️', '💅', '🤪', '🗿', '🆒', '💘', '🙉', '🦄', '😘', '💊',
+    '🙊', '😎', '👾', '🤷', '😡'];
+  const myReaction = (m) => (m && m.reactions && currentUser ? m.reactions[String(currentUser.id)] || null : null);
+  const reactKey = (m) => (m && m.reactions ? Object.entries(m.reactions).sort().join(',') : '');
+  function chatReactsHtml(m, pop = '') {
+    if (!m.reactions || m.pending) return '';
+    const groups = new Map();   // эмодзи → кто поставил
+    for (const [uid, emoji] of Object.entries(m.reactions)) {
+      if (!groups.has(emoji)) groups.set(emoji, []);
+      groups.get(emoji).push(uid);
+    }
+    const mine = myReaction(m), myId = currentUser ? String(currentUser.id) : '';
+    const name = (uid) => (uid === myId ? 'Вы' : chatPersonById(uid).name);
+    return `<div class="chat-reacts">${[...groups].sort((a, b) => b[1].length - a[1].length).map(([emoji, users]) => `
+      <button type="button" class="chat-react ${emoji === mine ? 'is-mine' : ''} ${emoji === pop ? 'is-pop' : ''}" data-react-chip="${escapeHtml(emoji)}"
+        title="${escapeHtml(users.map(name).join(', '))}" aria-label="${escapeHtml(emoji)}: ${users.length}">${escapeHtml(emoji)}${users.length > 1 ? `<b>${users.length}</b>` : ''}</button>`).join('')}</div>`;
+  }
+  // Перерисовать только плашки реакций — сообщение с фото или кружком не пересоздаётся
+  function paintChatReacts(m, pop = '') {
+    const el = chatBubbleEl(m.id);
+    if (!el) return;
+    const old = el.querySelector(':scope > .chat-reacts');
+    if (old) old.remove();
+    const html = chatReactsHtml(m, pop);
+    if (html) el.querySelector(':scope > .chat-msg-time').insertAdjacentHTML('beforebegin', html);
+  }
+  const reactSqlHint = (error) => /function|schema cache|could not find|reactions|edited_at/i.test(error.message || '')
+    ? '\n\nВыполните supabase_chat_reactions.sql в Supabase.' : '';
+  async function toggleChatReaction(id, emoji) {
+    const c = chat, m = chatMsgById(id);
+    if (!c || !m || m.pending || !currentUser || !emoji) return;
+    const uid = String(currentUser.id), before = m.reactions;
+    const next = { ...(m.reactions || {}) };
+    const adding = next[uid] !== emoji;
+    if (adding) next[uid] = emoji; else delete next[uid];
+    m.reactions = normReactions(next);
+    if (navigator.vibrate && adding) { try { navigator.vibrate(8); } catch {} }
+    paintChatReacts(m, adding ? emoji : '');   // сразу на экране, сервер — в фоне
+    saveChatCache(c);
+    const { data, error } = await supabaseClient.rpc('react_chat_message', { chat_kind: c.type, msg_id: String(m.id), emoji });
+    if (error) {
+      console.warn('[chat react]', error.message);
+      m.reactions = before;
+      if (chat === c) paintChatReacts(m);
+      saveChatCache(c);
+      alert('Не удалось поставить реакцию: ' + error.message + reactSqlHint(error));
+      return;
+    }
+    // ответ сервера — реакции всех участников на этот момент
+    const fresh = normReactions(data);
+    if (reactKey({ reactions: fresh }) !== reactKey(m)) {
+      m.reactions = fresh;
+      if (chat === c) paintChatReacts(m);
+      saveChatCache(c);
+    }
+  }
+
+  /* ── Редактирование своего сообщения: текст или подпись к фото, видео, файлу ── */
+  const canEditMsg = (m) => isMyMsg(m) && !m.pending && ['text', 'image', 'video', 'file'].includes(m.kind || 'text');
+  function setChatEdit(id) {
+    const c = chat;
+    if (!c) return;
+    const m = id == null ? null : chatMsgById(id);
+    if (m && !canEditMsg(m)) return;
+    const input = winBody.querySelector('#chat-text');
+    if (m) {
+      if (!c.editing) c.draft = input ? input.value : '';   // начатое сообщение вернётся в поле после правки
+      c.replyTo = null;
+      c.editing = m;
+      if (input) {
+        input.value = m.content || '';
+        input.focus({ preventScroll: true });
+        try { input.setSelectionRange(input.value.length, input.value.length); } catch {}
+      }
+    } else if (c.editing) {
+      c.editing = null;
+      if (input) input.value = c.draft || '';
+      c.draft = '';
+    }
+    syncChatReplyBar();
+  }
+  async function editChatMessage(m, text) {
+    const c = chat;
+    if (!c || !m || text === m.content) return;
+    const prev = { content: m.content, editedAt: m.editedAt || null };
+    const apply = (fields) => {
+      Object.assign(m, fields);
+      if (chat === c) replaceChatBubble(m.id, m);
+      saveChatCache(c);
+      const key = chatKey(c), last = chatLast.get(key);
+      if (last && String(last.id) === String(m.id)) { chatLast.set(key, { ...last, ...fields }); paintChatsList(); }
+    };
+    apply({ content: text, editedAt: new Date().toISOString() });   // сразу на экране, сервер — в фоне
+    const { data, error } = await supabaseClient.rpc('edit_chat_message', { chat_kind: c.type, msg_id: String(m.id), new_content: text });
+    if (error) {
+      console.warn('[chat edit]', error.message);
+      apply(prev);
+      alert('Не удалось изменить сообщение: ' + error.message + reactSqlHint(error));
+      return;
+    }
+    if (data) { m.editedAt = data; saveChatCache(c); }
   }
 
   /* ── Даты в ленте чата ──
@@ -9966,6 +10163,9 @@
     const release = () => { if (held) held.classList.remove('is-floating'); held = null; };
     const hide = () => { fl.classList.remove('is-on'); release(); };
     body.addEventListener('scroll', () => {
+      // ленту вернул вниз скрипт (догрузилось фото, пришло сообщение), а не человек листает — дату не показываем
+      if (body.autoTop != null && Math.abs(body.scrollTop - body.autoTop) < 2) { clearTimeout(timer); hide(); return; }
+      body.autoTop = null;
       const top = body.getBoundingClientRect().top;
       let cur = null, next = null;
       for (const sep of body.querySelectorAll(':scope > .chat-date')) {
@@ -10110,15 +10310,32 @@
     }, { passive: true });
     syncChatDates(body);
     initChatFloatDate(body);
+    /* Лента внизу, пока высота чего-то меняется: догрузилось фото, появилась плашка закреплённого,
+       выехала клавиатура. ResizeObserver срабатывает до отрисовки кадра — лента не дёргается,
+       как было, когда её возвращали вниз уже после того, как кадр показан */
+    const keepBottom = window.ResizeObserver ? new ResizeObserver(() => { if (chat && chat.stick) scrollChatToBottom(); }) : null;
+    const watchSizes = () => {
+      if (!keepBottom) return;
+      keepBottom.observe(body);
+      for (const el of body.children) if (!el.dataset.sized) { el.dataset.sized = '1'; keepBottom.observe(el); }
+    };
     // лента меняется из многих мест (новое сообщение, удаление, перерисовка) — плашки дат следуют за ней
-    new MutationObserver(() => { syncChatDates(body); syncChatReadMarks(); }).observe(body, { childList: true });
+    new MutationObserver(() => { syncChatDates(body); syncChatReadMarks(); watchSizes(); }).observe(body, { childList: true });
+    watchSizes();
     syncChatReadMarks();
     hydrateChatMedia(body);
     scrollChatToBottom();
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
+    // нажатие «Отправить» не забирает фокус у поля — на телефоне клавиатура не прячется после каждого сообщения
+    winBody.querySelector('#chat-composer .support-chat-send').addEventListener('mousedown', (e) => {
+      if (document.activeElement === winBody.querySelector('#chat-text')) e.preventDefault();
+    });
     winBody.querySelector('#chat-file').addEventListener('change', onChatFilesPicked);
     const c = chat;
     winBody.querySelector('#chat-text').addEventListener('input', () => sendTyping(c, typingNowKind(c)));
+    winBody.querySelector('#chat-text').addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && (c.editing || c.replyTo)) { e.preventDefault(); if (c.editing) setChatEdit(null); else setChatReply(null); }
+    });
     if (chat.type === 'match') refreshMatchVotePanel();
     syncChatPinBar();
     syncChatSelectionUi();
@@ -10137,23 +10354,34 @@
   function setChatReply(id) {
     const m = id == null ? null : chatMsgById(id);
     if (!chat || (m && m.pending)) return;
+    if (m && chat.editing) setChatEdit(null);   // ответ и правка вместе не бывают
     chat.replyTo = m || null;
     syncChatReplyBar();
     if (m) { const input = winBody.querySelector('#chat-text'); if (input) input.focus({ preventScroll: true }); }
   }
+  // Плашка над полем ввода: «Ответ · …» или «Редактирование»; кнопка отправки при правке — галочка
   function syncChatReplyBar() {
     const el = winBody.querySelector('#chat-reply-bar');
     if (!el || !chat) return;
-    // сообщение, на которое отвечали, успели удалить
+    // сообщение, на которое отвечали или которое правили, успели удалить
     if (chat.replyTo && !chat.messages.includes(chat.replyTo)) chat.replyTo = null;
-    const m = chat.replyTo;
+    if (chat.editing && !chat.messages.includes(chat.editing)) setChatEdit(null);
+    const edit = chat.editing, m = edit || chat.replyTo;
     el.hidden = !m;
+    el.classList.toggle('is-edit', !!edit);
     el.innerHTML = m ? `
       <div class="chat-pin-main">
-        <span class="chat-pin-cap">Ответ · ${escapeHtml(msgAuthorName(m))}</span>
+        <span class="chat-pin-cap">${edit ? 'Редактирование' : 'Ответ · ' + escapeHtml(msgAuthorName(m))}</span>
         <span class="chat-pin-text">${escapeHtml(chatPreviewText(m) || 'Сообщение')}</span>
       </div>
-      <button type="button" class="chat-pin-x" data-reply-cancel aria-label="Не отвечать" title="Не отвечать">×</button>` : '';
+      ${edit ? '<button type="button" class="chat-pin-x" data-edit-cancel aria-label="Отменить правку" title="Отменить правку">×</button>'
+        : '<button type="button" class="chat-pin-x" data-reply-cancel aria-label="Не отвечать" title="Не отвечать">×</button>'}` : '';
+    const send = winBody.querySelector('#chat-composer .support-chat-send');
+    if (send && send.dataset.mode !== (edit ? 'edit' : 'send')) {
+      send.dataset.mode = edit ? 'edit' : 'send';
+      send.innerHTML = edit ? ICON_CHECK : ICON_SEND;
+      send.setAttribute('aria-label', edit ? 'Сохранить' : 'Отправить');
+    }
     if (m && chat.stick) scrollChatToBottom();
   }
   function jumpToChatMessage(id) {
@@ -10237,7 +10465,9 @@
 
   function scrollChatToBottom() {
     const body = winBody.querySelector('#chat-view-body');
-    if (body) body.scrollTop = body.scrollHeight;
+    if (!body) return;
+    body.scrollTop = body.scrollHeight;
+    body.autoTop = body.scrollTop;   // эту прокрутку сделал скрипт — плавающая дата на неё не показывается
   }
 
   function chatBubbleEl(id) {
@@ -10423,6 +10653,14 @@
     const input = winBody.querySelector('#chat-text');
     if (!input) return;
     const text = input.value.trim();
+    const edit = chat && chat.editing;
+    if (edit) {
+      // у текста пустым он быть не может (для этого есть «Удалить»), у фото и файла подпись можно стереть
+      if (!text && (edit.kind || 'text') === 'text') return;
+      setChatEdit(null);
+      editChatMessage(edit, text);
+      return;
+    }
     if (!text) return;
     input.value = '';
     sendTyping(chat, typingNowKind(chat));
@@ -10741,6 +10979,12 @@
   }
 
   function chatMsgById(id) { return chat ? chat.messages.find((x) => String(x.id) === String(id)) || null : null; }
+  // Ленту подменили свежей с сервера: «отвечаем на» и «правим» переводим на новые копии тех же сообщений
+  function relinkChatRefs(c) {
+    for (const k of ['replyTo', 'editing']) {
+      if (c[k] && !c.messages.includes(c[k])) c[k] = c.messages.find((m) => String(m.id) === String(c[k].id)) || c[k];
+    }
+  }
   function isMyMsg(m) { return !!m && !!currentUser && String(m.fromId) === String(currentUser.id); }
   const chatSqlHint = (error) => /function|schema cache|could not find|pinned/i.test(error.message || '')
     ? '\n\nВыполните supabase_chat_actions.sql в Supabase.' : '';
@@ -10770,15 +11014,31 @@
     if (kind === 'dm' && r.from_id !== currentUser.id && r.to_id !== currentUser.id) return;
     const m = norm(r);
     if (payload.eventType !== 'UPDATE') { onIncomingChatRow(m); return; }
+    // сообщение отредактировали — если оно последнее в чате, меняется и строка в списке чатов
+    const lastKey = msgChatKey(m), last = chatLast.get(lastKey);
+    if (last && String(last.id) === String(m.id) && last.content !== m.content) { chatLast.set(lastKey, m); paintChatsList(); }
     const c = chat;
     if (!c || c.type !== kind) return;
     const idx = c.messages.findIndex((x) => String(x.id) === String(m.id));
     if (idx === -1) return;
     const old = c.messages[idx];
-    if (old.pinned === m.pinned && old.content === m.content) return;
-    c.messages[idx] = { ...m, localUrl: old.localUrl };
+    const sameText = old.pinned === m.pinned && old.content === m.content && (old.editedAt || null) === m.editedAt;
+    const sameReacts = reactKey(old) === reactKey(m);
+    if (sameText && sameReacts) return;
+    // «отвечаем на» и «правим» указывают на сообщение — переводим их на его новую копию
+    const merged = { ...m, localUrl: old.localUrl };
+    if (c.editing === old) c.editing = merged;
+    if (c.replyTo === old) c.replyTo = merged;
+    c.messages[idx] = merged;
+    if (sameText) {
+      // поменялись только реакции — перерисовываем одни плашки, кружок и фото не пересоздаются
+      const added = Object.entries(m.reactions || {}).find(([uid, e]) => !old.reactions || old.reactions[uid] !== e);
+      paintChatReacts(merged, added ? added[1] : '');
+      saveChatCache(c);
+      return;
+    }
     c.pinIdx = null;
-    replaceChatBubble(m.id, c.messages[idx]);
+    replaceChatBubble(m.id, merged);
     syncChatPinBar();
     saveChatCache(c);
   }
@@ -10796,6 +11056,7 @@
     if (body && !c.messages.length) body.innerHTML = `<div class="empty-msg">Начните диалог.</div>`;
     syncChatPinBar();
     syncChatSelectionUi();
+    if (c.editing || c.replyTo) syncChatReplyBar();   // удалили то, что правили или на что отвечали
     saveChatCache(c);
   }
 
@@ -10873,28 +11134,63 @@
     if (del) del.disabled = !chat.selected.size;
   }
 
-  // Меню сообщения — по долгому нажатию или правой кнопке мыши
+  /* Меню сообщения — по долгому нажатию или правой кнопке мыши. Сверху ряд реакций (стрелка раскрывает все),
+     под ним главное: «Ответить», «Редактировать», «Переслать», «Удалить»; остальное — в «Ещё» */
+  const ICON_CHEV_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9.5 6 6 6-6"/></svg>';
   function openMsgMenu(id, x, y) {
     const m = chatMsgById(id);
     if (!m || m.pending) return;
     closePostMenus();
     const pop = document.createElement('div');
-    pop.className = 'popover msg-menu';
+    pop.className = 'popover msg-menu msg-ctx';
+    const mid = escapeHtml(m.id);
     const item = (act, label, danger = false) =>
-      `<button class="pop-item ${danger ? 'danger' : ''}" type="button" data-msg-act="${act}" data-msg-id="${escapeHtml(m.id)}">${label}</button>`;
+      `<button class="pop-item ${danger ? 'danger' : ''}" type="button" data-msg-act="${act}" data-msg-id="${mid}">${label}</button>`;
+    const mine = myReaction(m);
+    const emo = (e) => `<button type="button" class="msg-react-opt ${e === mine ? 'is-on' : ''}" data-msg-act="react" data-emoji="${escapeHtml(e)}" data-msg-id="${mid}" aria-label="Реакция ${escapeHtml(e)}">${escapeHtml(e)}</button>`;
     // своё сообщение в групповом чате: кто его прочитал — «Sasha + 3», по нажатию весь список
     const readers = isMyMsg(m) && chat.type !== 'dm' && chatReadsReady && !chatReadsMissing ? item('readers', readersLabel(chatReaders(m))) : '';
-    pop.innerHTML = item('reply', 'Ответить') + readers + item('pin', m.pinned ? 'Открепить' : 'Закрепить')
-      + ((m.content || '').trim() ? item('copy', 'Копировать текст') : '')
+    const main = item('reply', 'Ответить')
+      + (canEditMsg(m) ? item('edit', 'Редактировать') : '')
       + item('forward', 'Переслать')
-      + item('select', 'Выбрать')
+      + '<button class="pop-item" type="button" data-msg-page="more">Ещё<span class="pop-chev" aria-hidden="true">›</span></button>'
       + item('delete', 'Удалить', true);
+    const more = '<button class="pop-item pop-back" type="button" data-msg-page="main"><span class="pop-chev" aria-hidden="true">‹</span>Назад</button>'
+      + readers
+      + item('pin', m.pinned ? 'Открепить' : 'Закрепить')
+      + ((m.content || '').trim() ? item('copy', 'Копировать текст') : '')
+      + item('select', 'Выбрать');
+    pop.innerHTML = `
+      <div class="msg-reacts" role="group" aria-label="Реакции">
+        <div class="msg-reacts-row">${REACTS_TOP.map(emo).join('')}<button type="button" class="msg-react-more" data-react-expand aria-expanded="false" aria-label="Все реакции" title="Все реакции">${ICON_CHEV_DOWN}</button></div>
+        <div class="msg-reacts-all" hidden>${[...REACTS_TOP, ...REACTS_MORE].map(emo).join('')}</div>
+      </div>
+      <div class="msg-menu-list" data-page="main">${main}</div>
+      <div class="msg-menu-list" data-page="more" hidden>${more}</div>`;
     winBody.appendChild(pop);
-    const r = winBody.getBoundingClientRect();
-    const left = Math.max(8, Math.min(x - r.left, r.width - pop.offsetWidth - 8));
-    const top = Math.max(8, Math.min(y - r.top, r.height - pop.offsetHeight - 8));
-    pop.style.left = left + 'px';
-    pop.style.top = (top + winBody.scrollTop) + 'px';
+    // меню не вылезает за края окна; когда его содержимое меняется (раскрыли реакции, «Ещё»), место пересчитывается
+    const place = () => {
+      const r = winBody.getBoundingClientRect();
+      const left = Math.max(8, Math.min(x - r.left, r.width - pop.offsetWidth - 8));
+      const top = Math.max(8, Math.min(y - r.top, r.height - pop.offsetHeight - 8));
+      pop.style.left = left + 'px';
+      pop.style.top = (top + winBody.scrollTop) + 'px';
+    };
+    place();
+    pop.addEventListener('click', (ev) => {
+      const page = ev.target.closest('[data-msg-page]');
+      const expand = ev.target.closest('[data-react-expand]');
+      if (!page && !expand) return;   // реакции и пункты меню обрабатывает общий обработчик [data-msg-act]
+      ev.stopPropagation();
+      if (page) pop.querySelectorAll('.msg-menu-list').forEach((el) => { el.hidden = el.dataset.page !== page.dataset.msgPage; });
+      if (expand) {
+        const open = expand.getAttribute('aria-expanded') !== 'true';
+        expand.setAttribute('aria-expanded', String(open));
+        pop.querySelector('.msg-reacts-all').hidden = !open;
+        pop.querySelectorAll('.msg-reacts-row .msg-react-opt').forEach((el) => { el.hidden = open; });
+      }
+      place();
+    });
     const onDocDown = (ev) => {
       if (pop.contains(ev.target)) return;
       pop.remove();
@@ -11089,7 +11385,7 @@
   function typingNowKind(c) {
     if (chatRec && chatRec.chat === c) return chatRec.kind;
     if (c.uploads) return 'file';
-    const input = chat === c && winBody.querySelector('#chat-text');
+    const input = chat === c && !c.editing && winBody.querySelector('#chat-text');   // правка старого — не «печатает»
     return input && input.value.trim() ? 'text' : '';
   }
   // kind: text | voice | circle | file, '' — перестал. Одно и то же — не чаще раза в 3 с
@@ -11203,6 +11499,7 @@
         // то, что успели отправить или получить за время загрузки, остаётся в конце ленты
         const ids = new Set(fresh.map((m) => String(m.id)));
         c.messages = [...fresh, ...c.messages.filter((m) => m.pending || !ids.has(String(m.id)))];
+        relinkChatRefs(c);
         await warmChatMedia(c.messages, 40, 120);
         if (chat !== c) return;
       }
@@ -11218,22 +11515,34 @@
      Перерисовываем целиком, только если что-то удалили или изменили. */
   function mergeFreshHistory(c, fresh) {
     const id = (m) => String(m.id);
-    const sign = (list) => list.map((m) => m.id + (m.pinned ? '*' : '')).join(',');
+    const order = (list) => list.map(id).join(',');
+    // что могло измениться у сообщения, пока чат был закрыт: закрепление, правка текста, реакции
+    const ver = (m) => [m.pinned ? 1 : 0, m.content, m.editedAt || '', reactKey(m)].join('\u0001');
     const sending = c.messages.filter((m) => m.pending);
     const old = c.messages.filter((m) => !m.pending);
-    const freshIds = new Set(fresh.map(id)), oldIds = new Set(old.map(id));
-    const added = fresh.filter((m) => !oldIds.has(id(m)));
+    const freshIds = new Set(fresh.map(id)), oldById = new Map(old.map((m) => [id(m), m]));
+    const added = fresh.filter((m) => !oldById.has(id(m)));
     const gone = old.filter((m) => !freshIds.has(id(m)));
-    const same = sign(old.filter((m) => freshIds.has(id(m)))) === sign(fresh.filter((m) => oldIds.has(id(m))));
-    if (same && !added.length && !gone.length) return;
+    const same = order(old.filter((m) => freshIds.has(id(m)))) === order(fresh.filter((m) => oldById.has(id(m))));
+    const changed = fresh.filter((m) => oldById.has(id(m)) && ver(m) !== ver(oldById.get(id(m))));
+    if (same && !added.length && !gone.length && !changed.length) return;
     const body = winBody.querySelector('#chat-view-body');
     const firstFresh = msgTs(fresh[0]), lastOld = msgTs(old[old.length - 1]);
     // «пропавшие» старше загруженного окна — они не удалены, просто не попали в последние CHAT_KEEP
     const tailOnly = same && body && old.length && !sending.length
       && (fresh.length >= CHAT_KEEP ? gone.every((m) => msgTs(m) < firstFresh) : !gone.length)
       && added.every((m) => msgTs(m) >= lastOld);
-    if (!tailOnly) { c.messages = [...fresh, ...sending]; rerenderChatBody(); return; }
+    for (const m of fresh) { const o = oldById.get(id(m)); if (o && o.localUrl) m.localUrl = o.localUrl; }
+    if (!tailOnly) { c.messages = [...fresh, ...sending]; relinkChatRefs(c); rerenderChatBody(); return; }
     c.messages = [...gone, ...fresh];
+    relinkChatRefs(c);
+    // изменённые перерисовываем по одному — остальная лента не мигает и не грузит вложения заново
+    for (const m of changed) {
+      const o = oldById.get(id(m));
+      if (o.pinned === m.pinned && o.content === m.content && (o.editedAt || null) === m.editedAt) paintChatReacts(m);
+      else replaceChatBubble(m.id, m);
+    }
+    if (changed.length) { c.pinIdx = null; syncChatPinBar(); syncChatReplyBar(); }
     if (!added.length) return;
     body.insertAdjacentHTML('beforeend', added.map(chatBubbleHtml).join(''));
     hydrateChatMedia(body);
@@ -12853,6 +13162,8 @@
       const m = chatMsgById(id);
       if (!m) return;
       if (act === 'reply') setChatReply(id);
+      else if (act === 'react') toggleChatReaction(id, msgAct.dataset.emoji);
+      else if (act === 'edit') setChatEdit(id);
       else if (act === 'readers') openReadersModal(m);
       else if (act === 'pin') setChatMessagePinned(id, !m.pinned);
       else if (act === 'copy') { try { await navigator.clipboard.writeText(m.content || ''); } catch (err) { console.warn('[copy]', err); } }
@@ -12862,6 +13173,13 @@
       return;
     }
     if (e.target.closest('[data-reply-cancel]')) { setChatReply(null); return; }
+    if (e.target.closest('[data-edit-cancel]')) { setChatEdit(null); return; }
+    const reactChip = e.target.closest('[data-react-chip]');
+    if (reactChip) {
+      const bubble = reactChip.closest('.chat-msg[data-msg-id]');
+      if (bubble) toggleChatReaction(bubble.dataset.msgId, reactChip.dataset.reactChip);
+      return;
+    }
     const replyTo = e.target.closest('[data-reply-to]');
     if (replyTo) { jumpToChatMessage(replyTo.dataset.replyTo); return; }
     const pinOff = e.target.closest('[data-pin-off]');
@@ -13270,10 +13588,11 @@
       s.lock = true;
       clearTimeout(msgPressTimer); msgPressAt = null;
     }
-    if (e.cancelable) e.preventDefault();
+    // ленту по горизонтали браузер и так не двигает (у сообщения touch-action: pan-y), поэтому обработчик
+    // пассивный: прокрутка пальцем не ждёт скрипт и не подтормаживает
     s.dx = Math.max(0, Math.min(SWIPE_MAX, dx));
     swipePaint(s.el, s.dx);
-  }, { passive: false });
+  }, { passive: true });
   const endMsgSwipe = (fire) => {
     const s = msgSwipe;
     msgSwipe = null;
@@ -13321,7 +13640,9 @@
 
   /* ── тачпадом: два пальца влево по сообщению ──
      Тачпад присылает прокрутку (wheel): движение пальцев влево — положительный deltaX. Ответ включается сразу,
-     как только сообщение дотянули до отметки; остаток жеста и его инерция гасятся, пока прокрутка не стихнет. */
+     как только сообщение дотянули до отметки; остаток жеста и его инерция гасятся, пока прокрутка не стихнет.
+     Обработчик пассивный: иначе любая прокрутка ленты тачпадом ждёт скрипт и на ноутбуке подёргивается, пока
+     приложение занято (догружает чат, рисует карту). Уход «назад» по истории свайпом гасит overscroll-behavior. */
   let wheelSwipe = null;
   const endWheelSwipe = () => {
     const s = wheelSwipe;
@@ -13336,7 +13657,6 @@
       if (!el) return;
       s = wheelSwipe = { el, dx: 0, done: false, timer: 0 };
     }
-    e.preventDefault();   // жест наш: лента не дёргается, браузер не уходит «назад» по истории
     clearTimeout(s.timer);
     s.timer = setTimeout(endWheelSwipe, 180);
     if (s.done) return;
@@ -13349,7 +13669,7 @@
       setTimeout(() => swipeReset(s.el), 140);   // стрелка успевает показаться, и сообщение возвращается
       setChatReply(id);
     }
-  }, { passive: false });
+  }, { passive: true });
 
   /* ── Список чатов: свайп строки влево открывает «Уведомления» и «Удалить», вправо — прячет ── */
   let chatRowSwipe = null, chatRowSwipedAt = 0;
@@ -13400,6 +13720,22 @@
     e.preventDefault(); e.stopPropagation();
     toggleChatSelected(el.dataset.msgId);
   }, true);
+
+  /* Двойное нажатие на сообщение (пальцем или мышью) — реакция QUICK_REACTION, повторное двойное — снимает её.
+     По фото, видео, голосовому, файлу, цитате и плашкам реакций у нажатия своё действие — там не срабатывает */
+  let lastMsgTap = null;
+  winBody.addEventListener('click', (e) => {
+    const el = chatMsgAt(e.target);
+    if (!el || !chat || chat.selecting
+      || e.target.closest('img, video, audio, a, button, [data-voice], [data-circle], .chat-reply, .chat-reacts')) { lastMsgTap = null; return; }
+    const now = Date.now(), id = el.dataset.msgId, t = lastMsgTap;
+    if (t && t.id === id && now - t.at < 350 && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 30) {
+      lastMsgTap = null;
+      toggleChatReaction(id, QUICK_REACTION);
+      return;
+    }
+    lastMsgTap = { id, at: now, x: e.clientX, y: e.clientY };
+  });
 
   /* ═══════ DOCK ═══════ */
   dock.addEventListener('click', (e) => {
@@ -13592,6 +13928,48 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) relayoutApp(); });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', relayoutApp);
   if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', relayoutApp);
+
+  /* ── Экранная клавиатура на телефонах ──
+     Android (Chrome) при открытой клавиатуре не уменьшает страницу — она просто закрывает низ, вместе с полем ввода
+     чата. iPhone сдвигает всю страницу вверх, чтобы показать поле. Поэтому, пока клавиатура открыта, окно
+     приложения ставится ровно в видимую над ней часть экрана (visualViewport), а панель вкладок прячется.
+     Клавиатура «открыта», если в фокусе текстовое поле и видимая часть заметно ниже обычной высоты экрана. */
+  const kbHtml = document.documentElement;
+  let kbBase = { w: 0, h: 0 }, kbRaf = 0, kbOn = false;
+  const kbTouch = matchMedia('(pointer: coarse)');
+  const isTextField = (el) => !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable
+    || (el.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit|reset|file|color|image|hidden)$/i.test(el.type)));
+  function syncKeyboard() {
+    kbRaf = 0;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    // обычная высота экрана — наибольшая, что была при этой ширине (поворот экрана её сбрасывает)
+    if (Math.abs(innerWidth - kbBase.w) > 1) kbBase = { w: innerWidth, h: 0 };
+    kbBase.h = Math.max(kbBase.h, innerHeight, kbHtml.clientHeight);
+    // только сенсорные экраны: на ноутбуке окно браузера просто сделали ниже — это не клавиатура
+    const on = kbTouch.matches && isTextField(document.activeElement) && vv.scale < 1.05 && kbBase.h - vv.height > 120;
+    if (on) {
+      kbHtml.style.setProperty('--kb-top', Math.max(0, vv.offsetTop) + 'px');
+      kbHtml.style.setProperty('--kb-h', vv.height + 'px');
+    }
+    if (on === kbOn) return;
+    kbOn = on;
+    kbHtml.classList.toggle('kb-open', on);
+    if (!on) {
+      kbHtml.style.removeProperty('--kb-top');
+      kbHtml.style.removeProperty('--kb-h');
+      // iPhone иногда оставляет страницу сдвинутой после того, как клавиатура спряталась
+      if (window.scrollY || document.scrollingElement.scrollTop) window.scrollTo(0, 0);
+    }
+  }
+  const syncKeyboardSoon = () => { if (!kbRaf) kbRaf = requestAnimationFrame(syncKeyboard); };
+  if (window.visualViewport) {
+    visualViewport.addEventListener('resize', syncKeyboardSoon);
+    visualViewport.addEventListener('scroll', syncKeyboardSoon);
+    document.addEventListener('focusin', syncKeyboardSoon);
+    // фокус ушёл — клавиатура уезжает; проверяем ещё раз, когда она уже спряталась
+    document.addEventListener('focusout', () => { syncKeyboardSoon(); setTimeout(syncKeyboardSoon, 350); });
+  }
   if (window.ResizeObserver) new ResizeObserver(relayoutApp).observe(document.getElementById('map'));
 
   if ('serviceWorker' in navigator) {
