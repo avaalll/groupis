@@ -6,7 +6,7 @@
      качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v1.1.37';
+const VERSION = 'v1.1.38';
 const CACHE = `groupis-${VERSION}`;
 const STATIC_VERSION = 's2';
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
@@ -201,13 +201,53 @@ self.addEventListener('fetch', (event) => {
    Сервер (функция send-push в Supabase) присылает { title, body, tag, open, chat }.
    Если приложение открыто и на экране — уведомление не показываем: там всё уже видно.
    На iPhone показываем всегда: за «тихие» push Safari отзывает подписку. */
+/* ── Цифра на значке приложения ──
+   Сколько чатов с непрочитанным. Пока приложение открыто, список чатов присылает страница (badge-sync);
+   пока закрыто — каждый push о сообщении добавляет свой чат в список. Список лежит в отдельном кеше
+   (имя не начинается с groupis-, поэтому обновление приложения его не стирает). */
+const BADGE_CACHE = 'app-badge';
+const BADGE_URL = new URL('./__badge', self.location).href;
+async function readBadgeChats() {
+  try {
+    const res = await (await caches.open(BADGE_CACHE)).match(BADGE_URL);
+    const list = res ? await res.json() : [];
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+async function saveBadgeChats(list) {
+  try {
+    await (await caches.open(BADGE_CACHE)).put(BADGE_URL, new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } }));
+  } catch {}
+}
+async function showBadge(n) {
+  try {
+    if (!self.navigator.setAppBadge) return;
+    if (n) await self.navigator.setAppBadge(n); else await self.navigator.clearAppBadge();
+  } catch {}
+}
+
+self.addEventListener('message', (event) => {
+  const d = event.data;
+  if (!d || d.type !== 'badge-sync' || !Array.isArray(d.chats)) return;
+  const list = [...new Set(d.chats.map(String))].slice(0, 500);
+  event.waitUntil(Promise.all([saveBadgeChats(list), showBadge(list.length)]));
+});
+
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : '' }; }
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const ios = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
-    if (!ios && wins.some((c) => c.focused && c.visibilityState === 'visible')) return;
+    const onScreen = wins.some((c) => c.focused && c.visibilityState === 'visible');
+    // приложение на экране — цифру ведёт оно само; иначе чат этого сообщения добавляется к непрочитанным
+    if (!onScreen && data.chat) {
+      const list = await readBadgeChats();
+      if (!list.includes(data.chat)) list.push(data.chat);
+      await saveBadgeChats(list);
+      await showBadge(list.length);
+    }
+    if (!ios && onScreen) return;
     await self.registration.showNotification(data.title || 'GroupIS', {
       body: data.body || '',
       icon: './icons/icon-192.png',
