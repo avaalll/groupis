@@ -3134,7 +3134,12 @@
     @keyframes unread-shine { to { background-position: -300% 0; } }
     @media (prefers-reduced-motion: reduce) { .chat-row.has-unread .chat-last { animation: none; } }
     /* ── Личный чат: «Прочитано» у последнего своего сообщения, которое собеседник прочитал ── */
-    #chat-view-body.reads-on .chat-msg.me.is-read-last .chat-ticks::after { content: "Прочитано"; margin-left: 6px; font-weight: 700; }
+    #chat-view-body.reads-on .chat-msg.me.is-read-last .chat-ticks::after,
+    #chat-view-body.reads-on .chat-msg.me.is-edit-seen .chat-ticks::after { content: "Прочитано"; margin-left: 6px; font-weight: 700; }
+    /* своё исправленное сообщение: «Отредактировано», пока собеседник не открыл чат после правки (тогда — «Прочитано»);
+       пометка «изм.» у времени при этом не нужна */
+    #chat-view-body.reads-on .chat-msg.me.is-edit-unseen .chat-ticks::after { content: "Отредактировано"; margin-left: 6px; font-weight: 700; opacity: .8; }
+    #chat-view-body.reads-on .chat-msg.me[data-edited-ts] .chat-edited { display: none; }
     /* ── Ответ на сообщение: цитата в сообщении, плашка над полем ввода, свайп влево ── */
     .chat-reply {
       display: grid; gap: 1px; margin: 0 0 5px; padding: 4px 8px; max-width: 100%; min-width: 0;
@@ -3259,6 +3264,16 @@
     .chat-react.is-pop { animation: react-pop .5s var(--spring, ease); }
     @keyframes react-pop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } }
     .chat-edited { opacity: .8; font-style: italic; }
+    /* Поле ввода в несколько строк: растёт до 6 строк (fitChatInput), дальше прокручивается; кнопки — по нижнему краю */
+    .chat-composer { align-items: flex-end; }
+    .chat-composer .chat-tool { margin-bottom: 4px; }
+    .chat-composer .chat-textarea {
+      display: block; box-sizing: border-box; resize: none; overflow-y: hidden;
+      line-height: 1.35; max-height: calc(6 * 1.35em + 25px); border-radius: 22px;
+      white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin;
+    }
+    /* переносы строк, набранные в сообщении, сохраняются; длинное слово или ссылка не распирают пузырь */
+    .chat-text, .chat-caption { white-space: pre-wrap; overflow-wrap: anywhere; }
     /* Редактирование: плашка над полем ввода, кнопка отправки — галочка */
     .chat-reply-bar.is-edit .chat-pin-cap { color: var(--you); }
 
@@ -5506,11 +5521,19 @@
     const params = new URLSearchParams(location.search);
     const target = params.get('open');
     const chatRef = params.get('chat');
-    if (!target && !chatRef) return;
+    if (!target && !chatRef) { restoreScreenState(); return; }
     params.delete('open'); params.delete('chat');
     const qs = params.toString();
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
     openPushTarget(target, chatRef);
+  }
+  // Экран, открытый перед тем, как вкладку выгрузили или обновили (см. saveScreenState)
+  function restoreScreenState() {
+    let s = null;
+    try { s = JSON.parse(sessionStorage.getItem('groupis.screen') || 'null'); sessionStorage.removeItem('groupis.screen'); } catch {}
+    if (!s || !currentUser || s.uid !== String(currentUser.id) || !(Date.now() - s.at < 30 * 60 * 1000)) return;
+    if (!s.chat && !['messenger', 'groups', 'friends', 'profile', 'notifications', 'settings'].includes(s.open)) return;
+    openPushTarget(s.open, s.chat);
   }
 
   /* ═══════ КЕШ НА УСТРОЙСТВЕ ═══════
@@ -9241,7 +9264,11 @@
     for (const m of c.messages) if (!m.pending && msgTs(m) >= msgTs(top)) top = m;
     const at = msgTs(top);
     if (at > (s.at[key] || s.base)) { s.at[key] = at; saveChatReads(); }
-    pushChatRead(c, key, top);   // собеседник и участники группы увидят, что сообщение прочитано
+    // правки чужих сообщений, которые сейчас на экране, тоже увидены: отметка сдвигается до времени правки,
+    // и у автора «Отредактировано» сменяется на «Прочитано»
+    let seen = at;
+    for (const m of c.messages) if (m.editedAt && !m.pending && !isMyMsg(m)) seen = Math.max(seen, Date.parse(m.editedAt) || 0);
+    pushChatRead(c, key, seen);   // собеседник и участники группы увидят, что сообщение прочитано
     if (chatUnread.get(key)) {
       chatUnread.delete(key);
       if (winBody.querySelector('#chats-list')) paintChatsList(); else updateChatBadges();
@@ -9305,13 +9332,14 @@
       if (chat === c) syncChatReadMarks();
     } catch (err) { console.warn('[chat reads] load:', err); }
   }
-  function pushChatRead(c, key, m) {
-    if (chatReadsMissing || !currentUser || !m) return;
-    const ts = msgTs(m), prev = myServerReads.get(key) || 0;
+  // ts — до какого момента прочитано: время последнего сообщения или последней увиденной правки (мс)
+  function pushChatRead(c, key, ts) {
+    if (chatReadsMissing || !currentUser || !ts) return;
+    const prev = myServerReads.get(key) || 0;
     if (ts <= prev) return;
     myServerReads.set(key, ts);
     supabaseClient.from('chat_reads')
-      .upsert({ user_id: currentUser.id, chat_kind: c.type, chat_id: chatReadTarget(c), read_at: m.createdAt }, { onConflict: 'user_id,chat_kind,chat_id' })
+      .upsert({ user_id: currentUser.id, chat_kind: c.type, chat_id: chatReadTarget(c), read_at: new Date(ts).toISOString() }, { onConflict: 'user_id,chat_kind,chat_id' })
       .then(({ error }) => {
         if (!error) return;
         if (myServerReads.get(key) === ts) myServerReads.set(key, prev);
@@ -9343,6 +9371,10 @@
       const read = at > 0 && Number(el.dataset.ts) <= at;
       el.classList.toggle('is-read', read);
       if (read) lastRead = el;
+      // исправленное: «Отредактировано», пока собеседник не открыл чат после правки, потом — «Прочитано»
+      const edited = Number(el.dataset.editedTs) || 0;
+      el.classList.toggle('is-edit-unseen', !!edited && !(at >= edited));
+      el.classList.toggle('is-edit-seen', !!edited && at >= edited);
     }
     for (const el of mine) el.classList.toggle('is-read-last', el === lastRead);
   }
@@ -9826,6 +9858,20 @@
   const ICON_MIC = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>`;
   const ICON_CIRCLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16z"/><path fill="currentColor" d="M8 9.5h5.5a1 1 0 0 1 1 1v.7l2-1.2v4l-2-1.2v.7a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/></svg>`;
   const ICON_SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6V10l12.6 2-12.6 2z"/></svg>`;
+  // Телефон или планшет без мыши: Enter на экранной клавиатуре — новая строка, а не отправка
+  const touchTyping = matchMedia('(hover: none) and (pointer: coarse)');
+  /* Поле ввода растёт вместе с текстом: длинная строка переносится, после ~6 строк появляется прокрутка
+     (предел — max-height у .chat-textarea) */
+  function fitChatInput(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    if (!el.scrollHeight) { el.style.height = ''; return; }   // поле ещё не на экране
+    const max = parseFloat(getComputedStyle(el).maxHeight) || 160;
+    const border = el.offsetHeight - el.clientHeight;
+    const h = el.scrollHeight + border;
+    el.style.height = Math.min(h, max) + 'px';
+    el.style.overflowY = h > max ? 'auto' : 'hidden';
+  }
   const ICON_CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
 
   // Открытый чат: { type: 'dm' | 'group', peerId, groupId, headTitle, winTitle, messages: [] }
@@ -9993,14 +10039,16 @@
       chat && chat.selected && chat.selected.has(String(m.id)) ? 'is-selected' : ''].join(' ');
     const body = isMedia
       ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
-      : escapeHtml(m.content);
+      : `<span class="chat-text">${escapeHtml(m.content)}</span>`;
     // у своих сообщений в личном чате — место под «Прочитано» (его расставляет syncChatReadMarks)
     const ticks = mine && !m.pending && chat && chat.type === 'dm';
     const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '')
       + fmtTime(m.createdAt) + (ticks ? '<span class="chat-ticks" aria-hidden="true"></span>' : '');
     // цитата сообщения, на которое ответили: нажатие перематывает ленту к нему
     const quote = m.reply ? `<div class="chat-reply" data-reply-to="${escapeHtml(m.reply.id)}" role="button"><b>${escapeHtml(m.reply.name || 'Сообщение')}</b><span>${escapeHtml(m.reply.text || 'Сообщение')}</span></div>` : '';
-    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${ticks ? `data-ts="${msgTs(m)}"` : ''}>${author}${quote}${body}${chatReactsHtml(m)}<span class="chat-msg-time">${time}</span></div>`;
+    // своё исправленное сообщение в личном чате: на месте «Прочитано» — «Отредактировано», пока собеседник не увидел правку
+    const editedTs = ticks && m.editedAt ? Date.parse(m.editedAt) || 0 : 0;
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${ticks ? `data-ts="${msgTs(m)}"` : ''} ${editedTs ? `data-edited-ts="${editedTs}"` : ''}>${author}${quote}${body}${chatReactsHtml(m)}<span class="chat-msg-time">${time}</span></div>`;
   }
 
   /* ── Реакции ──
@@ -10081,12 +10129,13 @@
       c.editing = m;
       if (input) {
         input.value = m.content || '';
+        fitChatInput(input);
         input.focus({ preventScroll: true });
         try { input.setSelectionRange(input.value.length, input.value.length); } catch {}
       }
     } else if (c.editing) {
       c.editing = null;
-      if (input) input.value = c.draft || '';
+      if (input) { input.value = c.draft || ''; fitChatInput(input); }
       c.draft = '';
     }
     syncChatReplyBar();
@@ -10110,7 +10159,8 @@
       alert('Не удалось изменить сообщение: ' + error.message + reactSqlHint(error));
       return;
     }
-    if (data) { m.editedAt = data; saveChatCache(c); }
+    // время правки — серверное: по нему сверяется, увидел ли собеседник правку
+    if (data && data !== m.editedAt) { m.editedAt = data; if (chat === c) replaceChatBubble(m.id, m); saveChatCache(c); }
   }
 
   /* ── Даты в ленте чата ──
@@ -10283,7 +10333,7 @@
         <form class="support-chat-form chat-composer" id="chat-composer">
           <button type="button" class="chat-tool" data-chat-attach title="Фото, видео или файл" aria-label="Прикрепить фото, видео или файл">${ICON_CLIP}</button>
           <input type="file" id="chat-file" multiple hidden>
-          <input class="support-chat-input" type="text" id="chat-text" placeholder="Сообщение…" maxlength="1000" autocomplete="off">
+          <textarea class="support-chat-input chat-textarea" id="chat-text" rows="1" placeholder="Сообщение…" maxlength="1000" autocomplete="off" enterkeyhint="enter"></textarea>
           <button type="button" class="chat-tool" data-chat-rec="voice" title="Голосовое сообщение" aria-label="Записать голосовое сообщение">${ICON_MIC}</button>
           <button type="button" class="chat-tool" data-chat-rec="circle" title="Видеосообщение" aria-label="Записать видеокружок">${ICON_CIRCLE}</button>
           <button class="support-chat-send" type="submit" aria-label="Отправить">${ICON_SEND}</button>
@@ -10332,9 +10382,17 @@
     });
     winBody.querySelector('#chat-file').addEventListener('change', onChatFilesPicked);
     const c = chat;
-    winBody.querySelector('#chat-text').addEventListener('input', () => sendTyping(c, typingNowKind(c)));
-    winBody.querySelector('#chat-text').addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && (c.editing || c.replyTo)) { e.preventDefault(); if (c.editing) setChatEdit(null); else setChatReply(null); }
+    const textEl = winBody.querySelector('#chat-text');
+    textEl.addEventListener('input', () => { fitChatInput(textEl); sendTyping(c, typingNowKind(c)); });
+    textEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && (c.editing || c.replyTo)) { e.preventDefault(); if (c.editing) setChatEdit(null); else setChatReply(null); return; }
+      /* Как в Telegram и WhatsApp: на компьютере Enter отправляет, Shift+Enter — новая строка;
+         на телефоне Enter на клавиатуре — новая строка, отправка — кнопкой. Во время набора иероглифов
+         и подсказок (isComposing) Enter принадлежит клавиатуре */
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing && e.keyCode !== 229 && !touchTyping.matches) {
+        e.preventDefault();
+        sendChatText();
+      }
     });
     if (chat.type === 'match') refreshMatchVotePanel();
     syncChatPinBar();
@@ -10663,6 +10721,7 @@
     }
     if (!text) return;
     input.value = '';
+    fitChatInput(input);
     sendTyping(chat, typingNowKind(chat));
     sendChatMessage({ kind: 'text', content: text });
   }
@@ -11041,6 +11100,8 @@
     replaceChatBubble(m.id, merged);
     syncChatPinBar();
     saveChatCache(c);
+    // собеседник исправил сообщение, а чат открыт — правку видно, автору уходит «Прочитано»
+    if (!isMyMsg(merged) && merged.editedAt) markChatRead(c);
   }
 
   function removeChatMessagesLocal(kind, ids) {
@@ -13973,23 +14034,55 @@
   if (window.ResizeObserver) new ResizeObserver(relayoutApp).observe(document.getElementById('map'));
 
   if ('serviceWorker' in navigator) {
-    /* Вышла новая версия: страница открывается из кеша мгновенно, а свежая подгружается в фоне. Чтобы
-       не перезагружать приложение на глазах, новая версия включается, когда его свернут. */
+    /* Вышла новая версия: страница открывается из кеша мгновенно, а свежая подгружается в фоне и
+       открывается при следующем запуске. Раньше она включалась перезагрузкой, как только приложение
+       сворачивали, — и на ноутбуке переход на соседнюю вкладку браузера на пару секунд перезагружал
+       страницу. Теперь сама страница перезагружается, только если приложение было свёрнуто долго
+       (UPDATE_IDLE_MS): тогда это незаметно — как новый запуск. */
+    const UPDATE_IDLE_MS = 30 * 60 * 1000;
     const hadController = !!navigator.serviceWorker.controller;
-    let updateReady = false;
+    let updateReady = false, hiddenAt = 0, updateTimer = 0, updateCheckedAt = 0;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController) return;   // первая установка — перезагружать незачем
-      updateReady = true;
-      if (document.hidden) location.reload();
+      if (hadController) updateReady = true;   // первая установка — перезагружать незачем
     });
-    document.addEventListener('visibilitychange', () => { if (updateReady && document.hidden) location.reload(); });
+    document.addEventListener('visibilitychange', () => {
+      clearTimeout(updateTimer);
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        updateTimer = setTimeout(() => { if (updateReady && document.hidden) location.reload(); }, UPDATE_IDLE_MS);
+        return;
+      }
+      // телефон «заморозил» свёрнутое приложение и таймер не сработал — обновляемся при возвращении после долгого перерыва
+      if (updateReady && hiddenAt && Date.now() - hiddenAt >= UPDATE_IDLE_MS) location.reload();
+      hiddenAt = 0;
+    });
     addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then((reg) => {
-        // Установленное приложение подолгу не закрывают: проверяем обновление при каждом возвращении в него
-        document.addEventListener('visibilitychange', () => { if (!document.hidden && navigator.onLine) reg.update().catch(() => {}); });
+        // Установленное приложение подолгу не закрывают: проверяем обновление при возвращении в него, не чаще раза в 5 минут
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden || !navigator.onLine || Date.now() - updateCheckedAt < 5 * 60 * 1000) return;
+          updateCheckedAt = Date.now();
+          reg.update().catch(() => {});
+        });
       }).catch((err) => console.warn('SW', err));
     });
   }
+
+  /* Если браузер всё же выгрузил вкладку сам (так делают Safari и Chrome, когда не хватает памяти) или
+     страницу обновили, при новой загрузке открывается тот же экран: открытый чат или раздел.
+     Хранится в sessionStorage — только для этой вкладки и только 30 минут. */
+  const SCREEN_KEY = 'groupis.screen';
+  function saveScreenState() {
+    if (!currentUser) return;
+    try {
+      sessionStorage.setItem(SCREEN_KEY, JSON.stringify({
+        at: Date.now(), uid: String(currentUser.id),
+        open: openApp && openApp !== 'map' ? openApp : '', chat: chat ? chatKey(chat) : '',
+      }));
+    } catch {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveScreenState(); });
+  addEventListener('pagehide', saveScreenState);
 
   // Карта стартует из bootApp: сразу, если вход уже выполнен, или после вступления на экране входа.
   // Страховка — если что-то пошло не так (например, нет сети при проверке сессии)
