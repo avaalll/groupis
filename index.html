@@ -1333,7 +1333,7 @@
       flex: none;
     }
     .chat-row .chat-time {
-      color: var(--ink-soft); font-size: 11px;
+      color: var(--ink-soft); font-size: 11px; white-space: nowrap;
     }
 
     /* ── Чат: панель ввода, медиа, голосовые, кружки ── */
@@ -9544,14 +9544,15 @@
   // В скольких личных и групповых чатах есть непрочитанное
   function unreadChats() {
     // чаты с выключенными уведомлениями в общий счётчик не идут — цифра остаётся только в их строке
-    const has = (key) => (chatUnread.get(key) > 0 && !isChatMuted(key) ? 1 : 0);
+    const keys = [];
+    const has = (key) => (chatUnread.get(key) > 0 && !isChatMuted(key) ? (keys.push(key), 1) : 0);
     let dm = 0, group = 0;
     if (currentUser) {
       for (const f of friends) dm += has('dm:' + f.id);
       for (const g of myGroups()) group += has('group:' + g.id);
       for (const m of myAcceptedMatches()) group += has('match:' + m.id);
     }
-    return { dm, group };
+    return { dm, group, keys };
   }
   function updateChatBadges() {
     const n = unreadChats();
@@ -9559,7 +9560,33 @@
     put(document.getElementById('chats-badge'), n.dm + n.group);
     put(winBody.querySelector('[data-tab-unread="dm"]'), n.dm);
     put(winBody.querySelector('[data-tab-unread="group"]'), n.group);
+    syncAppBadge(n.keys);
   }
+
+  /* ── Цифра на значке приложения (рабочий стол, Dock, панель задач, экран «Домой») ──
+     Сколько чатов с непрочитанным: написали два человека и одна группа — 3. Чаты с выключенными
+     уведомлениями не считаются, как и в счётчике на вкладке «Чаты». Пока приложение закрыто, цифру
+     ведёт сервис-воркер по приходящим push (sw.js), поэтому ему передаём список чатов с непрочитанным.
+     Значок с цифрой — у установленного приложения: Chrome и Edge на компьютере, Safari на Mac и iPhone
+     (iOS 16.4+, с разрешёнными уведомлениями). На Android цифру у значка рисует сам телефон по уведомлениям.
+     Во вкладке браузера то же число видно в заголовке: «(3) GroupIS». */
+  let appBadgeShown = null;
+  function syncAppBadge(keys) {
+    if (currentUser && !chatSummaryLoaded) return;   // сводка ещё не загружена — не сбрасываем цифру, оставшуюся с прошлого раза
+    const list = currentUser ? keys : [];
+    const sign = list.join(',');
+    if (sign === appBadgeShown) return;
+    appBadgeShown = sign;
+    const n = list.length;
+    document.title = n ? `(${n > 99 ? '99+' : n}) GroupIS` : 'GroupIS';
+    try {
+      if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+    } catch {}
+    const sw = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (sw) { try { sw.postMessage({ type: 'badge-sync', chats: list }); } catch {} }
+  }
+  // сервис-воркер сменился (первая установка или новая версия) — передаём список и ему
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange', () => { appBadgeShown = null; updateChatBadges(); });
 
   // Последние сообщения всех чатов — тремя запросами одновременно
   async function loadChatSummaries() {
@@ -9623,14 +9650,15 @@
     paintChatsList();
   }
 
-  // Время последнего сообщения в списке чатов: сегодня — часы и минуты, раньше — дата (12.10), в прошлые годы — с годом (12.10.25)
+  // Время последнего сообщения в списке чатов: сегодня — часы и минуты (16:32), раньше — словами, чтобы
+  // не путать с временем: «10 октября», в прошлые годы — «10 окт. 2025»
   function fmtChatListTime(iso) {
     const d = iso ? new Date(iso) : null;
     if (!d || isNaN(d)) return '';
     const now = new Date();
     if (d.toDateString() === now.toDateString()) return fmtTime(iso);
     return d.toLocaleDateString('ru-RU', d.getFullYear() === now.getFullYear()
-      ? { day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit', year: '2-digit' });
+      ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\s*г\.$/, '');
   }
 
   function chatsListHtml() {
