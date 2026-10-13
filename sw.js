@@ -6,7 +6,7 @@
      качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v1.1.42';
+const VERSION = 'v1.1.43';
 const CACHE = `groupis-${VERSION}`;
 const STATIC_VERSION = 's2';
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
@@ -57,7 +57,7 @@ const STATIC_PATHS = new Set(STATIC_FILES.map((p) => new URL(p, self.location).p
 // рядом (supabase.min.js) — сторонний CDN у части мобильных операторов недоступен
 const CACHEABLE_EXTERNAL = [];
 // Таблица шрифтов — адрес тот же, что в <link> в index.html
-const FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap';
+const FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap';
 const FONTS_CSS_ORIGIN = 'https://fonts.googleapis.com';
 const FONTS_FILE_ORIGIN = 'https://fonts.gstatic.com';
 const FONT_SUBSETS = ['cyrillic', 'latin'];   // остальные наборы символов кешируются, если понадобятся
