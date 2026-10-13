@@ -5,7 +5,7 @@
   <!-- Три запрета, которые не касаются загрузки скриптов, карты и данных: на странице не может появиться
        встроенный объект (плагин), подменённый базовый адрес или форма, отправляющая введённое на чужой сервер -->
   <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -1427,8 +1427,14 @@
     .photo-viewer {
       position: fixed; inset: 0; z-index: 200; padding: 20px;
       background: rgba(5,6,14,.92); display: grid; place-items: center; cursor: zoom-out;
+      /* ячейка ровно по размеру экрана: иначе она растёт под высокое фото, и max-height: 100% у картинки не работает */
+      grid-template: minmax(0, 1fr) / minmax(0, 1fr); overflow: hidden;
     }
-    .photo-viewer img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+    .photo-viewer img {
+      display: block; min-width: 0; min-height: 0; border-radius: 10px; object-fit: contain;
+      max-width: min(100%, calc(100vw - 40px)); max-height: min(100%, calc(100vh - 40px));
+      max-height: min(100%, calc(100dvh - 40px));
+    }
     .group-chat-avatar { border-radius: 12px; }
 
     .auth-screen {
@@ -3320,6 +3326,8 @@
       .dock-wrap { justify-content: flex-start; padding: 0 calc(max(10px, env(safe-area-inset-right, 0px)) + 56px) 0 max(10px, env(safe-area-inset-left, 0px)); }
       .dock, :root[data-theme="dark"] .dock { flex: 1; max-width: none; }
       .dock-item { flex: 1 1 0; width: auto; min-width: 0; }
+      /* открыт раздел — кнопки «моё место» нет, место под неё не нужно: панель встаёт по центру */
+      body.app-window .dock-wrap { padding: 0 max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); }
     }
     @media (max-height: 480px) and (orientation: landscape) {
       .geo-btn { width: 44px; height: 44px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
@@ -9914,15 +9922,35 @@
   const touchTyping = matchMedia('(hover: none) and (pointer: coarse)');
   /* Поле ввода растёт вместе с текстом: длинная строка переносится, после ~6 строк появляется прокрутка
      (предел — max-height у .chat-textarea) */
+  /* Высоту меняем, только когда она действительно другая. Раньше поле на каждую букву сжималось до одной
+     строки и растягивалось обратно: вся лента чата дважды пересчитывалась, прокрутка внутри поля
+     сбрасывалась, а клавиатура телефона от этого теряла место набора — курсор отскакивал назад. */
   function fitChatInput(el) {
     if (!el) return;
-    el.style.height = 'auto';
-    if (!el.scrollHeight) { el.style.height = ''; return; }   // поле ещё не на экране
+    const len = el.value.length, prevLen = el.fitLen;
+    const rows = el.value.split('\n').length, prevRows = el.fitRows;
+    el.fitLen = len; el.fitRows = rows;
+    const set = (prop, v) => { if (el.style[prop] !== v) el.style[prop] = v; };
+    if (!len) { set('height', ''); set('overflowY', 'hidden'); return; }   // пусто — одна строка, как в CSS
+    const fits = el.scrollHeight <= el.clientHeight + 1;
+    // текста прибавилось и он помещается — высота та же; сжимать поле для замера нужно, только когда текст убавился
+    if (el.style.height && fits && prevLen != null && len >= prevLen && rows >= prevRows) return;
     const max = parseFloat(getComputedStyle(el).maxHeight) || 160;
     const border = el.offsetHeight - el.clientHeight;
-    const h = el.scrollHeight + border;
-    el.style.height = Math.min(h, max) + 'px';
-    el.style.overflowY = h > max ? 'auto' : 'hidden';
+    if (!fits && el.offsetHeight >= max - 1) { set('overflowY', 'auto'); return; }   // уже предел — дальше прокрутка
+    let h = el.scrollHeight + border;
+    if (fits) {
+      const top = el.scrollTop;
+      el.style.height = 'auto';
+      if (!el.scrollHeight) { el.style.height = ''; return; }   // поле ещё не на экране
+      h = el.scrollHeight + border;
+      el.style.height = Math.min(h, max) + 'px';
+      el.scrollTop = top;
+    } else {
+      if (!el.scrollHeight) return;
+      set('height', Math.min(h, max) + 'px');
+    }
+    set('overflowY', h > max ? 'auto' : 'hidden');
   }
   const ICON_CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
 
@@ -14201,7 +14229,7 @@
      приложения ставится ровно в видимую над ней часть экрана (visualViewport), а панель вкладок прячется.
      Клавиатура «открыта», если в фокусе текстовое поле и видимая часть заметно ниже обычной высоты экрана. */
   const kbHtml = document.documentElement;
-  let kbBase = { w: 0, h: 0 }, kbRaf = 0, kbOn = false;
+  let kbBase = { w: 0, h: 0 }, kbRaf = 0, kbOn = false, kbPoll = 0, kbResets = 0;
   const kbTouch = matchMedia('(pointer: coarse)');
   const isTextField = (el) => !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable
     || (el.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit|reset|file|color|image|hidden)$/i.test(el.type)));
@@ -14213,15 +14241,26 @@
     if (Math.abs(innerWidth - kbBase.w) > 1) kbBase = { w: innerWidth, h: 0 };
     kbBase.h = Math.max(kbBase.h, innerHeight, kbHtml.clientHeight);
     // только сенсорные экраны: на ноутбуке окно браузера просто сделали ниже — это не клавиатура
-    const on = kbTouch.matches && isTextField(document.activeElement) && vv.scale < 1.05 && kbBase.h - vv.height > 120;
+    const field = document.activeElement;
+    const on = kbTouch.matches && isTextField(field) && vv.scale < 1.05 && kbBase.h - vv.height > 120;
     if (on) {
-      kbHtml.style.setProperty('--kb-top', Math.max(0, vv.offsetTop) + 'px');
-      kbHtml.style.setProperty('--kb-h', vv.height + 'px');
+      /* Поле в окне приложения уже стоит над клавиатурой, сдвигать страницу незачем — возвращаем её на место.
+         Иначе iPhone держит страницу уехавшей вверх и на каждой новой строке двигает её снова. Если телефон
+         упорно сдвигает обратно (kbResets) — не спорим и просто ставим окно в видимую часть. */
+      if (kbOn && vv.offsetTop > 0.5 && kbResets < 6 && field.closest('#window')) { kbResets++; window.scrollTo(0, 0); }
+      const top = Math.max(0, Math.round(vv.offsetTop)) + 'px', h = Math.round(vv.height) + 'px';
+      if (kbHtml.style.getPropertyValue('--kb-top') !== top) kbHtml.style.setProperty('--kb-top', top);
+      if (kbHtml.style.getPropertyValue('--kb-h') !== h) kbHtml.style.setProperty('--kb-h', h);
     }
     if (on === kbOn) return;
     kbOn = on;
+    kbResets = 0;
     kbHtml.classList.toggle('kb-open', on);
-    if (!on) {
+    if (on) {
+      // окно ужалось — поле, в которое печатают, должно остаться на виду внутри него; и сразу перепроверяем сдвиг
+      if (field.closest('#window') && field.id !== 'chat-text') { try { field.scrollIntoView({ block: 'nearest' }); } catch {} }
+      syncKeyboardSoon();
+    } else {
       kbHtml.style.removeProperty('--kb-top');
       kbHtml.style.removeProperty('--kb-h');
       // iPhone иногда оставляет страницу сдвинутой после того, как клавиатура спряталась
@@ -14229,10 +14268,21 @@
     }
   }
   const syncKeyboardSoon = () => { if (!kbRaf) kbRaf = requestAnimationFrame(syncKeyboard); };
+  /* У приложения, установленного на экран «Домой», iPhone не всегда сообщает, что клавиатура выехала
+     (события visualViewport теряются). Поэтому, пока в фокусе текстовое поле, перепроверяем сами. */
+  function watchKeyboard() {
+    clearInterval(kbPoll); kbPoll = 0;
+    if (!kbTouch.matches || !isTextField(document.activeElement)) return;
+    let n = 0;
+    kbPoll = setInterval(() => {
+      if (!isTextField(document.activeElement)) { clearInterval(kbPoll); kbPoll = 0; }
+      if (++n < 12 || n % 4 === 0) syncKeyboardSoon();   // первые ~1,5 с часто, дальше — раз в полсекунды
+    }, 120);
+  }
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', syncKeyboardSoon);
     visualViewport.addEventListener('scroll', syncKeyboardSoon);
-    document.addEventListener('focusin', syncKeyboardSoon);
+    document.addEventListener('focusin', () => { syncKeyboardSoon(); watchKeyboard(); });
     // фокус ушёл — клавиатура уезжает; проверяем ещё раз, когда она уже спряталась
     document.addEventListener('focusout', () => { syncKeyboardSoon(); setTimeout(syncKeyboardSoon, 350); });
   }
