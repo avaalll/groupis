@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-13 08:58">
+  <meta name="app-build" content="2026-10-13 12:21">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -68,8 +68,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Manrope — текст, Unbounded — заголовки, JetBrains Mono — мелкие подписи «как на дисплее» -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <!-- Один шрифт на всё приложение — Inter (вариативный, 400–700); не загрузился — текст остаётся системным шрифтом устройства -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap">
 
   <style>
     /* Палитра GroupIS «Сигнал»: сигнальный красно-оранжевый (--you) + сонарная мята (--lime)
@@ -106,6 +106,8 @@
       --dock-on-ink: #121514;
       --spring: cubic-bezier(.34, 1.56, .64, 1);
       --ease: cubic-bezier(.2, .9, .25, 1);
+      /* единственное семейство; размеры и насыщенности по ролям — в разделе «Типографика» в конце стилей */
+      --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
@@ -146,8 +148,9 @@
     body {
       background: var(--land);
       color: var(--ink);
-      font: 14px/1.45 "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      -webkit-font-smoothing: antialiased;
+      font: 15px/1.4 var(--font-ui);
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
       -webkit-user-select: none; user-select: none;
     }
     button { font: inherit; color: inherit; }
@@ -231,7 +234,7 @@
     .filter-block { display: grid; gap: 10px; }
     .filter-head { display: flex; align-items: center; gap: 10px; }
     .filter-title { font-weight: 700; font-size: 14px; flex: 1; }
-    .filter-sub { font-size: 12.5px; color: var(--ink-soft); }
+    .filter-sub { font-size: 13px; color: var(--ink-soft); }
     .filter-range { display: flex; align-items: center; gap: 12px; }
     .filter-range input[type="range"] { flex: 1; accent-color: var(--you); }
     .filter-range .filter-val { min-width: 64px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -292,7 +295,7 @@
       position: absolute; top: 4px; right: 2px; z-index: 20;
       min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
       background: var(--act); color: var(--act-ink);
-      font: 600 10.5px/22px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; text-align: center; font-variant-numeric: tabular-nums;
+      font: 600 11px/22px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums;
       box-shadow: 0 0 0 2px var(--win), 0 4px 10px -2px rgba(0, 0, 0, .4);
     }
 
@@ -319,11 +322,11 @@
     .wish-cloud .wc-body { fill: var(--wc-fill); stroke: var(--wc-accent); stroke-width: 4.2; stroke-linejoin: round; paint-order: stroke; }
     .wc-text {
       position: absolute; text-align: center; color: var(--wc-ink);
-      font: 700 13px/1.28 "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: -0.005em;
+      font: 700 13px/1.28 var(--font-ui); letter-spacing: -0.005em;
       text-wrap: balance; overflow-wrap: anywhere; white-space: normal;
     }
     .wc-cap {
-      display: block; margin-bottom: 1px; font-size: 9.5px; font-weight: 800; letter-spacing: .07em;
+      display: block; margin-bottom: 1px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
       text-transform: uppercase; color: var(--wc-cap); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .wc-msg { display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
@@ -335,11 +338,12 @@
     .wish-place .wish-anchor { left: calc(100% + 2px); top: 4px; }
 
     /* ── Превью облака в экранах желаний: так его видно на карте ── */
-    .wish-preview { --wish-k: 1; display: flex; justify-content: center; padding: 8px 12px 4px; }
-    .wp-stage { position: relative; flex: none; }
+    .wish-preview { --wish-k: 1; display: flex; justify-content: center; margin: 0 -8px; padding: 8px 0 4px; }
+    .wp-fit { position: relative; flex: none; }
+    .wp-stage { position: absolute; top: 0; }
     .wp-stage .wish-cloud { cursor: default; }
     .wp-stage .wp-pill { position: absolute; transform: translateX(-100%); z-index: 2; pointer-events: none; white-space: nowrap; }
-    .wish-meta { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin-top: 2px; }
+    .wish-meta { text-align: center; color: var(--ink-soft); font-size: 13px; margin-top: 2px; }
     .wish-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
     .wa-btn {
       display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border: 0; border-radius: 999px;
@@ -360,7 +364,7 @@
     }
     .wish-empty-card .wish-actions { margin-top: 12px; }
     .wish-section-title {
-      font-size: 12px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .07em;
+      font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em;
       padding: 14px 20px 4px;
     }
     .wish-list { list-style: none; margin: 0; padding: 0 4px; }
@@ -377,7 +381,7 @@
     .wa-icon:active { transform: scale(.88); }
     .wa-icon.danger { color: #E5484D; }
     .prompt-field { display: grid; gap: 6px; margin: 4px 0 16px; }
-    .prompt-count { justify-self: end; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .prompt-count { justify-self: end; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
     @media (max-width: 640px) {
       .wish-list .wish-card .wish-card-actions { gap: 6px; }
       .wish-list .wish-card .wish-card-actions .wa-btn { padding: 7px 10px; gap: 5px; }
@@ -394,9 +398,9 @@
     .wish-card .wish-card-text { font-weight: 600; white-space: pre-wrap; word-break: break-word; }
     .wish-card .wish-card-meta { color: var(--ink-soft); font-size: 12px; }
     .wish-card .wish-card-actions { display: flex; gap: 8px; justify-content: flex-start; flex-wrap: wrap; padding-top: 6px; }
-    .wish-card .wish-card-actions .wa-btn { padding: 7px 13px; font-size: 12.5px; background: var(--win); }
+    .wish-card .wish-card-actions .wa-btn { padding: 7px 13px; font-size: 13px; background: var(--win); }
     .wish-card .wish-card-actions .wa-btn:hover { background: var(--row-hover); }
-    .wish-card .wish-card-author { font-size: 12px; font-weight: 800; color: var(--you); }
+    .wish-card .wish-card-author { font-size: 12px; font-weight: 700; color: var(--you); }
 
     .user-avatar-wrap { position: relative; width: 26px; height: 26px; }
     .user-avatar-wrap[data-clickable="true"] { pointer-events: auto !important; cursor: pointer !important; }
@@ -453,7 +457,7 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.1);
     }
     .user-badge-name {
-      font-size: 12px; font-weight: 650; color: var(--ink); line-height: 1;
+      font-size: 12px; font-weight: 600; color: var(--ink); line-height: 1;
       white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
     }
     /* Участник группы, не друг: тёмная плашка, чтобы не сливалась со светлой картой */
@@ -463,7 +467,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.25);
     }
     .user-badge-inner.is-group .user-badge-name { color: #fff; }
-    .user-badge-inner.is-group .user-badge-group { color: #FFD9A0; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
+    .user-badge-inner.is-group .user-badge-group { color: #FFD9A0; opacity: .9; font-weight: 500; font-size: 11px; margin-left: 2px; }
     .user-dot-marker.is-group { background: #5C3418 !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
     /* Друг из общей группы: зелёная плашка */
     .user-badge-inner.is-friend-group {
@@ -472,7 +476,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 .5px rgba(0,0,0,.25);
     }
     .user-badge-inner.is-friend-group .user-badge-name { color: #fff; }
-    .user-badge-inner.is-friend-group .user-badge-group { color: #B8F5C6; opacity: .9; font-weight: 500; font-size: 10.5px; margin-left: 2px; }
+    .user-badge-inner.is-friend-group .user-badge-group { color: #B8F5C6; opacity: .9; font-weight: 500; font-size: 11px; margin-left: 2px; }
     .user-dot-marker.is-friend-group { background: #1E7A3C !important; box-shadow: 0 0 0 2px #fff, 0 2px 4px rgba(0,0,0,.35); }
     .user-badge-status {
       position: absolute; left: 50%; bottom: 100%;
@@ -504,12 +508,12 @@
     .map-group-ava {
       flex: none; width: 24px; height: 24px; border-radius: 8px;
       background: linear-gradient(145deg, #34D6B2, #0E8C72); background-size: cover; background-position: center;
-      display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff;
+      display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
     }
-    .map-group-name { font-size: 12.5px; font-weight: 700; line-height: 1; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+    .map-group-name { font-size: 13px; font-weight: 700; line-height: 1; white-space: nowrap; max-width: 164px; overflow: hidden; text-overflow: ellipsis; }
     .map-group-count {
-      font-size: 10.5px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px;
       background: rgba(255,255,255,.16); color: var(--you-soft); white-space: nowrap;
     }
     .map-group-count::before { content: "👥 "; }
@@ -541,7 +545,7 @@
     .match-vote[data-state="open"] { background: linear-gradient(135deg, rgba(var(--you-rgb), .16), rgba(var(--lime-rgb), .12)); }
     .match-vote[data-state="approved"] { background: linear-gradient(135deg, rgba(255, 143, 177, .2), rgba(var(--you-rgb), .2)); }
     .mv-head { display: flex; align-items: baseline; gap: 10px; }
-    .mv-title { flex: 1; font-weight: 800; font-size: 14px; }
+    .mv-title { flex: 1; font-weight: 700; font-size: 14px; }
     .mv-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
     .mv-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(120, 116, 150, .2); }
     .mv-yes { background: var(--lime); transition: width .5s var(--ease); }
@@ -549,7 +553,7 @@
     .mv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .mv-btn {
       border: 1.5px solid transparent; border-radius: 14px; padding: 10px 12px; cursor: pointer;
-      font: inherit; font-weight: 800; background: var(--win); color: var(--ink);
+      font: inherit; font-weight: 700; background: var(--win); color: var(--ink);
       transition: transform .3s var(--spring), border-color .2s, background .2s;
     }
     .mv-btn:active { transform: scale(.94); }
@@ -559,12 +563,12 @@
     .mv-hint { font-size: 12px; color: var(--ink-soft); line-height: 1.35; }
     .mv-start {
       justify-self: start; border: 0; border-radius: 14px; padding: 10px 16px; cursor: pointer;
-      font: inherit; font-weight: 800; background: var(--lime); color: var(--lime-ink);
+      font: inherit; font-weight: 700; background: var(--lime); color: var(--lime-ink);
       box-shadow: 0 8px 20px rgba(var(--lime-rgb), .25);
       transition: transform .3s var(--spring);
     }
     .mv-start:active { transform: scale(.94); }
-    .mv-done { font-weight: 800; font-size: 13.5px; }
+    .mv-done { font-weight: 700; font-size: 14px; }
 
     .map-popup {
       width: 220px; padding: 8px;
@@ -605,7 +609,7 @@
       border-bottom: 1px solid var(--win-line);
       font-size: 13px;
     }
-    .menubar strong { font-weight: 650; }
+    .menubar strong { font-weight: 600; }
     .menubar .brand { display: flex; align-items: center; gap: 6px; }
     .menubar .brand img { width: 18px; height: 18px; border-radius: 5px; display: block; }
     .menubar-right { display: flex; align-items: center; gap: 8px; }
@@ -711,7 +715,7 @@
     .win-back:hover { background: var(--row-hover); }
     .win-back:active { transform: scale(.94); }
     .win-back svg { width: 20px; height: 20px; }
-    .win-title { margin: 0; text-align: center; font-size: 13px; font-weight: 650; }
+    .win-title { margin: 0; text-align: center; font-size: 13px; font-weight: 600; }
     .win-body { flex: 1; overflow: auto; -webkit-user-select: text; user-select: text; position: relative; }
 
     .rows { list-style: none; margin: 0; padding: 6px; }
@@ -726,7 +730,7 @@
     .avatar {
       flex: none; width: 40px; height: 40px; border-radius: 50%;
       display: grid; place-items: center;
-      color: #fff; font-weight: 650; font-size: 15px;
+      color: #fff; font-weight: 600; font-size: 15px;
       background-size: cover; background-position: center; overflow: hidden;
     }
     .notif-icon {
@@ -1060,7 +1064,7 @@
       content: "Обложка";
       position: absolute; left: 4px; bottom: 4px;
       padding: 2px 6px; border-radius: 6px;
-      font-size: 10px; font-weight: 700; color: #fff;
+      font-size: 11px; font-weight: 700; color: #fff;
       background: rgba(var(--you-rgb), .92);
     }
     .post-drop.is-invalid { outline: 2px solid #C0392B; outline-offset: 4px; border-radius: 12px; }
@@ -1077,7 +1081,7 @@
     .avatar-group-title {
       font-size: 12px; font-weight: 600; color: var(--ink-soft);
       text-transform: uppercase; letter-spacing: .04em;
-      padding-left: 4px; margin-bottom: 2px;
+      padding-left: 4px; margin-bottom: 6px;   /* кольцо выбранного цвета не должно задевать подпись */
     }
     .avatar-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .avatar-swatch {
@@ -1094,6 +1098,7 @@
     .avatar-pill[aria-pressed="true"] { background: var(--you); color: #fff; border-color: transparent; }
 
     .user-profile-view { display: grid; gap: 14px; padding: 18px 16px 22px; }
+    .user-profile-view > * { min-width: 0; }   /* широкое содержимое одного раздела не растягивает весь экран вбок */
     .user-profile-hero {
       display: flex; flex-direction: column; align-items: center;
       gap: 8px; text-align: center;
@@ -1139,7 +1144,7 @@
       backdrop-filter: blur(20px) saturate(180%);
       z-index: 2;
     }
-    .sub-toolbar-title { font-size: 13px; font-weight: 650; color: var(--ink-soft); }
+    .sub-toolbar-title { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
     .sub-toolbar-spacer { flex: 1; }
     .icon-btn {
       width: 32px; height: 32px; border-radius: 50%;
@@ -1245,7 +1250,7 @@
     .legal-page {
       padding: 16px 18px 28px;
       color: var(--ink);
-      font-size: 13.5px; line-height: 1.55;
+      font-size: 14px; line-height: 1.55;
       white-space: pre-wrap;
     }
     .legal-page h3 { font-size: 14px; font-weight: 700; margin: 18px 0 6px; }
@@ -1255,7 +1260,7 @@
       margin-top: 16px; padding: 10px 12px;
       border-radius: 10px;
       background: rgba(var(--you-rgb), .1);
-      color: var(--ink); font-size: 12.5px;
+      color: var(--ink); font-size: 13px;
     }
 
     .support-chat { display: flex; flex-direction: column; height: 100%; }
@@ -1272,7 +1277,7 @@
       max-width: 78%;
       padding: 8px 12px;
       border-radius: 14px;
-      font-size: 13.5px;
+      font-size: 14px;
       line-height: 1.4;
       word-break: break-word;
       white-space: normal;
@@ -1292,7 +1297,7 @@
     :root[data-theme="dark"] .chat-msg.them { background: rgba(255,255,255,.08); }
     .chat-msg .chat-msg-time {
       display: block; margin-top: 4px;
-      font-size: 10.5px; opacity: .75; text-align: right;
+      font-size: 11px; opacity: .75; text-align: right;
     }
     .chat-msg.them .chat-msg-time { text-align: left; }
     .support-chat-form {
@@ -1302,7 +1307,7 @@
       background: var(--win);
     }
     .support-chat-input {
-      flex: 1; font: inherit; color: var(--ink);
+      flex: 1; min-width: 0; font: inherit; color: var(--ink);
       background: rgba(255,255,255,.55);
       border: 1px solid var(--win-line);
       border-radius: 10px;
@@ -1338,7 +1343,7 @@
     .chat-row .chat-main { flex: 1; min-width: 0; }
     .chat-row .chat-name { font-weight: 600; }
     .chat-row .chat-last {
-      color: var(--ink-soft); font-size: 12.5px;
+      color: var(--ink-soft); font-size: 13px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       margin-top: 2px;
     }
@@ -1365,7 +1370,7 @@
     .chat-composer .support-chat-send { width: 40px; height: 38px; padding: 0; display: grid; place-items: center; }
     .chat-composer .support-chat-send svg { width: 20px; height: 20px; }
 
-    .chat-msg-author { display: block; font-size: 11.5px; font-weight: 700; color: var(--you-soft); margin-bottom: 2px; }
+    .chat-msg-author { display: block; font-size: 12px; font-weight: 700; color: var(--you-soft); margin-bottom: 2px; }
     .chat-msg.has-media { padding: 4px; }
     .chat-msg.has-media .chat-msg-author { padding: 2px 6px 0; }
     .chat-msg.has-media .chat-msg-time { padding: 0 6px 2px; }
@@ -1413,13 +1418,13 @@
     .chat-file-ico {
       flex: none; width: 40px; height: 46px; border-radius: 8px;
       display: grid; place-items: center; color: #fff;
-      font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+      font-size: 11px; font-weight: 700; letter-spacing: .02em;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
     }
     .chat-file-main { display: grid; gap: 2px; min-width: 0; }
-    .chat-file-name { font-weight: 650; font-size: 13px; line-height: 1.25; word-break: break-word;
+    .chat-file-name { font-weight: 600; font-size: 13px; line-height: 1.25; word-break: break-word;
       display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .chat-file-size { font-size: 11.5px; opacity: .75; }
+    .chat-file-size { font-size: 12px; opacity: .75; }
 
     .chat-recbar {
       display: flex; align-items: center; gap: 8px;
@@ -1496,7 +1501,7 @@
       position: absolute; z-index: 2; top: max(14px, env(safe-area-inset-top, 0px)); left: max(14px, env(safe-area-inset-left, 0px));
       height: 44px; padding: 0 16px; border-radius: 999px; display: grid; place-items: center; pointer-events: none;
       color: #fff; background: rgba(28, 28, 36, .72); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
-      font: 500 12px var(--font-mono, ui-monospace, monospace); letter-spacing: .04em; font-variant-numeric: tabular-nums;
+      font: 500 12px var(--font-ui); letter-spacing: .04em; font-variant-numeric: tabular-nums;
     }
     @media (max-width: 640px) { .pv-nav { width: 38px; height: 38px; margin-top: -19px; background: rgba(28, 28, 36, .5); } .pv-prev { left: 6px; } .pv-next { right: 6px; } }
     /* телефон стоя: фото занимает всю ширину экрана — оставляем сверху полосу под крестик, чтобы он не закрывал угол фото */
@@ -1568,7 +1573,7 @@
       width: 64px; height: 64px; margin: 0 auto 12px;
       border-radius: 18px;
       background: linear-gradient(var(--you-2), var(--you));
-      color: #fff; font-size: 30px; font-weight: 800;
+      color: #fff; font-size: 30px; font-weight: 700;
       box-shadow: 0 10px 24px rgba(var(--you-rgb), .45);
     }
     .auth-logo-img { width: 84px; height: 84px; padding: 0; object-fit: cover; background: none; display: block; }
@@ -1595,7 +1600,7 @@
     }
     .auth-input.is-invalid { border-color: #C0392B; box-shadow: 0 0 0 3px rgba(192,57,43,.22); }
     .auth-error {
-      color: #FF8A7A; font-size: 12.5px;
+      color: #FF8A7A; font-size: 13px;
       padding: 8px 10px; border-radius: 8px;
       background: rgba(192,57,43,.14);
     }
@@ -1604,7 +1609,7 @@
     .auth-btn {
       width: 100%; border: 0; border-radius: 12px;
       padding: 12px 16px;
-      font: inherit; font-weight: 650; font-size: 14px;
+      font: inherit; font-weight: 600; font-size: 14px;
       cursor: pointer;
       background: linear-gradient(180deg, var(--you), var(--you));
       color: #fff;
@@ -1640,7 +1645,7 @@
     .auth-step-dot.active { background: var(--you); transform: scaleY(1.3); }
     .auth-step-dot.done   { background: rgba(var(--you-rgb), .55); }
     .auth-step-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; text-align: center; color: #EEF2EF; }
-    .auth-step-sub { font-size: 12.5px; color: #8D9792; text-align: center; margin: 0 0 16px; }
+    .auth-step-sub { font-size: 13px; color: #8D9792; text-align: center; margin: 0 0 16px; }
     .gender-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .gender-opt {
       display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -1799,7 +1804,7 @@
       }
       .win-back { width: 30px; height: 30px; }
       .win-back svg { width: 18px; height: 18px; }
-      .win-title { font-size: 12.5px; }
+      .win-title { font-size: 13px; }
 
       .edit-form { padding: 14px 12px 16px; gap: 12px; }
       .rows { padding: 4px; }
@@ -1895,7 +1900,7 @@
       }
       .auth-logo { width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px; }
       .auth-title { font-size: 16px; margin-bottom: 2px; }
-      .auth-sub { font-size: 11.5px; margin-bottom: 10px; }
+      .auth-sub { font-size: 12px; margin-bottom: 10px; }
       .auth-steps { margin-bottom: 8px; }
     }
 
@@ -1966,14 +1971,14 @@
     .menubar { transition: opacity .25s ease, transform .3s var(--ease); }
     .menubar .brand { gap: 8px; padding-right: 6px; }
     .menubar .brand img { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--lime); }
-    .menubar .brand span { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+    .menubar .brand span { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; }
     .menubar-right { gap: 2px; }
     #offline-badge {
-      font-size: 11.5px; font-weight: 700; color: #fff; background: var(--hot);
+      font-size: 12px; font-weight: 700; color: #fff; background: var(--hot);
       padding: 3px 9px; border-radius: 999px;
     }
     #install-btn {
-      font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+      font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
       background: var(--you); color: #fff;
     }
     #install-btn:hover { background: var(--you); filter: brightness(1.1); }
@@ -2003,7 +2008,7 @@
     }
     #notif-btn .badge {
       top: -3px; right: -3px; min-width: 19px; height: 19px; line-height: 19px; border-radius: 10px;
-      background: var(--hot); font-weight: 800; font-size: 10.5px;
+      background: var(--hot); font-weight: 700; font-size: 11px;
       box-shadow: 0 0 0 2.5px var(--land);
     }
     #filter-btn .filter-dot { top: 8px; right: 8px; width: 9px; height: 9px; background: var(--lime); box-shadow: 0 0 0 2px var(--glass); }
@@ -2035,7 +2040,7 @@
     .dock-btn:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
     .dock-label {
       max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
-      font-weight: 800; font-size: 14px; letter-spacing: -0.01em;
+      font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
       transition: max-width .4s var(--ease), opacity .25s ease, margin .4s var(--ease);
     }
     .dock-item[data-open="true"] .dock-btn { background: var(--lime); color: var(--lime-ink); padding: 0 18px 0 15px; }
@@ -2062,7 +2067,7 @@
     }
     .win-back:hover { background: var(--row-hover); color: var(--you); }
     .win-back:active { transform: scale(.86); }
-    .win-title { font-size: 17px; font-weight: 800; }
+    .win-title { font-size: 17px; font-weight: 700; }
 
     /* ── Списки, строки, карточки ── */
     .rows { padding: 6px 10px 10px; }
@@ -2079,7 +2084,7 @@
       padding: 4px 16px 10px; border-bottom: 0; background: var(--win);
       -webkit-backdrop-filter: none; backdrop-filter: none;
     }
-    .sub-toolbar-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .sub-toolbar-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
     .icon-btn {
       width: 38px; height: 38px; border-radius: 13px;
       background: var(--lime); color: var(--lime-ink);
@@ -2088,9 +2093,9 @@
     }
     .icon-btn:active { transform: scale(.86); }
     .profile-head { padding: 22px 16px 16px; }
-    .profile-name { font-size: 22px; font-weight: 800; }
-    .user-profile-name { font-weight: 800; font-size: 22px; }
-    .user-profile-section-title, .avatar-group-title { font-weight: 800; letter-spacing: .07em; }
+    .profile-name { font-size: 22px; font-weight: 700; }
+    .user-profile-name { font-weight: 700; font-size: 22px; }
+    .user-profile-section-title, .avatar-group-title { font-weight: 700; letter-spacing: .07em; }
     .empty-msg, .notif-empty, .wish-empty, .places-empty { color: var(--ink-soft); }
 
     /* ── Кнопки ── */
@@ -2130,7 +2135,7 @@
     .chat-msg.me { background: var(--you); border-bottom-right-radius: 6px; }
     .chat-msg.them { background: var(--field); border-bottom-left-radius: 6px; }
     .chat-msg.has-media { padding: 4px; }
-    .chat-msg-author { color: var(--you); font-weight: 800; }
+    .chat-msg-author { color: var(--you); font-weight: 700; }
     .chat-msg.me .chat-msg-author { color: #fff; }
     .support-chat-head { font-weight: 700; }
     .support-chat-form { border-top: 0; padding: 8px 12px 12px; gap: 6px; background: var(--win); }
@@ -2145,7 +2150,7 @@
 
     /* ── Модальные окна, меню, попапы ── */
     .modal { border-radius: 26px; background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none; padding: 22px 20px 16px; }
-    .modal-title { font-weight: 800; font-size: 17px; }
+    .modal-title { font-weight: 700; font-size: 17px; }
     .modal-backdrop { background: rgba(6, 12, 10, .5); }
     .popover { border-radius: 18px; background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none; }
     .popover .pop-item { border-radius: 12px; font-weight: 600; }
@@ -2176,11 +2181,11 @@
     }
     .auth-logo { border-radius: 20px; background: linear-gradient(145deg, var(--you-2), var(--you-deep)); box-shadow: 0 12px 28px rgba(var(--you-rgb), .45); }
     .auth-logo-img { border-radius: 50%; box-shadow: 0 0 0 3px var(--lime), 0 14px 30px rgba(0, 0, 0, .45); }
-    .auth-title { font-weight: 800; }
+    .auth-title { font-weight: 700; }
     .auth-input { border-radius: 14px; background: rgba(255, 255, 255, .06); border: 1.5px solid transparent; }
     .auth-input:focus { border-color: var(--you); box-shadow: 0 0 0 4px rgba(var(--you-rgb), .22); }
     .auth-btn {
-      border-radius: 16px; background: var(--lime); color: var(--lime-ink); font-weight: 800;
+      border-radius: 16px; background: var(--lime); color: var(--lime-ink); font-weight: 700;
       box-shadow: 0 12px 30px rgba(var(--lime-rgb), .22);
       transition: transform .3s var(--spring), filter .2s;
     }
@@ -2259,7 +2264,7 @@
     .ph-bars span { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.35); transition: background .2s ease; }
     .ph-bars span.is-on { background: #fff; }
     .ph-caption { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 2; color: #fff; pointer-events: none; }
-    .ph-name { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 1px 10px rgba(0,0,0,.35); }
+    .ph-name { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 1px 10px rgba(0,0,0,.35); }
     .ph-handle { margin-top: 3px; font-size: 14px; color: rgba(255,255,255,.78); }
     /* Профиль с фото и 3D-аватаром целиком помещается в окно: фото занимает то, что осталось */
     .friend-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(170px, calc(min(680px, 100dvh - 116px) - 372px), 420px); }
@@ -2286,9 +2291,9 @@
     .pm-pane { min-width: 0; }
     .has-tabs .friend-avatar-card > .user-profile-section-title { display: none; }   /* подпись «Аватар» теперь на вкладке */
     /* с вкладками под фото остаётся меньше места: фото чуть ниже, чтобы аватар по-прежнему помещался без прокрутки */
-    .friend-fit.has-tabs .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 410px), 420px); }
+    .friend-fit.has-tabs .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 412px), 420px); }
     @media (max-width: 640px) {
-      .friend-fit.has-tabs .photo-hero { height: clamp(140px, calc(100dvh - 484px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
+      .friend-fit.has-tabs .photo-hero { height: clamp(140px, calc(100dvh - 486px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
     }
     .pm-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
     .pm-cell {
@@ -2314,14 +2319,14 @@
     .pm-row:active { transform: scale(.985); transition-duration: .08s; }
     .pm-ico {
       flex: none; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
-      color: #fff; font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+      color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .02em;
       background: linear-gradient(145deg, var(--c1), var(--c3)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
     }
     .pm-ico-link { font-size: 18px; }
     .pm-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
     .pm-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pm-sub { font-size: 12.5px; color: var(--you); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pm-meta { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pm-sub { font-size: 13px; color: var(--you); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pm-meta { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* Свой профиль: фото + 6 пунктов меню помещаются в окно целиком */
     .me-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(150px, calc(min(680px, 100dvh - 116px) - 396px), 380px); }
     .me-fit.has-bio .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 440px), 380px); }
@@ -2355,7 +2360,7 @@
       box-shadow: 0 40px 90px -20px rgba(0, 0, 0, .55), inset 0 1px 0 var(--rim);
       animation: modal-in .4s var(--spring) both;
     }
-    .crop-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; text-align: center; }
+    .crop-title { font-family: var(--font-ui); font-weight: 600; font-size: 15px; text-align: center; }
     .crop-stage {
       position: relative; width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden;
       background: #090C0B; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
@@ -2376,7 +2381,7 @@
     .pg-item.is-main { cursor: default; box-shadow: inset 0 0 0 2px var(--you); }
     .pg-badge {
       position: absolute; left: 6px; bottom: 6px; padding: 3px 8px; border-radius: 999px;
-      background: var(--lime); color: #15131F; font-size: 10.5px; font-weight: 800;
+      background: var(--lime); color: #15131F; font-size: 11px; font-weight: 700;
     }
     .pg-del {
       position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border: 0; border-radius: 50%;
@@ -2527,7 +2532,7 @@
     .theme-block { display: grid; gap: 10px; padding: 8px 20px 6px; }
     .theme-head { display: grid; gap: 2px; }
     .theme-head .row-name { font-weight: 700; }
-    .theme-head .row-sub { color: var(--ink-soft); font-size: 12.5px; }
+    .theme-head .row-sub { color: var(--ink-soft); font-size: 13px; }
     .theme-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .theme-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; font-size: 13px; }
     .theme-opt svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -2616,7 +2621,7 @@
     .auth-card .auth-step-sub { margin-bottom: 14px; }
     .auth-eyebrow {
       text-align: center; margin: 0 0 8px;
-      font-size: 10.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #9FF3DE;
+      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9FF3DE;
     }
     .auth-card .auth-steps { margin-bottom: 12px; }
     .auth-card .auth-step-dot { width: 22px; }
@@ -2642,8 +2647,6 @@
       --prism-glow: -10px 10px 26px -12px var(--c1), 10px 10px 26px -12px var(--c4), 0 14px 26px -14px var(--c3);
       --prism-ink: #FFFFFF;
       --act: #111114; --act-ink: #FFFFFF;
-      --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
-      --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
       --land: #EDECE9;
       --you: #6B4DFF; --you-rgb: 107, 77, 255; --you-2: #00B3C7; --you-deep: #6B4DFF; --you-soft: #B9A9FF;
       --lime: #00B3C7; --lime-rgb: 0, 179, 199; --lime-deep: #00899A; --lime-ink: #002A30;
@@ -2679,23 +2682,12 @@
     }
     body { background: var(--land); }
 
-    /* ── Шрифты: заголовки — Unbounded, мелкие подписи — моноширинные, «как на дисплее» ── */
-    .win-title, .ph-name, .profile-name, .user-profile-name, .modal-title, .auth-title, .auth-step-title {
-      font-family: var(--font-display); font-weight: 600; letter-spacing: -0.015em;
-    }
-    .win-title { font-size: 15px; }
-    .ph-name { font-size: 22px; letter-spacing: -0.02em; }
-    .profile-name, .user-profile-name { font-size: 19px; }
-    .modal-title { font-size: 15px; }
-    .sub-toolbar-title, .wish-section-title, .user-profile-section-title, .avatar-group-title, .edit-label, .auth-label, .auth-eyebrow {
-      font-family: var(--font-mono); font-weight: 500; font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
-    }
+    /* ── Подзаголовки разделов: приглушённый цвет и цветная метка перед текстом (сами шрифты — в разделе «Типографика») ── */
     .sub-toolbar-title, .wish-section-title, .user-profile-section-title, .avatar-group-title, .edit-label { color: var(--ink-soft); }
     .sub-toolbar-title::before, .wish-section-title::before, .user-profile-section-title::before {
       content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 9px 1px 0; border-radius: 2px;
       background: var(--prism); vertical-align: middle;
     }
-    .row-time, .chat-row .chat-time, .chat-msg .chat-msg-time, .mv-count { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .02em; }
 
     /* ── Окно: раскрывается из нажатой кнопки, по краю пробегает спектр; сверху — тонкий световой штрих ── */
     .window {
@@ -2756,7 +2748,7 @@
     /* ── Списки ── */
     .rows { padding: 4px 10px 12px; }
     .row { padding: 13px 14px; border-radius: 18px; transition: background .2s, transform .4s var(--spring); }
-    .row-name { font-weight: 650; }
+    .row-name { font-weight: 600; }
     .row.danger .row-name { color: var(--hot); }
     .person-card, .chat-row { border-radius: 18px; transition: background .2s, transform .4s var(--spring); }
     .person-card.is-link:hover { background: var(--row-hover); }
@@ -2768,7 +2760,7 @@
 
     /* ── Кнопки: капсулы; главная — «чернильная» со спектральным свечением снизу ── */
     .btn {
-      border-radius: 999px; padding: 11px 18px; font-weight: 700; font-size: 13.5px; letter-spacing: -.005em;
+      border-radius: 999px; padding: 11px 18px; font-weight: 700; font-size: 14px; letter-spacing: -.005em;
       background: var(--field); color: var(--ink);
       transition: background .2s, transform .4s var(--spring), box-shadow .3s, filter .2s;
     }
@@ -2888,7 +2880,7 @@
     .dock-item[data-open="true"] .dock-btn .ic-fill { fill: url(#prismIcon); }
     .dock-label, .dock-item[data-open="true"] .dock-label {
       max-width: none; opacity: 1; margin: 0; overflow: visible;
-      font-size: 10.5px; font-weight: 700; letter-spacing: .01em; line-height: 1;
+      font-size: 11px; font-weight: 700; letter-spacing: .01em; line-height: 1;
     }
     /* радар «Карты»: у открытой вкладки луч вращается */
     .dock-btn .ic-sweep { transform-box: view-box; transform-origin: 12px 12px; }
@@ -2940,7 +2932,7 @@
     .map-tools #settings-btn:hover svg { transform: rotate(60deg); }
     #notif-btn .badge {
       top: 2px; right: 1px; min-width: 18px; height: 18px; line-height: 18px; padding: 0 5px; border-radius: 9px;
-      background: var(--prism); color: var(--prism-ink); font-weight: 800; box-shadow: 0 0 0 2px var(--win);
+      background: var(--prism); color: var(--prism-ink); font-weight: 700; box-shadow: 0 0 0 2px var(--win);
     }
     #filter-btn .filter-dot { top: 8px; right: 8px; width: 8px; height: 8px; background: var(--prism); box-shadow: 0 0 0 2px var(--win); }
     body.app-window .map-tools { opacity: 0; transform: translateY(-8px); pointer-events: none; }
@@ -3054,7 +3046,7 @@
     }
     .auth-card .username-prefix { color: #8C8C97; }
     .auth-btn {
-      border-radius: 999px; background: var(--a-act); color: var(--a-act-ink); font-weight: 800; letter-spacing: -.005em;
+      border-radius: 999px; background: var(--a-act); color: var(--a-act-ink); font-weight: 700; letter-spacing: -.005em;
       box-shadow: var(--prism-glow); transition: transform .4s var(--spring), box-shadow .3s ease, filter .2s;
     }
     .auth-btn:hover { filter: none; box-shadow: -14px 14px 34px -12px var(--c1), 14px 14px 34px -12px var(--c4), 0 18px 34px -14px var(--c3); }
@@ -3079,11 +3071,11 @@
     .flt-head { display: flex; align-items: center; gap: 12px; }
     .flt-head-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
     .flt-title { font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
-    .flt-sub { font-size: 12.5px; color: var(--ink-soft); }
+    .flt-sub { font-size: 13px; color: var(--ink-soft); }
     .flt-card.is-off .flt-age-body { display: none; }
     .flt-age-body { display: grid; gap: 12px; animation: scr-rise .35s var(--ease) both; }
-    .flt-big { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-display); font-weight: 600; font-size: 34px; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
-    .flt-big small { font: 500 10.5px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft); }
+    .flt-big { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-ui); font-weight: 600; font-size: 34px; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .flt-big small { font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .flt-range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer; --p: 0%; }
     .flt-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--prism) 0 / var(--p) 100% no-repeat, var(--win-line); }
     .flt-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--prism) 0 / var(--p) 100% no-repeat, var(--win-line); }
@@ -3093,10 +3085,10 @@
     .flt-range:focus-visible { outline: none; }
     .flt-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 2px 8px rgba(0, 0, 0, .32), 0 0 0 4px rgba(var(--you-rgb), .3); }
     .flt-spread { display: flex; align-items: center; gap: 6px; }
-    .flt-spread-label { flex: 1; font: 500 10.5px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft); }
+    .flt-spread-label { flex: 1; font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .flt-chip {
       min-width: 44px; padding: 7px 10px; border: 0; border-radius: 999px; cursor: pointer;
-      background: var(--win); color: var(--ink-soft); font: 700 12.5px "Manrope", system-ui, sans-serif; font-variant-numeric: tabular-nums;
+      background: var(--win); color: var(--ink-soft); font: 700 13px var(--font-ui); font-variant-numeric: tabular-nums;
       transition: background .2s, color .2s, transform .4s var(--spring);
     }
     .flt-chip:active { transform: scale(.9); transition-duration: .08s; }
@@ -3104,7 +3096,7 @@
     .flt-comp { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
     .flt-opt {
       display: grid; justify-items: center; gap: 8px; padding: 14px 2px 12px; border: 0; border-radius: 18px; cursor: pointer;
-      background: transparent; color: var(--ink-soft); font: 700 12px "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      background: transparent; color: var(--ink-soft); font: 700 12px var(--font-ui); letter-spacing: -.005em;
       transition: background .25s, color .2s, box-shadow .25s, transform .4s var(--spring);
     }
     .flt-opt svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -3114,7 +3106,7 @@
     .flt-opt[aria-pressed="true"] svg { stroke: url(#prismIcon); }
     .flt-warn { padding: 0 6px; font-size: 12px; color: var(--hot); }
     .flt-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 14px 4px 0; }
-    .flt-count { flex: 1; min-width: 0; font: 500 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+    .flt-count { flex: 1; min-width: 0; font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .flt-foot .btn-ghost { background: transparent; color: var(--ink-soft); padding: 11px 10px; }
     .flt-foot .btn-ghost:hover { color: var(--ink); text-decoration: none; }
     @media (max-width: 420px) {
@@ -3137,7 +3129,7 @@
     .avatar-stage:active { cursor: grabbing; }
     .avatar-stage-hint {
       position: absolute; left: 16px; top: 14px; pointer-events: none;
-      font: 500 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); opacity: .75;
+      font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); opacity: .75;
       transition: opacity .4s ease;
     }
     .avatar-zoom {
@@ -3160,7 +3152,7 @@
     :root[data-theme="dark"] .avatar-swatch { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
     :root[data-theme="dark"] .avatar-swatch[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
     .avatar-stage.is-touched .avatar-stage-hint { opacity: 0; }
-    .avatar-pill { border-radius: 999px; padding: 8px 15px; font-weight: 650; transition: background .2s, color .2s, transform .4s var(--spring); }
+    .avatar-pill { border-radius: 999px; padding: 8px 15px; font-weight: 600; transition: background .2s, color .2s, transform .4s var(--spring); }
     .avatar-pill:active, .avatar-swatch:active { transform: scale(.9); transition-duration: .08s; }
     .user-avatar-wrap { width: 44px; height: 44px; }
     .user-profile-avatar:not(.no-3d) { background: radial-gradient(circle at 50% 80%, rgba(var(--you-rgb), .2), transparent 70%), var(--field); }
@@ -3188,9 +3180,9 @@
       .dock-btn, .dock-item[data-open="true"] .dock-btn { height: 48px; gap: 3px; border-radius: 20px; padding: 0; }
       .dock-btn svg { width: 22px; height: 22px; }
       .dock-pill { border-radius: 20px; }
-      .dock-label, .dock-item[data-open="true"] .dock-label { font-size: 10px; }
+      .dock-label, .dock-item[data-open="true"] .dock-label { font-size: 11px; }
       .window { border-radius: 28px; }
-      .win-title { font-size: 14.5px; }
+      .win-title { font-size: 15px; }
       .ph-name { font-size: 20px; }
     }
     @media (max-width: 380px) {
@@ -3210,7 +3202,7 @@
     .unread-pill {
       flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
       background: var(--prism); color: var(--prism-ink);
-      font-family: inherit; font-size: 10.5px; font-weight: 800; line-height: 18px; letter-spacing: 0; text-align: center;
+      font-family: inherit; font-size: 11px; font-weight: 700; line-height: 18px; letter-spacing: 0; text-align: center;
     }
     .unread-pill[hidden] { display: none !important; }
     .dock-badge { position: absolute; top: 3px; left: 50%; margin-left: 3px; box-shadow: 0 0 0 2px var(--win); pointer-events: none; }
@@ -3242,7 +3234,7 @@
     .chat-row.is-muted .unread-pill { background: var(--field); color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--win-line); }
     .chat-row.is-muted.has-unread .chat-last { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--ink-soft); }
     /* непрочитанное в списке: имя жирнее, а текст сообщения переливается спектром — пока чат не откроют */
-    .chat-row.has-unread .chat-name { font-weight: 800; }
+    .chat-row.has-unread .chat-name { font-weight: 700; }
     .chat-row.has-unread .chat-last {
       font-weight: 700; color: var(--ink);
       background: linear-gradient(100deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1)) 0 0 / 300% 100%;
@@ -3251,21 +3243,51 @@
     }
     @keyframes unread-shine { to { background-position: -300% 0; } }
     @media (prefers-reduced-motion: reduce) { .chat-row.has-unread .chat-last { animation: none; } }
-    /* ── Личный чат: «Прочитано» у последнего своего сообщения, которое собеседник прочитал ── */
-    #chat-view-body.reads-on .chat-msg.me.is-read-last .chat-ticks::after,
-    #chat-view-body.reads-on .chat-msg.me.is-edit-seen .chat-ticks::after { content: "Прочитано"; margin-left: 6px; font-weight: 700; }
-    /* своё исправленное сообщение: «Отредактировано», пока собеседник не открыл чат после правки (тогда — «Прочитано»);
-       пометка «изм.» у времени при этом не нужна */
-    #chat-view-body.reads-on .chat-msg.me.is-edit-unseen .chat-ticks::after { content: "Отредактировано"; margin-left: 6px; font-weight: 700; opacity: .8; }
-    #chat-view-body.reads-on .chat-msg.me[data-edited-ts] .chat-edited { display: none; }
+    /* ── Отметки у времени своего сообщения, как в Telegram: часы — отправляется, галочка — отправлено,
+       две — прочитано. Галочки видны, когда известно, кто что прочитал (reads-on) ── */
+    .chat-ticks { display: none; margin-left: 4px; vertical-align: -1.5px; }
+    .chat-ticks svg {
+      display: block; width: 17px; height: 11.5px; overflow: visible;
+      fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .chat-msg.is-pending .chat-ticks, #chat-view-body.reads-on .chat-ticks { display: inline-block; }
+    .chat-ticks .tick-read, .chat-msg.is-read .chat-ticks .tick-sent { display: none; }
+    .chat-msg.is-read .chat-ticks .tick-read { display: inline; }
+    /* время у отправленного чуть приглушено, а две галочки — в полную силу: прочитанное видно с одного взгляда */
+    .chat-msg.me.is-read .chat-msg-time { opacity: .95; }
+    /* ── Пересланное сообщение: чьё оно ── */
+    .chat-fwd {
+      margin: 0 0 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      line-height: 1.3; opacity: .82;
+    }
+    .chat-msg.has-media .chat-fwd { margin: 2px 6px 5px; }
+    .chat-msg.is-circle .chat-fwd { margin: 0 4px 5px; color: var(--ink-soft); opacity: 1; }
+    /* ── Кнопка «вниз»: видна, когда ленту отлистали вверх; на ней — сколько сообщений пришло за это время ── */
+    .chat-down-wrap { position: relative; flex: none; height: 0; z-index: 3; }
+    .chat-down {
+      position: absolute; right: 12px; bottom: 10px; width: 40px; height: 40px; padding: 0;
+      display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+      background: var(--glass); color: var(--ink); border: 1px solid var(--glass-edge);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .45), inset 0 1px 0 var(--rim, transparent);
+      opacity: 0; visibility: hidden; transform: translateY(10px) scale(.86);
+      transition: opacity .2s ease, transform .3s var(--spring, ease), visibility 0s .3s, background .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .chat-down.is-on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+    .chat-down:hover { background: var(--win-2); }
+    .chat-down.is-on:active { transform: scale(.9); }
+    .chat-down svg { width: 22px; height: 22px; }
+    .chat-down .unread-pill { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); box-shadow: 0 0 0 2px var(--win); }
+    @media (prefers-reduced-motion: reduce) { .chat-down { transition: opacity .2s ease, visibility 0s .2s; transform: none; } }
     /* ── Ответ на сообщение: цитата в сообщении, плашка над полем ввода, свайп влево ── */
     .chat-reply {
       display: grid; gap: 1px; margin: 0 0 5px; padding: 4px 8px; max-width: 100%; min-width: 0;
       border-left: 3px solid currentColor; border-radius: 6px; background: rgba(127, 127, 140, .2);
-      font-size: 12.5px; line-height: 1.3; cursor: pointer;
+      font-size: 13px; line-height: 1.3; cursor: pointer;
     }
     .chat-msg.has-media .chat-reply { margin: 2px 2px 5px; }
-    .chat-reply b { font-weight: 800; }
+    .chat-reply b { font-weight: 700; }
     .chat-reply b, .chat-reply span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chat-reply span { opacity: .85; }
     .chat-reply-bar { margin: 0 12px 2px; cursor: default; }
@@ -3300,7 +3322,7 @@
     .chat-date span {
       display: block; padding: 4px 11px; border-radius: 999px;
       background: var(--glass); border: 1px solid var(--glass-edge);
-      color: var(--ink-soft); font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+      color: var(--ink-soft); font-size: 12px; font-weight: 600; line-height: 1.3; white-space: nowrap;
     }
     /* размытие под плашкой нужно только плавающей — она лежит поверх сообщений; у плашек в ленте под ними
        ровный фон окна, а размытие на каждой из них заметно тормозит прокрутку на ноутбуках */
@@ -3320,7 +3342,7 @@
     .chat-pin:hover { background: var(--row-hover); }
     .chat-pin::before { content: ""; flex: none; width: 3px; align-self: stretch; border-radius: 3px; background: var(--prism); }
     .chat-pin-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
-    .chat-pin-cap { font: 500 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+    .chat-pin-cap { font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .chat-pin-text { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .chat-pin-x {
       flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft);
@@ -3374,13 +3396,87 @@
       background: var(--field); color: inherit; box-shadow: inset 0 0 0 1px var(--win-line);
       transition: transform .3s var(--spring, ease), background .2s;
     }
-    .chat-react b { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .chat-react b { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .chat-react.is-mine { background: var(--act); color: var(--act-ink); box-shadow: none; }
     .chat-msg.me .chat-react { background: var(--me-card); box-shadow: none; }
     .chat-msg.me .chat-react.is-mine { background: var(--act-ink); color: var(--act); }
     .chat-react:active { transform: scale(.88); }
     .chat-react.is-pop { animation: react-pop .5s var(--spring, ease); }
     @keyframes react-pop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } }
+    /* ── Анимация реакции (playReactionFx): эмодзи на плашке и его крупная копия над сообщением ── */
+    .chat-react-emo { display: inline-block; }
+    .react-fx { position: fixed; z-index: 600; width: 0; height: 0; pointer-events: none; }
+    .react-fx-rise {
+      position: absolute; left: 0; top: 0; font-size: 60px; line-height: 1; white-space: nowrap;
+      transform: translate(-50%, -50%); animation: react-rise 2.1s var(--ease, ease) both;
+      filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .28));
+    }
+    .react-fx-rise > span { display: block; }
+    @keyframes react-rise {
+      0% { transform: translate(-50%, -50%) scale(.25); opacity: 0; }
+      14% { transform: translate(-50%, calc(-50% + var(--y) * 1.1)) scale(1.1); opacity: 1; }
+      24%, 82% { transform: translate(-50%, calc(-50% + var(--y))) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, calc(-50% + var(--y) * 1.35)) scale(.6); opacity: 0; }
+    }
+    .react-fx-sparks { position: absolute; left: 0; top: var(--y); }
+    .react-fx-sparks i {
+      position: absolute; left: 0; top: 0; font-style: normal; line-height: 1; opacity: 0;
+      animation: react-spark 1.15s cubic-bezier(.15, .7, .3, 1) var(--d, 0s) both;
+    }
+    @keyframes react-spark {
+      0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; }
+      18% { opacity: 1; }
+      100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)) scale(1); opacity: 0; }
+    }
+    .fx-beat { animation: fx-beat 1.8s ease-in-out both; }
+    .fx-laugh { animation: fx-laugh 1.9s ease-in-out both; transform-origin: 50% 85%; }
+    .fx-sob { animation: fx-sob 2s ease-in-out both; transform-origin: 50% 90%; }
+    .fx-thumb { animation: fx-thumb 1.6s ease-out both; transform-origin: 30% 90%; }
+    .fx-flame { animation: fx-flame 1.8s ease-in-out both; transform-origin: 50% 100%; }
+    .fx-gasp { animation: fx-gasp 1.6s ease-out both; }
+    .fx-party { animation: fx-party 1.8s ease-out both; }
+    .fx-rage { animation: fx-rage 1.5s linear both; }
+    .fx-wobble { animation: fx-wobble 1.6s ease-out both; }
+    @keyframes fx-beat {
+      0%, 100% { transform: scale(1); } 10% { transform: scale(1.36); } 20% { transform: scale(.94); } 30% { transform: scale(1.3); }
+      42% { transform: scale(1); } 58% { transform: scale(1.24); } 70% { transform: scale(.97); } 84% { transform: scale(1.12); }
+    }
+    @keyframes fx-laugh {
+      0%, 100% { transform: none; } 8% { transform: rotate(-15deg) translateY(-9%); } 16% { transform: rotate(13deg) translateY(2%); }
+      24% { transform: rotate(-13deg) translateY(-8%); } 32% { transform: rotate(11deg) translateY(2%); } 40% { transform: rotate(-10deg) translateY(-7%); }
+      48% { transform: rotate(9deg); } 56% { transform: rotate(-8deg) translateY(-5%); } 64% { transform: rotate(6deg); }
+      74% { transform: rotate(-5deg) translateY(-3%); } 84% { transform: rotate(3deg); } 93% { transform: rotate(-2deg); }
+    }
+    @keyframes fx-sob {
+      0%, 100% { transform: none; } 12% { transform: translateY(7%) scale(1.07, .93); } 24% { transform: translateY(-2%) rotate(-7deg); }
+      36% { transform: translateY(8%) scale(1.08, .92); } 48% { transform: translateY(-2%) rotate(7deg); } 60% { transform: translateY(7%) scale(1.07, .93); }
+      72% { transform: translateY(-1%) rotate(-4deg); } 86% { transform: translateY(3%) scale(1.03, .97); }
+    }
+    @keyframes fx-thumb {
+      0% { transform: rotate(-42deg) scale(.6); } 20% { transform: rotate(15deg) scale(1.32); } 36% { transform: rotate(-9deg) scale(1.05); }
+      52% { transform: rotate(7deg) scale(1.16); } 68% { transform: rotate(-4deg) scale(1); } 84% { transform: rotate(2deg) scale(1.05); } 100% { transform: none; }
+    }
+    @keyframes fx-flame {
+      0%, 100% { transform: none; } 10% { transform: scale(1.12, 1.32) skewX(-6deg); } 20% { transform: scale(.94, 1.08) skewX(5deg); }
+      30% { transform: scale(1.1, 1.36) skewX(-4deg); } 40% { transform: scale(.96, 1.1) skewX(6deg); } 50% { transform: scale(1.08, 1.3) skewX(-5deg); }
+      60% { transform: scale(.97, 1.08) skewX(4deg); } 72% { transform: scale(1.05, 1.2) skewX(-3deg); } 86% { transform: scale(1, 1.06) skewX(2deg); }
+    }
+    @keyframes fx-gasp {
+      0%, 100% { transform: none; } 12% { transform: scale(1.46); } 20% { transform: scale(1.38) translateX(-5%); } 26% { transform: scale(1.38) translateX(5%); }
+      32% { transform: scale(1.38) translateX(-4%); } 38% { transform: scale(1.38) translateX(4%); } 46% { transform: scale(1.4); } 72% { transform: scale(1.28); }
+    }
+    @keyframes fx-party {
+      0% { transform: translateY(22%) scale(.6) rotate(-22deg); } 18% { transform: translateY(-32%) scale(1.32) rotate(15deg); } 34% { transform: translateY(0) scale(1) rotate(-9deg); }
+      50% { transform: translateY(-20%) scale(1.16) rotate(8deg); } 66% { transform: translateY(0) rotate(-5deg); } 82% { transform: translateY(-7%) rotate(3deg); } 100% { transform: none; }
+    }
+    @keyframes fx-rage {
+      0%, 100% { transform: none; } 6%, 18%, 30%, 42%, 54%, 66% { transform: translateX(-9%) rotate(-6deg) scale(1.16); }
+      12%, 24%, 36%, 48%, 60%, 72% { transform: translateX(9%) rotate(6deg) scale(1.16); } 85% { transform: scale(1.06); }
+    }
+    @keyframes fx-wobble {
+      0% { transform: scale(.5) rotate(-20deg); } 20% { transform: scale(1.32) rotate(11deg); } 38% { transform: scale(.95) rotate(-8deg); }
+      56% { transform: scale(1.14) rotate(6deg); } 76% { transform: scale(1) rotate(-3deg); } 100% { transform: none; }
+    }
     .chat-edited { opacity: .8; font-style: italic; }
     /* Поле ввода в несколько строк: растёт до 6 строк (fitChatInput), дальше прокручивается; кнопки — по нижнему краю */
     .chat-composer { align-items: flex-end; }
@@ -3398,7 +3494,7 @@
     .win-title-name { display: block; overflow: hidden; text-overflow: ellipsis; }
     .win-title-sub {
       display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font: 500 11.5px/1.25 "Manrope", system-ui, sans-serif; letter-spacing: 0; color: var(--ink-soft);
+      font: 500 12px/1.25 var(--font-ui); letter-spacing: 0; color: var(--ink-soft);
     }
     .win-title-sub:empty { display: none; }
     .win-title-sub.is-online, .win-title-sub.is-typing { color: var(--you); }
@@ -3514,7 +3610,7 @@
     }
     /* выбор схемы в настройках */
     .pal-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .pal-opt { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px; font-size: 12.5px; }
+    .pal-opt { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px; font-size: 13px; }
     .pal-dot { width: 32px; height: 32px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .35); transition: transform .4s var(--spring); }
     .pal-opt[aria-pressed="true"] .pal-dot { transform: scale(1.12); box-shadow: 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
     @media (max-width: 360px) { .pal-seg { grid-template-columns: repeat(2, 1fr); } }
@@ -3544,14 +3640,14 @@
     .cv-wave i { flex: 1; min-width: 2px; border-radius: 2px; background: currentColor; opacity: .3; transition: opacity .15s linear; }
     .cv-wave i.is-on { opacity: 1; }
     .chat-msg.them .cv-wave i.is-on { background: var(--you); }
-    .chat-voice-dur { flex: none; min-width: 30px; text-align: right; font: 500 10.5px var(--font-mono); letter-spacing: .02em; opacity: .85; font-variant-numeric: tabular-nums; }
+    .chat-voice-dur { flex: none; min-width: 30px; text-align: right; font: 500 11px var(--font-ui); letter-spacing: .02em; opacity: .85; font-variant-numeric: tabular-nums; }
 
     /* ── Кружок: время и знак «без звука» — маленькие стеклянные плашки ── */
     .chat-circle-dur, .chat-circle-sound {
       background: rgba(12, 12, 16, .42); color: #fff;
       -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
     }
-    .chat-circle-dur { bottom: 12px; padding: 3px 9px; border-radius: 999px; font: 500 10.5px var(--font-mono); letter-spacing: .02em; }
+    .chat-circle-dur { bottom: 12px; padding: 3px 9px; border-radius: 999px; font: 500 11px var(--font-ui); letter-spacing: .02em; }
     .chat-circle-sound { right: 33px; bottom: 33px; width: 28px; height: 28px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
     .chat-circle-sound svg { width: 15px; height: 15px; display: block; }
 
@@ -3571,7 +3667,7 @@
     /* ── Воспоминание: с кем ── */
     .post-with-list { margin-top: 8px; }
     .post-with-list .person-card[role="radio"] .person-check { border-radius: 50%; }
-    .post-head .post-author.is-with { font-size: 13.5px; }
+    .post-head .post-author.is-with { font-size: 14px; }
     .pw-link { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer;
       text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
     .pw-link:hover { color: var(--you); text-decoration-color: currentColor; }
@@ -3602,14 +3698,14 @@
     @keyframes pop-card-in { from { opacity: 0; transform: translateY(8px) scale(.9); } }
     .map-popup .pop-img { border-radius: 18px; aspect-ratio: 4 / 3; background: var(--field); }
     .map-popup .pop-text { display: grid; gap: 3px; padding: 10px 8px 2px; }
-    .map-popup .pop-place { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-weight: 700; font-size: 13.5px; line-height: 1.3; letter-spacing: -.01em; color: var(--ink); }
+    .map-popup .pop-place { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-weight: 700; font-size: 14px; line-height: 1.3; letter-spacing: -.01em; color: var(--ink); }
     .map-popup .pop-place svg { flex: none; width: 15px; height: 15px; margin-top: 1px; fill: none; stroke: url(#prismIcon); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .map-popup .pop-with, .map-popup .pop-caption { margin: 0; padding-left: 21px; }
     .map-popup .pop-open {
       display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 40px; margin: 10px 0 0; padding: 0 16px;
       border: 0; border-radius: 999px; cursor: pointer;
       background: var(--act); color: var(--act-ink); box-shadow: var(--prism-glow);
-      font: 700 13px "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      font: 700 13px var(--font-ui); letter-spacing: -.005em;
       transition: transform .4s var(--spring), filter .2s;
     }
     .map-popup .pop-open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .4s var(--spring); }
@@ -3621,12 +3717,12 @@
     .pe { display: flex; flex-direction: column; gap: 22px; min-height: 100%; padding: 4px 14px 0; }
     .pe-sec { display: grid; gap: 10px; }
     .pe-cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; }
-    .pe-cap > span:first-child { font: 500 10.5px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft); }
+    .pe-cap > span:first-child { font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .pe-cap > span:first-child::before {
       content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 9px 1px 0; border-radius: 2px;
       background: var(--prism); vertical-align: middle;
     }
-    .pe-count { font: 500 10.5px var(--font-mono); font-style: normal; letter-spacing: .06em; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .pe-count { font: 500 11px var(--font-ui); font-style: normal; letter-spacing: .06em; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
     .pe-note { margin: 0; padding: 0 4px; font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
     .pe-card .pe-note { padding: 0; }
 
@@ -3645,7 +3741,7 @@
     }
     .pe .pg-badge {
       left: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px;
-      background: rgba(12, 12, 16, .5); color: #fff; font: 500 9.5px var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+      background: rgba(12, 12, 16, .5); color: #fff; font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase;
       -webkit-backdrop-filter: blur(10px) saturate(160%); backdrop-filter: blur(10px) saturate(160%);
     }
     .pe .pg-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--prism); }
@@ -3662,7 +3758,7 @@
     }
     .pe .pg-add {
       gap: 8px; border: 0; background: var(--field); color: var(--ink-soft);
-      font: 500 9.5px var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+      font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase;
       transition: background .2s, color .2s, transform .4s var(--spring), box-shadow .2s;
     }
     .pe .pg-add svg {
@@ -3688,13 +3784,13 @@
     .pe-field.is-invalid .pe-label { color: var(--hot); }
     .pe-label {
       display: flex; justify-content: space-between; gap: 8px;
-      font: 500 10px var(--font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink-soft);
+      font: 500 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft);
       transition: color .2s;
     }
     .pe-field:focus-within .pe-label { color: var(--ink); }
     .pe-input {
       width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; background: none; outline: none;
-      color: var(--ink); font: 600 15px/1.4 "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      color: var(--ink); font: 600 15px/1.4 var(--font-ui); letter-spacing: -.005em;
     }
     .pe-input::placeholder { color: var(--ink-soft); opacity: .6; font-weight: 500; }
     .pe-handle { display: flex; align-items: baseline; gap: 1px; }
@@ -3706,7 +3802,7 @@
     .pe-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 18px; background: var(--field); }
     .pe-seg-opt {
       display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 8px; border: 0; border-radius: 14px; cursor: pointer;
-      background: transparent; color: var(--ink-soft); font: 700 13px "Manrope", system-ui, sans-serif; letter-spacing: -.005em;
+      background: transparent; color: var(--ink-soft); font: 700 13px var(--font-ui); letter-spacing: -.005em;
       transition: background .25s, color .2s, box-shadow .25s, transform .4s var(--spring);
     }
     .pe-seg-opt svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -3728,6 +3824,107 @@
       .pe { padding: 2px 12px 0; gap: 20px; }
       .pe-foot { margin: auto -12px 0; padding: 20px 12px 14px; }
       .pe-input, .pe-handle i { font-size: 16px; }
+    }
+
+    /* ═══════ Типографика ═══════
+       Один шрифт (--font-ui) и одна шкала на всё приложение — как в системных мессенджерах:
+         заголовки   24 / 20 / 17 — имя на фото профиля и экран входа, имя в профиле, заголовок окна
+         основной    15           — имена в списках (600), текст сообщений, пункты меню, поля (на телефоне 16)
+         вторичный   13–14        — подписи строк, кнопки, вкладки, цитаты
+         служебный   11–12        — время, счётчики, подзаголовки разделов, вкладки нижней панели
+       Насыщенности: 400 — текст, 500 — подписи и пункты меню, 600 — имена, кнопки и заголовки, 700 — крупные заголовки.
+       Раздел стоит последним и задаёт шрифт каждой роли; размеры и насыщенности в правилах выше — только для того,
+       чего здесь нет, и подчиняются той же шкале. Меняете шрифты — меняйте здесь. */
+    h1, h2, h3, h4 { font-family: var(--font-ui); }
+    /* цифры одной ширины там, где они меняются или стоят столбцом: время, длительность, счётчики */
+    .chat-msg .chat-msg-time, .row-time, .chat-row .chat-time, .pm-meta, .chat-voice-dur, .chat-circle-dur, .chat-rec-time,
+    .unread-pill, #notif-btn .badge, .pe-count, .mv-count, .pv-count, .flt-big, .flt-chip, .chat-react b { font-variant-numeric: tabular-nums; }
+
+    /* ── заголовки ── */
+    .win-title { font-size: 17px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; }
+    .win-title.has-sub { line-height: 1.2; }
+    .win-title-sub { font: 400 12px/1.25 var(--font-ui); letter-spacing: 0; }
+    .modal-title, .auth-card .auth-step-title { font-size: 17px; font-weight: 600; line-height: 1.3; letter-spacing: -0.015em; }
+    .auth-card .auth-title { font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -0.022em; }
+    .ph-name { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -0.022em; }
+    .profile-name, .user-profile-name { font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -0.018em; }
+    .flt-title, .legal-page h3, .mv-title, .filter-title { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+    .crop-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+    .flt-big { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; }
+
+    /* ── списки: имя, подпись, время ── */
+    .row-name, .theme-head .row-name, .person-card .person-name, .chat-row .chat-name, .group-name, .pm-title, .post-head .post-author {
+      font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -0.005em;
+    }
+    .chat-row.has-unread .chat-name { font-weight: 700; }
+    .row-sub, .theme-head .row-sub, .person-card .person-handle, .group-sub, .pm-sub, .flt-sub, .filter-sub, .post-head .post-place {
+      font-size: 13px; font-weight: 400; line-height: 1.35;
+    }
+    .chat-row .chat-last { font-size: 14px; font-weight: 400; line-height: 1.35; }   /* текст последнего сообщения — почти основной */
+    .chat-row.has-unread .chat-last { font-weight: 600; }
+    .row-time, .chat-row .chat-time, .pm-meta { font-size: 12px; font-weight: 400; letter-spacing: 0; }
+
+    /* ── чат ── */
+    .chat-msg { font-size: 15px; line-height: 1.38; }
+    .chat-msg .chat-msg-time { font-size: 11px; font-weight: 400; line-height: 1.2; letter-spacing: 0; }
+    .chat-date span { font-size: 12px; font-weight: 500; }
+    .chat-msg-author { font-size: 13px; font-weight: 600; }
+    .chat-fwd { font-size: 13px; }
+    .chat-fwd b { font-weight: 600; }
+    .chat-reply { font-size: 13px; line-height: 1.3; }
+    .chat-reply b { font-weight: 600; }
+    .chat-file-name { font-size: 14px; font-weight: 600; }
+    .chat-file-size { font-size: 12px; }
+    .chat-file-ico, .pm-ico { font-size: 11px; font-weight: 700; }
+    .chat-voice-dur, .chat-circle-dur { font: 500 12px var(--font-ui); letter-spacing: 0; }
+    .chat-pin-cap { font: 600 12px var(--font-ui); letter-spacing: 0; text-transform: none; }
+    .chat-pin-text { font-size: 14px; font-weight: 400; }
+    .chat-react b { font-size: 12px; font-weight: 600; }
+    .chat-sel-count { font-size: 14px; font-weight: 600; }
+    .support-chat-head { font-size: 12px; font-weight: 500; }
+
+    /* ── кнопки, вкладки, меню ── */
+    .btn { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
+    .auth-btn { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+    .chat-tab, .seg-opt, .pe-seg-opt, .flt-chip, .theme-opt, .pal-opt, .avatar-pill, .wa-btn, .friend-add-btn, #install-btn, .mv-btn, .mv-start {
+      font-size: 13px; font-weight: 600; letter-spacing: 0;
+    }
+    .flt-opt { font-size: 12px; font-weight: 600; letter-spacing: 0; }   /* четыре плитки в ряд — на узком телефоне им нужен размер поменьше */
+    .popover .pop-item { font-size: 15px; font-weight: 500; }
+    .auth-link, .pw-link { font-size: 14px; font-weight: 600; }
+    .dock-label, .dock-item[data-open="true"] .dock-label { font-size: 11px; font-weight: 600; letter-spacing: 0; }
+    .unread-pill, #notif-btn .badge { font-size: 11px; font-weight: 700; letter-spacing: 0; }
+
+    /* ── подписи: подзаголовки разделов — небольшой капителью; названия полей и счётчики — обычным начертанием ── */
+    .sub-toolbar-title, .wish-section-title, .user-profile-section-title, .avatar-group-title, .auth-eyebrow, .pe-cap > span:first-child, .flt-spread-label {
+      font: 600 12px/1.2 var(--font-ui); letter-spacing: .04em; text-transform: uppercase;
+    }
+    .edit-label, .auth-label { font: 500 13px/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+    .pe-label { font: 500 12px/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+    .pe-count, .flt-count, .avatar-stage-hint { font: 500 12px/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
+    .flt-big small { font: 500 12px var(--font-ui); letter-spacing: .04em; }
+    .pe .pg-badge, .pe .pg-add { font-weight: 600; }
+
+    /* ── поля ввода: набранный текст — обычным начертанием, как и остальной текст ── */
+    .pe-input { font-weight: 500; }
+    .pe-bio { font-weight: 400; }
+    .pe-handle i { font-weight: 500; }
+
+    /* ── карта ── */
+    .user-badge-name, .map-group-name, .map-popup .pop-place, .map-popup .pop-open, .wc-text, #offline-badge { font-weight: 600; }
+
+    @media (max-width: 640px) {
+      .ph-name { font-size: 22px; }
+      /* подписи вкладок нижней панели на телефоне — 10 px, как в системных панелях вкладок */
+      .dock-label, .dock-item[data-open="true"] .dock-label { font-size: 10px; }
+    }
+    @media (max-width: 420px) {
+      .auth-card .auth-title { font-size: 22px; }
+      .flt-big { font-size: 28px; }
+    }
+    @media (max-width: 350px) { .flt-opt, #install-btn { font-size: 11px; } }
+    @media (max-height: 480px) and (orientation: landscape) {
+      .auth-card .auth-title { font-size: 20px; }
     }
   </style>
 </head>
@@ -4874,7 +5071,7 @@
     userLocationsById.clear(); userAvatarCfgById.clear(); groupMemberProfiles.clear();
     posts = []; wishes = []; groups = []; notifications = []; friends = [];
     leaveChat(); mediaUrlCache.clear(); chatMessages = []; supportMessages = []; chatsListShown = '';
-    peerReads.clear(); myServerReads.clear(); chatReadsReady = false;
+    peerReads.clear(); myServerReads.clear(); chatReadsReady = false; peerDmReadsLoaded = false;
     chatPrefs.clear(); chatPrefsUid = null;
     chatLast.clear(); chatUnread.clear(); chatSummaryLoaded = false; chatSummarySeq++; clearTimeout(chatSummaryTimer); updateChatBadges();
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
@@ -8461,16 +8658,20 @@
   }
 
   /* Превью: облако над плашкой — ровно так, как его видно на карте.
-     pillW — примерная ширина плашки, чтобы она не вылезала за край. */
+     pillW — примерная ширина плашки, чтобы она не вылезала за край. Плашка с длинным именем вместе с облаком
+     шире окна телефона — тогда превью целиком уменьшается (k), а не распирает экран вбок. */
   function wishPreviewHtml({ text, tone, caption = '', pillHtml, pillW }) {
     const { html, g } = wishCloud({ text, caption, tone, side: 'right' });
     const pillX = g.tipX - 1;      // правый край плашки: хвостик огибает её сбоку, как на карте
     const pillTop = g.tipY - 10;
     const shift = Math.max(0, Math.round(pillW - pillX));
-    return `<div class="wish-preview"><div class="wp-stage" style="width:${g.w}px;height:${Math.ceil(pillTop + 32)}px;margin-left:${shift}px">
-        <span class="wish-anchor" style="left:${g.tipX.toFixed(1)}px;top:${g.tipY.toFixed(1)}px;margin:0">${html}</span>
-        ${pillHtml.replace('class="', `style="left:${pillX.toFixed(1)}px;top:${pillTop.toFixed(1)}px" class="wp-pill `)}
-      </div></div>`;
+    const w = shift + g.w, h = Math.ceil(pillTop + 32);
+    const k = Math.min(1, Math.max(200, winBody.clientWidth - 44) / w);   // 44 — поля экрана по бокам от превью
+    return `<div class="wish-preview"><div class="wp-fit" style="width:${Math.floor(w * k)}px;height:${Math.ceil(h * k)}px">
+        <div class="wp-stage" style="left:${shift}px;width:${g.w}px;height:${h}px;transform:scale(${k.toFixed(3)});transform-origin:${-shift}px 0">
+          <span class="wish-anchor" style="left:${g.tipX.toFixed(1)}px;top:${g.tipY.toFixed(1)}px;margin:0">${html}</span>
+          ${pillHtml.replace('class="', `style="left:${pillX.toFixed(1)}px;top:${pillTop.toFixed(1)}px" class="wp-pill `)}
+        </div></div></div>`;
   }
 
   function myWishPreviewHtml(w) {
@@ -9442,13 +9643,13 @@
   // Чат на экране — всё, что в нём есть, прочитано
   function markChatRead(c) {
     if (!c || !currentUser || document.hidden) return;
+    if (c.below) return;   // ленту отлистали вверх, и ниже есть сообщения, которых ещё не видели (см. syncChatDown)
     const key = chatKey(c), s = chatReads();
     let top = chatLast.get(key) || null;
     for (const m of c.messages) if (!m.pending && msgTs(m) >= msgTs(top)) top = m;
     const at = msgTs(top);
     if (at > (s.at[key] || s.base)) { s.at[key] = at; saveChatReads(); }
-    // правки чужих сообщений, которые сейчас на экране, тоже увидены: отметка сдвигается до времени правки,
-    // и у автора «Отредактировано» сменяется на «Прочитано»
+    // правки чужих сообщений, которые сейчас на экране, тоже увидены: отметка сдвигается до времени правки
     let seen = at;
     for (const m of c.messages) if (m.editedAt && !m.pending && !isMyMsg(m)) seen = Math.max(seen, Date.parse(m.editedAt) || 0);
     pushChatRead(c, key, seen);   // собеседник и участники группы увидят, что сообщение прочитано
@@ -9500,7 +9701,22 @@
       if (error) { chatReadsError(error); return; }
       (data || []).forEach(applyReadRow);
       chatReadsReady = true;
+      loadPeerDmReads();   // не ждём: на подсчёт непрочитанного эти отметки не влияют
     } catch (err) { console.warn('[chat reads] load:', err); }
+  }
+  /* Отметки собеседников во всех личных чатах со мной — один раз за сеанс (дальше их ведёт realtime, а открытый
+     чат перечитывает свою): галочки у моих сообщений верны сразу, как только чат открыли, а не после ответа сервера */
+  let peerDmReadsLoaded = false;
+  async function loadPeerDmReads() {
+    if (peerDmReadsLoaded || chatReadsMissing || !currentUser) return;
+    peerDmReadsLoaded = true;
+    const uid = currentUser.id;
+    try {
+      const { data, error } = await supabaseClient.from('chat_reads').select('user_id, chat_kind, chat_id, read_at').eq('chat_kind', 'dm').eq('chat_id', String(uid));
+      if (error || !currentUser || currentUser.id !== uid) { if (error) peerDmReadsLoaded = false; return; }
+      (data || []).forEach(applyReadRow);
+      if (chat) syncChatReadMarks();
+    } catch { peerDmReadsLoaded = false; }
   }
   // Отметки собеседника (личный чат) или всех участников (групповой) для открытого чата
   async function loadChatReads(c) {
@@ -9539,27 +9755,21 @@
     if (mine) { if (chatUnread.get(key)) refreshChatSummariesSoon(); }
     else if (chat && chatKey(chat) === key) syncChatReadMarks();
   }
-  // Личный чат: «Прочитано» у последнего моего сообщения, которое собеседник прочитал
+  /* Галочки у своих сообщений, как в Telegram: одна — отправлено, две — прочитано (в групповом чате —
+     хотя бы одним участником). Отметка стоит у каждого сообщения и никуда не переезжает */
   function syncChatReadMarks() {
     const c = chat, body = winBody.querySelector('#chat-view-body');
-    if (!c || !body) return;
-    const on = chatReadsReady && !chatReadsMissing && c.type === 'dm';
+    if (!c || !body || !currentUser) return;
+    const on = chatReadsReady && !chatReadsMissing;
     body.classList.toggle('reads-on', on);
     if (!on) return;
-    const reads = peerReads.get(chatKey(c));
-    const at = (reads && reads.get(String(c.peerId))) || 0;
-    const mine = body.querySelectorAll(':scope > .chat-msg.me[data-ts]');
-    let lastRead = null;
-    for (const el of mine) {
+    const reads = peerReads.get(chatKey(c)), myId = String(currentUser.id);
+    let at = 0;   // до какого момента чат дочитал кто-то, кроме меня
+    if (reads) for (const [uid, ts] of reads) if (uid !== myId && ts > at) at = ts;
+    for (const el of body.querySelectorAll(':scope > .chat-msg.me[data-ts]')) {
       const read = at > 0 && Number(el.dataset.ts) <= at;
-      el.classList.toggle('is-read', read);
-      if (read) lastRead = el;
-      // исправленное: «Отредактировано», пока собеседник не открыл чат после правки, потом — «Прочитано»
-      const edited = Number(el.dataset.editedTs) || 0;
-      el.classList.toggle('is-edit-unseen', !!edited && !(at >= edited));
-      el.classList.toggle('is-edit-seen', !!edited && at >= edited);
+      if (el.classList.contains('is-read') !== read) el.classList.toggle('is-read', read);
     }
-    for (const el of mine) el.classList.toggle('is-read-last', el === lastRead);
   }
   // Имя и аватар участника чата
   function chatPersonById(id) {
@@ -10113,13 +10323,22 @@
     el.classList.toggle('is-long', h > max);
   }
   const ICON_CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
+  // отметки у времени своего сообщения: одна галочка (отправлено) и две (прочитано) — в одном значке, видна нужная
+  const ICON_TICKS = `<svg viewBox="0 0 18 12"><path class="tick-sent" d="M6.4 6.4 9.8 9.8 16.6 2.2"/><g class="tick-read"><path d="M1.4 6.4 4.8 9.8 11.6 2.2"/><path d="M8.6 8.6 9.8 9.8 16.6 2.2"/></g></svg>`;
+  const ICON_TICK_CLOCK = `<svg viewBox="0 0 18 12"><circle cx="11.6" cy="6" r="4.7"/><path d="M11.6 3.5V6l1.7 1.2"/></svg>`;
 
   // Открытый чат: { type: 'dm' | 'group', peerId, groupId, headTitle, winTitle, messages: [] }
   let chat = null;
 
   function normReply(v) {
-    if (!v || typeof v !== 'object' || v.id == null) return null;
+    if (!v || typeof v !== 'object' || v.id == null || v.fwd) return null;
     return { id: String(v.id), name: String(v.name || ''), text: String(v.text || '') };
+  }
+  /* Пересланное сообщение помнит автора оригинала: { uid, name }. Отдельной колонки под это нет — запись лежит
+     в той же колонке reply с пометкой fwd (ответом пересланное быть не может), поэтому базу менять не нужно */
+  function normForward(v) {
+    if (!v || typeof v !== 'object' || !v.fwd) return null;
+    return { uid: v.uid != null ? String(v.uid) : '', name: String(v.name || '') };
   }
   /* Реакции хранятся в колонке reactions (supabase_chat_reactions.sql): { id пользователя: эмодзи } —
      у каждого одна реакция на сообщение, как в Telegram. Пусто — null */
@@ -10132,20 +10351,20 @@
   function normDmRow(r) {
     return { id: r.id, fromId: r.from_id, toId: r.to_id, groupId: null, matchId: null, authorName: null,
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply),
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply),
       reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
   function normGroupRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: r.group_id, matchId: null, authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply),
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply),
       reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
   // Совместный чат двух групп после match
   function normMatchRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: null, matchId: String(r.match_id), authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply),
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply),
       reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
 
@@ -10280,15 +10499,14 @@
     const body = isMedia
       ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
       : `<span class="chat-text">${escapeHtml(m.content)}</span>`;
-    // у своих сообщений в личном чате — место под «Прочитано» (его расставляет syncChatReadMarks)
-    const ticks = mine && !m.pending && chat && chat.type === 'dm';
-    const time = m.pending ? 'отправка…' : (m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '')
-      + fmtTime(m.createdAt) + (ticks ? '<span class="chat-ticks" aria-hidden="true"></span>' : '');
+    // у своих сообщений рядом со временем — отметка: часы, пока отправляется; потом галочки (их расставляет syncChatReadMarks)
+    const ticks = mine ? `<span class="chat-ticks" aria-hidden="true">${m.pending ? ICON_TICK_CLOCK : ICON_TICKS}</span>` : '';
+    const time = (m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '') + fmtTime(m.createdAt) + ticks;
     // цитата сообщения, на которое ответили: нажатие перематывает ленту к нему
     const quote = m.reply ? `<div class="chat-reply" data-reply-to="${escapeHtml(m.reply.id)}" role="button"><b>${escapeHtml(m.reply.name || 'Сообщение')}</b><span>${escapeHtml(m.reply.text || 'Сообщение')}</span></div>` : '';
-    // своё исправленное сообщение в личном чате: на месте «Прочитано» — «Отредактировано», пока собеседник не увидел правку
-    const editedTs = ticks && m.editedAt ? Date.parse(m.editedAt) || 0 : 0;
-    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${ticks ? `data-ts="${msgTs(m)}"` : ''} ${editedTs ? `data-edited-ts="${editedTs}"` : ''}>${author}${quote}${body}${chatReactsHtml(m)}<span class="chat-msg-time">${time}</span></div>`;
+    // пересланное: чьё это сообщение — видно и тому, кто переслал, и тому, кому переслали
+    const fwd = m.forward ? `<div class="chat-fwd">Переслано от <b>${escapeHtml(m.forward.name || 'пользователя')}</b></div>` : '';
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${mine && !m.pending ? `data-ts="${msgTs(m)}"` : ''}>${author}${fwd}${quote}${body}${chatReactsHtml(m)}<span class="chat-msg-time">${time}</span></div>`;
   }
 
   /* ── Реакции ──
@@ -10313,7 +10531,7 @@
     const name = (uid) => (uid === myId ? 'Вы' : chatPersonById(uid).name);
     return `<div class="chat-reacts">${[...groups].sort((a, b) => b[1].length - a[1].length).map(([emoji, users]) => `
       <button type="button" class="chat-react ${emoji === mine ? 'is-mine' : ''} ${emoji === pop ? 'is-pop' : ''}" data-react-chip="${escapeHtml(emoji)}"
-        title="${escapeHtml(users.map(name).join(', '))}" aria-label="${escapeHtml(emoji)}: ${users.length}">${escapeHtml(emoji)}${users.length > 1 ? `<b>${users.length}</b>` : ''}</button>`).join('')}</div>`;
+        title="${escapeHtml(users.map(name).join(', '))}" aria-label="${escapeHtml(emoji)}: ${users.length}"><span class="chat-react-emo">${escapeHtml(emoji)}</span>${users.length > 1 ? `<b>${users.length}</b>` : ''}</button>`).join('')}</div>`;
   }
   // Перерисовать только плашки реакций — сообщение с фото или кружком не пересоздаётся
   function paintChatReacts(m, pop = '') {
@@ -10323,6 +10541,57 @@
     if (old) old.remove();
     const html = chatReactsHtml(m, pop);
     if (html) el.querySelector(':scope > .chat-msg-time').insertAdjacentHTML('beforebegin', html);
+    if (pop) playReactionFx(el.querySelector(':scope > .chat-reacts .chat-react.is-pop'));
+  }
+
+  /* ── Анимация реакции, как в Telegram ──
+     Только что поставленная реакция (моя или собеседника) пару секунд «живёт»: сердце бьётся, смех трясётся,
+     плач всхлипывает… — эмодзи на плашке и его крупная копия над сообщением, от которой разлетаются искры.
+     У каждой группы эмодзи своё движение (fx-…), у остальных — общее «wobble». */
+  const REACT_FX = [
+    ['beat', '❤️ 🥰 😍 💘 💋 ❤️‍🔥 💔 😘 🤗'],
+    ['laugh', '😂 🤣 😁 🤪 🤡 😈 😎'],
+    ['sob', '😢 😭 😨'],
+    ['thumb', '👍 👎 👏 🙏 🤝 👌 ✍️ 🫡 🖕 💅'],
+    ['flame', '🔥 ⚡ 💯'],
+    ['gasp', '😮 😱 🤯 🤩 👀 🙈 🙉 🙊'],
+    ['party', '🎉 🍾 🏆 🎄 🎅 🎃 🦄 ☃️'],
+    ['rage', '🤬 😡'],
+  ].map(([kind, list]) => [kind, new Set(list.split(' '))]);
+  const REACT_SPARKS = { sob: '💧', party: '✨', flame: '✨', thumb: '✨', rage: '💢' };   // чем «брызжет» крупная копия; иначе — самим эмодзи
+  function playReactionFx(chip) {
+    if (!chip || reduceMotion) return;
+    const emoji = chip.dataset.reactChip;
+    const kind = (REACT_FX.find(([, set]) => set.has(emoji)) || ['wobble'])[0];
+    const emo = chip.querySelector('.chat-react-emo');
+    if (emo) {
+      emo.classList.add('fx-' + kind);
+      emo.addEventListener('animationend', () => emo.classList.remove('fx-' + kind), { once: true });
+    }
+    // крупная копия — только когда плашка на экране; у верхнего края она появляется под плашкой, а не над ней
+    const body = chip.closest('#chat-view-body');
+    const r = chip.getBoundingClientRect(), box = body ? body.getBoundingClientRect() : null;
+    if (!box || r.bottom < box.top || r.top > box.bottom) return;
+    const lift = r.top - box.top < 110 ? 78 : -78;
+    const spark = REACT_SPARKS[kind] || emoji;
+    let sparks = '';
+    for (let i = 0, n = kind === 'sob' ? 6 : 8; i < n; i++) {
+      let dx, dy, delay;
+      if (kind === 'sob') {   // слёзы капают вниз одна за другой
+        dx = (i % 2 ? 1 : -1) * (8 + Math.random() * 14); dy = 44 + Math.random() * 30; delay = .3 + i * .2;
+      } else {                // остальное разлетается веером вверх и в стороны
+        const a = -Math.PI / 2 + ((i + .5) / n - .5) * Math.PI * 1.7 + (Math.random() - .5) * .4, dist = 44 + Math.random() * 34;
+        dx = Math.cos(a) * dist; dy = Math.sin(a) * dist; delay = .14 + Math.random() * .2;
+      }
+      sparks += `<i style="--dx:${dx.toFixed(1)}px;--dy:${dy.toFixed(1)}px;--rot:${Math.round((Math.random() - .5) * 140)}deg;--d:${delay.toFixed(2)}s;font-size:${Math.round(13 + Math.random() * 8)}px">${escapeHtml(spark)}</i>`;
+    }
+    const layer = document.createElement('div');
+    layer.className = 'react-fx';
+    layer.setAttribute('aria-hidden', 'true');
+    layer.style.cssText = `left:${(r.left + Math.min(r.width / 2, 17)).toFixed(1)}px;top:${(r.top + r.height / 2).toFixed(1)}px;--y:${lift}px`;
+    layer.innerHTML = `<span class="react-fx-rise"><span class="fx-${kind}">${escapeHtml(emoji)}</span></span><span class="react-fx-sparks">${sparks}</span>`;
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 2300);
   }
   const reactSqlHint = (error) => /function|schema cache|could not find|reactions|edited_at/i.test(error.message || '')
     ? '\n\nВыполните supabase_chat_reactions.sql в Supabase.' : '';
@@ -10356,7 +10625,8 @@
   }
 
   /* ── Редактирование своего сообщения: текст или подпись к фото, видео, файлу ── */
-  const canEditMsg = (m) => isMyMsg(m) && !m.pending && ['text', 'image', 'video', 'file'].includes(m.kind || 'text');
+  // пересланное не правят: это чужие слова (или свои, но сказанные в другом чате)
+  const canEditMsg = (m) => isMyMsg(m) && !m.pending && !m.forward && ['text', 'image', 'video', 'file'].includes(m.kind || 'text');
   function setChatEdit(id) {
     const c = chat;
     if (!c) return;
@@ -10566,6 +10836,7 @@
         ${chat.type === 'match' ? '<div class="match-vote" id="match-vote"></div>' : ''}
         <div class="chat-pin" id="chat-pin" role="button" tabindex="0" hidden></div>
         <div class="support-chat-body" id="chat-view-body">${rows}</div>
+        <div class="chat-down-wrap"><button type="button" class="chat-down" id="chat-down" aria-label="К последним сообщениям" title="К последним сообщениям">${ICON_CHEV_DOWN}<span class="unread-pill" hidden></span></button></div>
         <div class="chat-date chat-date-float" id="chat-date-float" aria-hidden="true"><span></span></div>
         <div class="chat-rec-preview" id="chat-rec-preview" hidden><video playsinline muted></video><span class="chat-rec-ring"></span></div>
         <div class="chat-pin chat-reply-bar" id="chat-reply-bar" hidden></div>
@@ -10594,9 +10865,18 @@
       </div>`;
     const body = winBody.querySelector('#chat-view-body');
     chat.stick = true;
+    chat.below = 0;   // сколько сообщений пришло, пока ленту листали вверх
     body.addEventListener('scroll', () => {
-      if (chat) chat.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+      if (!chat) return;
+      chat.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+      // вернулись к концу ленты — то, что пришло, пока её листали, теперь увидено
+      if (chat.stick && chat.below) { chat.below = 0; markChatRead(chat); }
+      syncChatDown();
     }, { passive: true });
+    const down = winBody.querySelector('#chat-down');
+    down.addEventListener('click', () => scrollChatToBottom(true));
+    // как и «Отправить», кнопка не забирает фокус у поля — клавиатура телефона не прячется
+    down.addEventListener('mousedown', (e) => { if (document.activeElement === winBody.querySelector('#chat-text')) e.preventDefault(); });
     syncChatDates(body);
     initChatFloatDate(body);
     /* Лента внизу, пока высота чего-то меняется: догрузилось фото, появилась плашка закреплённого,
@@ -10609,7 +10889,7 @@
       for (const el of body.children) if (!el.dataset.sized) { el.dataset.sized = '1'; keepBottom.observe(el); }
     };
     // лента меняется из многих мест (новое сообщение, удаление, перерисовка) — плашки дат следуют за ней
-    new MutationObserver(() => { syncChatDates(body); syncChatReadMarks(); watchSizes(); }).observe(body, { childList: true });
+    new MutationObserver(() => { syncChatDates(body); syncChatReadMarks(); watchSizes(); syncChatDown(); }).observe(body, { childList: true });
     watchSizes();
     syncChatReadMarks();
     hydrateChatMedia(body);
@@ -10760,18 +11040,30 @@
     onMatchesChanged();
   }
 
-  function scrollChatToBottom() {
+  function scrollChatToBottom(smooth = false) {
     const body = winBody.querySelector('#chat-view-body');
     if (!body) return;
+    if (smooth && !reduceMotion) { body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' }); return; }
     body.scrollTop = body.scrollHeight;
     body.autoTop = body.scrollTop;   // эту прокрутку сделал скрипт — плавающая дата на неё не показывается
+  }
+  /* Кнопка «вниз», как в Telegram: появляется, когда ленту отлистали вверх, и возвращает к последним сообщениям.
+     Пока лента отлистана, новые сообщения не сдёргивают её вниз — на кнопке растёт счётчик (chat.below) */
+  function syncChatDown() {
+    const body = winBody.querySelector('#chat-view-body'), btn = winBody.querySelector('#chat-down');
+    if (!body || !btn || !chat) return;
+    btn.classList.toggle('is-on', body.scrollHeight - body.scrollTop - body.clientHeight > 160);
+    const n = chat.below || 0, badge = btn.lastElementChild;
+    badge.hidden = !n;
+    badge.textContent = n > 99 ? '99+' : String(n);
   }
 
   function chatBubbleEl(id) {
     return winBody.querySelector(`#chat-view-body [data-msg-id="${CSS.escape(String(id))}"]`);
   }
 
-  function appendChatBubble(m) {
+  // stay — ленту не трогаем: её отлистали вверх, а сообщение чужое
+  function appendChatBubble(m, stay = false) {
     const body = winBody.querySelector('#chat-view-body');
     if (!body) return;
     const empty = body.querySelector('.empty-msg');
@@ -10779,7 +11071,7 @@
     body.insertAdjacentHTML('beforeend', chatBubbleHtml(m));
     if (body.lastElementChild) body.lastElementChild.classList.add('is-new');   // новое сообщение «выпрыгивает»
     hydrateChatMedia(body);
-    scrollChatToBottom();
+    if (!stay) scrollChatToBottom();
   }
 
   function replaceChatBubble(oldId, m) {
@@ -10810,7 +11102,8 @@
   }
 
   /* Ответ на сообщение хранится в колонке reply (supabase_chat_reply.sql): { id, name, text } — снимок того,
-     на что ответили. Без колонки ответ уходит обычным сообщением, без цитаты. */
+     на что ответили; у пересланного там же — автор оригинала (см. normForward). Без колонки сообщение уходит
+     обычным: без цитаты и без подписи «Переслано». */
   let chatReplyMissing = false;
   async function insertChatRow(c, fields) {
     if (chatReplyMissing) fields = { ...fields, reply: null };
@@ -10818,7 +11111,7 @@
     if (res.error && fields.reply && /reply/i.test(res.error.message || '')) {
       chatReplyMissing = true;
       res = await insertChatRowRaw(c, { ...fields, reply: null });
-      alert('Сообщение отправлено без цитаты: чтобы работали ответы, выполните supabase_chat_reply.sql в Supabase.');
+      alert(`Сообщение отправлено без ${fields.reply.fwd ? 'подписи «Переслано»' : 'цитаты'}: чтобы работали ответы и пересылка с автором, выполните supabase_chat_reply.sql в Supabase.`);
     }
     return res;
   }
@@ -10926,8 +11219,10 @@
     // сообщение пришло — подпись «печатает» у его автора снимаем сразу
     if (c.typing && c.typing.delete(String(m.fromId))) paintTyping(c);
     if (c.messages.some((x) => x.id === m.id)) return;
-    // чат открыт, но приложение свёрнуто — сообщение ещё не видели; отметка снимется при возврате
-    noteChatMessage(m, !document.hidden);
+    // ленту отлистали вверх — чужое сообщение читающего вниз не сдёргивает: оно ждёт под кнопкой «вниз»
+    const away = c.stick === false && !isMyMsg(m);
+    // чат открыт, но приложение свёрнуто (или лента отлистана) — сообщение ещё не видели; отметка снимется позже
+    noteChatMessage(m, !document.hidden && !away);
     if (String(m.fromId) === String(currentUser.id)) {
       // Своё сообщение может прийти раньше ответа на insert — заменяем черновик, а не дублируем
       const tmp = c.messages.find((x) => x.pending && x.kind === m.kind &&
@@ -10941,9 +11236,9 @@
       }
     }
     c.messages.push(m);
-    appendChatBubble(m);
+    appendChatBubble(m, away);
     saveChatCache(c);
-    markChatRead(c);
+    if (away) { c.below = (c.below || 0) + 1; syncChatDown(); } else markChatRead(c);
   }
 
   function sendChatText() {
@@ -11442,6 +11737,7 @@
     if (stick) scrollChatToBottom();
     syncChatPinBar();
     syncChatSelectionUi();
+    syncChatDown();
   }
 
   // События realtime по сообщениям: новое, изменённое (закрепили / открепили) и удалённое
@@ -11696,7 +11992,12 @@
   }
 
   /* Пересылка: копия сообщения в другой чат. Файл копируется в папку того чата — у его участников
-     есть доступ только к ней */
+     есть доступ только к ней. С копией уходит автор оригинала («Переслано от …»); у сообщения, которое
+     пересылают дальше, автор остаётся прежним — тот, кто написал его первым */
+  function forwardSnapshot(m) {
+    const from = m.forward || { uid: String(m.fromId), name: isMyMsg(m) ? profile.name || profile.handle || '' : msgAuthorName(m) };
+    return { fwd: true, id: String(m.id), uid: from.uid, name: String(from.name || '').slice(0, 80), text: '' };
+  }
   function forwardTargets() {
     const out = [];
     for (const g of myGroups()) {
@@ -11724,7 +12025,7 @@
     }
     const { data, error } = await insertChatRow(target, {
       kind: m.kind || 'text', content: m.content || '', mediaPath,
-      duration: m.duration, fileName: m.fileName, fileSize: m.fileSize,
+      duration: m.duration, fileName: m.fileName, fileSize: m.fileSize, reply: forwardSnapshot(m),
     });
     if (error) throw error;
     const list = data && chatHistoryCache.get(chatKey(target));
@@ -12115,8 +12416,10 @@
   function mergeFreshHistory(c, fresh) {
     const id = (m) => String(m.id);
     const order = (list) => list.map(id).join(',');
+    // шапка сообщения — цитата или «Переслано от …»: у копии, сохранённой прежней версией приложения, она могла быть другой
+    const head = (m) => (m.forward ? 'f:' + m.forward.name : m.reply ? 'r:' + m.reply.id : '');
     // что могло измениться у сообщения, пока чат был закрыт: закрепление, правка текста, реакции
-    const ver = (m) => [m.pinned ? 1 : 0, m.content, m.editedAt || '', reactKey(m)].join('\u0001');
+    const ver = (m) => [m.pinned ? 1 : 0, m.content, m.editedAt || '', reactKey(m), head(m)].join('\u0001');
     const sending = c.messages.filter((m) => m.pending);
     const old = c.messages.filter((m) => !m.pending);
     const freshIds = new Set(fresh.map(id)), oldById = new Map(old.map((m) => [id(m), m]));
@@ -12138,7 +12441,7 @@
     // изменённые перерисовываем по одному — остальная лента не мигает и не грузит вложения заново
     for (const m of changed) {
       const o = oldById.get(id(m));
-      if (o.pinned === m.pinned && o.content === m.content && (o.editedAt || null) === m.editedAt) paintChatReacts(m);
+      if (o.pinned === m.pinned && o.content === m.content && (o.editedAt || null) === m.editedAt && head(o) === head(m)) paintChatReacts(m);
       else replaceChatBubble(m.id, m);
     }
     if (changed.length) { c.pinIdx = null; syncChatPinBar(); syncChatReplyBar(); }
