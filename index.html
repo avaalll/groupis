@@ -7,8 +7,8 @@
   <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
-       узнаёт, что в кеше уже лежит версия новее, и показывает её в настройках («Обновить приложение») -->
-  <meta name="app-build" content="2026-10-13 07:43">
+       узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
+  <meta name="app-build" content="2026-10-13 07:52">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -9197,7 +9197,6 @@
       winBody.scrollTop = 0;
       winBody.innerHTML = APPS.settings.render();
       syncSettingsUi();
-      checkAppUpdate();   // строка «Обновить приложение» сразу показывает, есть ли версия новее
     }, () => showProfileScreen());
   }
 
@@ -12174,10 +12173,6 @@
             <div class="row-main"><div class="row-name">Техподдержка</div><div class="row-sub">Связаться с техподдержкой</div></div>
             <span class="chev">›</span>
           </li>
-          <li class="row" data-action="app-update" role="button" tabindex="0">
-            <div class="row-main"><div class="row-name">Обновить приложение</div><div class="row-sub" id="app-build-sub">${appUpdateReady ? 'Доступна новая версия' : 'Версия от ' + escapeHtml(appBuildLabel())}</div></div>
-            <span class="chev">›</span>
-          </li>
         </ul>`;
       }
     }
@@ -13838,7 +13833,6 @@
     if (e.target.closest('[data-action="back-to-groups"]')) { goBack(); return; }
     if (e.target.closest('[data-action="open-rules"]')) { showRulesScreen(); return; }
     if (e.target.closest('[data-action="open-support"]')) { showSupportChatScreen(); return; }
-    if (e.target.closest('[data-action="app-update"]')) { forceAppUpdate(); return; }
     if (e.target.closest('[data-action="logout"]')) { logout(); return; }
 
     const wEdit = e.target.closest('[data-wish-edit]');
@@ -14635,18 +14629,11 @@
      и до этого исправления выглядели «не дошедшими». Теперь страница сама смотрит, какая версия лежит в кеше
      (метка app-build в самом начале страницы):
      — приложение только что открыли и в нём ещё ничего не делают — оно сразу перезагружается на новую версию;
-     — позже, чтобы не прерывать человека, новая версия ждёт: включится при следующем запуске, после долгого
-       простоя в фоне (UPDATE_IDLE_MS) или кнопкой «Обновить приложение» в настройках. */
+     — позже, чтобы не прерывать человека, новая версия ждёт: включится при следующем запуске или после
+       долгого простоя в фоне (UPDATE_IDLE_MS).
+     Кнопки «обновить» нет намеренно: приложение обновляется само. */
   const APP_BUILD = (document.querySelector('meta[name="app-build"]') || {}).content || '';
-  let appUpdateReady = false, appUpdating = false;
-  function appBuildLabel() {
-    const m = /^(\d{4})-(\d\d)-(\d\d) (\d\d:\d\d)$/.exec(APP_BUILD);
-    return m ? `${m[3]}.${m[2]}.${m[1]}, ${m[4]}` : (APP_BUILD || 'не указана');
-  }
-  function paintAppBuild() {
-    const el = document.getElementById('app-build-sub');
-    if (el) el.textContent = appUpdating ? 'Обновляем…' : appUpdateReady ? 'Доступна новая версия' : 'Версия от ' + appBuildLabel();
-  }
+  let appUpdateReady = false;
   // Метка сборки страницы, которая лежит в кеше сервис-воркера (читаем только её начало)
   async function cachedAppBuild() {
     if (!window.caches) return '';
@@ -14673,7 +14660,6 @@
   // В кеше лежит версия новее той, что на экране
   function appUpdateFound() {
     appUpdateReady = true;
-    paintAppBuild();
     /* Приложение только что открыли и в нём ещё ничего не делают — новую версию включаем сразу.
        Не чаще раза в две минуты: что бы ни случилось, страница не должна перезагружаться по кругу. */
     let last = 0;
@@ -14692,27 +14678,6 @@
     if (!(cached > APP_BUILD)) return false;   // метки — «год-месяц-день часы:минуты», сравниваются как строки
     if (!appUpdateReady) appUpdateFound();
     return true;
-  }
-  // «Обновить приложение» в настройках: забыть сохранённую страницу и загрузить её с сервера заново
-  async function forceAppUpdate() {
-    if (appUpdating) return;
-    if (!navigator.onLine) { alert('Нет соединения с интернетом — обновить приложение сейчас не получится.'); return; }
-    appUpdating = true;
-    paintAppBuild();
-    const soon = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
-    try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) await soon(reg.update().catch(() => {}), 8000);
-      }
-      if (window.caches) {
-        const names = (await caches.keys()).filter((n) => n.startsWith('groupis-') && !n.startsWith('groupis-static-'));
-        await soon(Promise.all(names.map((n) => caches.delete(n))), 4000);
-      }
-    } catch (err) { console.warn('[update] force:', err); }
-    try { sessionStorage.setItem(AUTOUPDATE_KEY, String(Date.now())); } catch {}   // после этой перезагрузки ещё одна, автоматическая, не нужна
-    saveScreenState();
-    location.reload();
   }
   if (window.caches) {
     // сервис-воркер подгружает свежую страницу в первые секунды после запуска — тогда и смотрим, не новее ли она
