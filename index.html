@@ -6,6 +6,9 @@
        встроенный объект (плагин), подменённый базовый адрес или форма, отправляющая введённое на чужой сервер -->
   <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
+       узнаёт, что в кеше уже лежит версия новее, и показывает её в настройках («Обновить приложение») -->
+  <meta name="app-build" content="2026-10-13 07:43">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -13,6 +16,17 @@
   <meta name="theme-color" content="#EDECE9" id="meta-theme-color">
   <meta name="color-scheme" content="light dark">
   <script>
+    /* iPhone и iPad. Когда фокус попадает в поле ввода, iOS сама приближает страницу и назад уже не отдаляет —
+       поле «наезжает», всё приложение уезжает вбок. maximum-scale=1 это приближение запрещает (в Safari страницу
+       по-прежнему можно увеличить пальцами: там этот запрет действует только на автоприближение).
+       Класс is-ios — для правил «только iOS» в стилях. */
+    (function () {
+      var ios = /iPhone|iPad|iPod/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (!ios) return;
+      document.documentElement.classList.add('is-ios');
+      var vp = document.querySelector('meta[name="viewport"]');
+      if (vp && !/maximum-scale/.test(vp.getAttribute('content'))) vp.setAttribute('content', vp.getAttribute('content') + ', maximum-scale=1');
+    })();
     /* Тема до первой отрисовки, чтобы не мигало: выбор из настроек (auto / light / dark), «авто» — как в системе */
     (function () {
       var pref = 'auto';
@@ -1424,16 +1438,51 @@
     .chat-rec-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
     .chat-rec-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 4px #E0443A; pointer-events: none; }
 
+    /* ── Просмотр фото ──
+       Фото целиком вписывается в экран при любых пропорциях: оно стоит по центру области просмотра (.pv-stage)
+       и не может быть шире или выше неё. Нажатие на фото увеличивает его (.is-zoomed) — тогда область
+       просмотра листается; крестик, Esc или нажатие мимо фото — закрыть. */
     .photo-viewer {
-      position: fixed; inset: 0; z-index: 200; padding: 20px;
-      background: rgba(5,6,14,.92); display: grid; place-items: center; cursor: zoom-out;
-      /* ячейка ровно по размеру экрана: иначе она растёт под высокое фото, и max-height: 100% у картинки не работает */
-      grid-template: minmax(0, 1fr) / minmax(0, 1fr); overflow: hidden;
+      position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 500;
+      background: rgba(5, 6, 14, .94);
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+      animation: fade-in .18s ease both;
     }
-    .photo-viewer img {
-      display: block; min-width: 0; min-height: 0; border-radius: 10px; object-fit: contain;
-      max-width: min(100%, calc(100vw - 40px)); max-height: min(100%, calc(100vh - 40px));
-      max-height: min(100%, calc(100dvh - 40px));
+    .pv-stage {
+      position: absolute; cursor: zoom-out;
+      top: max(16px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+      bottom: max(16px, env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+    }
+    .pv-stage img {
+      position: absolute; top: 0; right: 0; bottom: 0; left: 0; margin: auto;
+      display: block; max-width: 100%; max-height: 100%;
+      border-radius: 10px; cursor: zoom-in; -webkit-user-drag: none;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
+    }
+    .photo-viewer.is-zoomed .pv-stage {
+      top: 0; right: 0; bottom: 0; left: 0; display: flex; overflow: auto; cursor: zoom-out;
+      overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .35) transparent;
+    }
+    .photo-viewer.is-zoomed .pv-stage img {
+      position: static; flex: none; max-width: none; max-height: none;
+      border-radius: 0; box-shadow: none; cursor: zoom-out;
+    }
+    .photo-viewer.is-zoomed .pv-stage.is-dragging, .photo-viewer.is-zoomed .pv-stage.is-dragging img { cursor: grabbing; }
+    .pv-close {
+      position: absolute; z-index: 2; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+      top: max(14px, env(safe-area-inset-top, 0px)); right: max(14px, env(safe-area-inset-right, 0px));
+      display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(28, 28, 36, .72);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      transition: background .2s, transform .3s var(--spring, ease);
+    }
+    .pv-close:hover { background: rgba(64, 64, 78, .88); }
+    .pv-close:active { transform: scale(.9); }
+    .pv-close svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+    /* телефон стоя: фото занимает всю ширину экрана — оставляем сверху полосу под крестик, чтобы он не закрывал угол фото */
+    @media (max-width: 640px) and (orientation: portrait) {
+      .photo-viewer:not(.is-zoomed) .pv-stage { top: calc(max(14px, env(safe-area-inset-top, 0px)) + 54px); left: 10px; right: 10px; }
     }
     .group-chat-avatar { border-radius: 12px; }
 
@@ -3305,15 +3354,33 @@
 
     /* ── Экранная клавиатура на телефонах (см. syncKeyboard): окно ужимается до видимой над клавиатурой части,
        панель вкладок и кнопка «моё место» на это время прячутся ── */
+    /* верх окна — там же, где без клавиатуры на телефоне (10px под «чёлкой»): при её появлении шапка не прыгает,
+       поднимается только нижний край. --kb-top — где начинается видимая часть экрана, --kb-h — её высота */
     html.kb-open .window {
-      top: calc(var(--kb-top, 0px) + max(8px, env(safe-area-inset-top, 0px)));
+      top: calc(var(--kb-top, 0px) + 10px + env(safe-area-inset-top, 0px));
       bottom: calc(100% - var(--kb-top, 0px) - var(--kb-h, 100%) + 8px);
       height: auto; max-height: 680px;
     }
-    html.kb-open .dock-wrap, html.kb-open .geo-btn { visibility: hidden; }
-    /* iPhone увеличивает страницу, если шрифт поля меньше 16px, — и после этого кнопка «Отправить» уезжает за край */
+    html.kb-open .dock-wrap, html.kb-open .geo-btn, html.kb-open .push-ask { visibility: hidden; }
+    /* iPhone приближает страницу, когда фокус попадает в поле со шрифтом меньше 16px, — и сам назад не отдаляет:
+       поле ввода «наезжает», а кнопка «Отправить» уезжает за край. Поэтому на сенсорных экранах у всех полей шрифт
+       не меньше 16px. !important обязателен: у полей свои классы (.support-chat-input, .edit-textarea…) с
+       font: inherit — без него класс перебивает это правило, и у поля чата шрифт оставался 14px. */
     @media (pointer: coarse) {
-      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select { font-size: max(16px, 1em); }
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select { font-size: max(16px, 1em) !important; }
+    }
+    html.is-ios input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), html.is-ios textarea, html.is-ios select { font-size: max(16px, 1em) !important; }
+    /* Прокрутка внутри окна не передаётся странице: на телефоне с открытой клавиатурой иначе вместе с лентой
+       сообщений сдвигается всё приложение */
+    .win-body, .support-chat-body, .chats-list, .people-picker, .fwd-list, .readers-list { overscroll-behavior: contain; }
+    /* По полю чата ведут пальцем — страница под клавиатурой не едет; когда текста больше шести строк, поле листается само */
+    .chat-composer .chat-textarea { touch-action: pan-x; overscroll-behavior: contain; }
+    .chat-composer .chat-textarea.is-long { touch-action: pan-x pan-y; }
+    /* невидимая копия поля чата: по ней fitChatInput узнаёт, сколько строк занимает текст */
+    .chat-composer .chat-textarea.chat-textarea-mirror {
+      position: absolute; left: 0; top: 0; z-index: -1; flex: none;
+      height: 0; min-height: 0; max-height: none; overflow: hidden;
+      visibility: hidden; pointer-events: none;
     }
 
     /* ── Кнопка «моё место» — в правом нижнем углу, на одной линии с панелью вкладок ── */
@@ -3329,8 +3396,23 @@
       /* открыт раздел — кнопки «моё место» нет, место под неё не нужно: панель встаёт по центру */
       body.app-window .dock-wrap { padding: 0 max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); }
     }
+    /* Телефон лёжа: панель вкладок стоит ниже — иначе окно над ней наезжало на неё на пару пикселей */
     @media (max-height: 480px) and (orientation: landscape) {
-      .geo-btn { width: 44px; height: 44px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+      .dock-wrap { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+      .geo-btn { width: 44px; height: 44px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+    }
+    /* Узкие телефоны (до 360px): поле сообщения не должно сжиматься так, что в нём не помещается даже подпись */
+    @media (max-width: 360px) {
+      .chat-composer { padding-left: 8px; padding-right: 8px; gap: 3px; }
+      .chat-composer .chat-tool { width: 32px; }
+      .chat-composer .chat-textarea { padding-left: 12px; padding-right: 12px; }
+    }
+    .chat-composer .chat-textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Самые узкие экраны (до 350px): логотип с кнопкой «Установить» иначе наезжает на кнопки карты справа */
+    @media (max-width: 350px) {
+      .menubar .brand .brand-wordmark { padding: 0 6px 0 8px; }
+      .menubar .brand .brand-wordmark svg { height: 18px; }
+      #install-btn { padding: 5px 8px; font-size: 11px; }
     }
 
     /* ═══════════════════ ЦВЕТОВЫЕ СХЕМЫ ═══════════════════
@@ -9115,6 +9197,7 @@
       winBody.scrollTop = 0;
       winBody.innerHTML = APPS.settings.render();
       syncSettingsUi();
+      checkAppUpdate();   // строка «Обновить приложение» сразу показывает, есть ли версия новее
     }, () => showProfileScreen());
   }
 
@@ -9922,35 +10005,44 @@
   const touchTyping = matchMedia('(hover: none) and (pointer: coarse)');
   /* Поле ввода растёт вместе с текстом: длинная строка переносится, после ~6 строк появляется прокрутка
      (предел — max-height у .chat-textarea) */
-  /* Высоту меняем, только когда она действительно другая. Раньше поле на каждую букву сжималось до одной
-     строки и растягивалось обратно: вся лента чата дважды пересчитывалась, прокрутка внутри поля
-     сбрасывалась, а клавиатура телефона от этого теряла место набора — курсор отскакивал назад. */
+  /* Нужную высоту меряем на невидимой копии поля, а само поле трогаем, только когда высота действительно
+     другая (добавилась или ушла строка). Раньше поле на каждую букву сжималось до одной строки и растягивалось
+     обратно: вся лента чата дважды пересчитывалась, прокрутка внутри поля сбрасывалась, а клавиатура телефона
+     от этого теряла место набора — курсор отскакивал назад. */
+  let chatInputMirror = null;
   function fitChatInput(el) {
     if (!el) return;
-    const len = el.value.length, prevLen = el.fitLen;
-    const rows = el.value.split('\n').length, prevRows = el.fitRows;
-    el.fitLen = len; el.fitRows = rows;
+    const width = el.offsetWidth;
+    if (!width) return;   // поле ещё не на экране
     const set = (prop, v) => { if (el.style[prop] !== v) el.style[prop] = v; };
-    if (!len) { set('height', ''); set('overflowY', 'hidden'); return; }   // пусто — одна строка, как в CSS
-    const fits = el.scrollHeight <= el.clientHeight + 1;
-    // текста прибавилось и он помещается — высота та же; сжимать поле для замера нужно, только когда текст убавился
-    if (el.style.height && fits && prevLen != null && len >= prevLen && rows >= prevRows) return;
-    const max = parseFloat(getComputedStyle(el).maxHeight) || 160;
-    const border = el.offsetHeight - el.clientHeight;
-    if (!fits && el.offsetHeight >= max - 1) { set('overflowY', 'auto'); return; }   // уже предел — дальше прокрутка
-    let h = el.scrollHeight + border;
-    if (fits) {
-      const top = el.scrollTop;
-      el.style.height = 'auto';
-      if (!el.scrollHeight) { el.style.height = ''; return; }   // поле ещё не на экране
-      h = el.scrollHeight + border;
-      el.style.height = Math.min(h, max) + 'px';
-      el.scrollTop = top;
-    } else {
-      if (!el.scrollHeight) return;
-      set('height', Math.min(h, max) + 'px');
+    let m = chatInputMirror;
+    if (!m || m.parentNode !== el.parentNode) {
+      if (m) m.remove();
+      m = chatInputMirror = document.createElement('textarea');
+      m.className = 'support-chat-input chat-textarea chat-textarea-mirror';
+      m.rows = 1; m.disabled = true; m.tabIndex = -1;
+      m.setAttribute('aria-hidden', 'true');
+      el.parentNode.appendChild(m);
     }
+    const cs = getComputedStyle(el);
+    const key = width + '|' + cs.fontSize;
+    if (m.fitKey !== key) {   // изменилась ширина поля или шрифт — заново меряем высоту одной строки
+      m.fitKey = key;
+      m.style.width = width + 'px';
+      m.value = 'x';
+      m.oneLine = m.scrollHeight;
+    }
+    m.value = el.value;
+    const content = m.scrollHeight;
+    if (content <= m.oneLine) {   // одна строка — высота, как задано в стилях
+      set('height', ''); set('overflowY', 'hidden'); el.classList.remove('is-long');
+      return;
+    }
+    const max = parseFloat(cs.maxHeight) || 160;
+    const h = content + (el.offsetHeight - el.clientHeight);
+    set('height', Math.min(h, max) + 'px');
     set('overflowY', h > max ? 'auto' : 'hidden');
+    el.classList.toggle('is-long', h > max);
   }
   const ICON_CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
 
@@ -10945,13 +11037,95 @@
     }
   }
 
-  /* ── Просмотр ── */
+  /* ── Просмотр фото ──
+     Фото целиком вписано в экран. Нажатие на фото увеличивает его вокруг точки нажатия (до настоящего размера,
+     но не меньше чем вдвое) — дальше оно листается колесом, тачпадом, пальцем или перетаскивается мышью;
+     ещё одно нажатие возвращает обратно. Закрыть: крестик, Esc или нажатие мимо фото. */
+  let closePhotoViewer = null;
   function openPhotoViewer(src) {
+    if (closePhotoViewer) closePhotoViewer();
+    // клавиатура телефона не должна закрывать собой фото
+    const focused = document.activeElement;
+    if (focused && focused !== document.body && focused.blur) { try { focused.blur(); } catch {} }
     const back = document.createElement('div');
     back.className = 'photo-viewer';
-    back.innerHTML = `<img src="${escapeHtml(src)}" alt="">`;
-    back.addEventListener('click', () => back.remove());
+    back.setAttribute('role', 'dialog');
+    back.setAttribute('aria-modal', 'true');
+    back.setAttribute('aria-label', 'Просмотр фото');
+    back.innerHTML = `
+      <div class="pv-stage"><img src="${escapeHtml(src)}" alt="" draggable="false"></div>
+      <button type="button" class="pv-close" aria-label="Закрыть" title="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+    const stage = back.querySelector('.pv-stage'), img = stage.querySelector('img');
+    let zoomed = false, drag = null, dragged = false;
+
+    const setZoom = (on, x, y) => {
+      if (on === zoomed) return;
+      if (!on) {
+        zoomed = false;
+        back.classList.remove('is-zoomed');
+        img.style.width = img.style.height = '';
+        return;
+      }
+      const fit = img.getBoundingClientRect();
+      if (!img.naturalWidth || !fit.width) return;   // фото ещё не загрузилось
+      let k = img.naturalWidth / fit.width;
+      if (!(k >= 1.5)) k = 2;                         // фото и так показано почти в настоящем размере — увеличиваем вдвое
+      k = Math.min(k, 5);
+      const fx = (x - fit.left) / fit.width, fy = (y - fit.top) / fit.height;
+      zoomed = true;
+      img.style.width = Math.round(fit.width * k) + 'px';
+      img.style.height = Math.round(fit.height * k) + 'px';
+      back.classList.add('is-zoomed');
+      // точка, по которой нажали, остаётся под пальцем или курсором
+      const big = img.getBoundingClientRect();
+      stage.scrollLeft += big.left + fx * big.width - x;
+      stage.scrollTop += big.top + fy * big.height - y;
+    };
+
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault(); e.stopPropagation();   // Esc закрывает только фото, окно чата под ним остаётся
+      close();
+    };
+    // увеличенное фото перетаскивается мышью (пальцем и тачпадом оно листается само)
+    const onMove = (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!dragged && Math.hypot(dx, dy) < 5) return;
+      dragged = true;
+      stage.classList.add('is-dragging');
+      stage.scrollLeft = drag.left - dx;
+      stage.scrollTop = drag.top - dy;
+    };
+    const onUp = () => { drag = null; stage.classList.remove('is-dragging'); };
+    function close() {
+      document.removeEventListener('keydown', onKey, true);
+      removeEventListener('pointermove', onMove);
+      removeEventListener('pointerup', onUp);
+      removeEventListener('pointercancel', onUp);
+      back.remove();
+      if (closePhotoViewer === close) closePhotoViewer = null;
+    }
+
+    stage.addEventListener('pointerdown', (e) => {
+      dragged = false;
+      if (!zoomed || e.pointerType !== 'mouse' || e.button !== 0) return;
+      e.preventDefault();
+      drag = { x: e.clientX, y: e.clientY, left: stage.scrollLeft, top: stage.scrollTop };
+    });
+    back.addEventListener('click', (e) => {
+      if (e.target.closest('.pv-close')) { close(); return; }
+      if (dragged) { dragged = false; return; }   // кнопку отпустили после перетаскивания — это не нажатие
+      const r = img.getBoundingClientRect();
+      const onPhoto = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (onPhoto) setZoom(!zoomed, e.clientX, e.clientY); else close();
+    });
+    document.addEventListener('keydown', onKey, true);
+    addEventListener('pointermove', onMove);
+    addEventListener('pointerup', onUp);
+    addEventListener('pointercancel', onUp);
     document.body.appendChild(back);
+    closePhotoViewer = close;
   }
 
   // Кружок: по умолчанию крутится без звука; тап — проиграть со звуком, повторный тап — пауза
@@ -11998,6 +12172,10 @@
           </li>
           <li class="row" data-action="open-support" role="button" tabindex="0">
             <div class="row-main"><div class="row-name">Техподдержка</div><div class="row-sub">Связаться с техподдержкой</div></div>
+            <span class="chev">›</span>
+          </li>
+          <li class="row" data-action="app-update" role="button" tabindex="0">
+            <div class="row-main"><div class="row-name">Обновить приложение</div><div class="row-sub" id="app-build-sub">${appUpdateReady ? 'Доступна новая версия' : 'Версия от ' + escapeHtml(appBuildLabel())}</div></div>
             <span class="chev">›</span>
           </li>
         </ul>`;
@@ -13660,6 +13838,7 @@
     if (e.target.closest('[data-action="back-to-groups"]')) { goBack(); return; }
     if (e.target.closest('[data-action="open-rules"]')) { showRulesScreen(); return; }
     if (e.target.closest('[data-action="open-support"]')) { showSupportChatScreen(); return; }
+    if (e.target.closest('[data-action="app-update"]')) { forceAppUpdate(); return; }
     if (e.target.closest('[data-action="logout"]')) { logout(); return; }
 
     const wEdit = e.target.closest('[data-wish-edit]');
@@ -14205,11 +14384,15 @@
      Карта 2GIS сама не узнаёт, что её контейнер изменился: холст остаётся прежнего размера, а рядом —
      пустая чёрная область. Пересчитываем размер карты при любом изменении. На iPad и iPhone новые
      размеры приходят не сразу после поворота, поэтому повторяем пересчёт несколько раз. */
+  let kbState = '';   // экранная клавиатура (см. ниже): '' — её нет, 'guess' — вот-вот выедет, 'open' — на экране
   let relayoutTimers = [];
   function relayoutNow() {
-    if (map2gis && typeof map2gis.invalidateSize === 'function') { try { map2gis.invalidateSize(); } catch {} }
+    // пока открыта клавиатура, карту под окном не пересчитываем: её почти не видно, а пересчёт холста на каждое
+    // изменение высоты подтормаживает набор текста; он выполнится, когда клавиатура спрячется
+    if (!kbState && map2gis && typeof map2gis.invalidateSize === 'function') { try { map2gis.invalidateSize(); } catch {} }
     scheduleWishDeclutter();
     if (dockPill) { dockPill.classList.remove('is-ready'); dockPillLeft = null; moveDockPill(); }
+    fitChatInput(winBody.querySelector('#chat-text'));   // ширина поля чата могла измениться — текст переносится иначе
   }
   function relayoutApp() {
     relayoutTimers.forEach(clearTimeout);
@@ -14224,91 +14407,346 @@
   if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', relayoutApp);
 
   /* ── Экранная клавиатура на телефонах ──
-     Android (Chrome) при открытой клавиатуре не уменьшает страницу — она просто закрывает низ, вместе с полем ввода
-     чата. iPhone сдвигает всю страницу вверх, чтобы показать поле. Поэтому, пока клавиатура открыта, окно
-     приложения ставится ровно в видимую над ней часть экрана (visualViewport), а панель вкладок прячется.
-     Клавиатура «открыта», если в фокусе текстовое поле и видимая часть заметно ниже обычной высоты экрана. */
+     Когда выезжает клавиатура, страница не становится ниже — клавиатура просто закрывает её нижнюю часть
+     (на Android с interactive-widget=resizes-content страница ужимается сама, и почти всё ниже ей не нужно).
+     iPhone при этом ещё и прокручивает всю страницу, чтобы поле ввода встало посередине видимой части:
+     шапка окна уезжает за верх экрана. Поэтому:
+     1) окно приложения ставится ровно в видимую над клавиатурой часть экрана (visualViewport), а панель
+        вкладок на это время прячется (html.kb-open в стилях);
+     2) окно ужимается сразу при нажатии на поле — по высоте клавиатуры, запомненной с прошлого раза, —
+        не дожидаясь, пока она выедет (kbState = 'guess'): поле ни на миг не оказывается под клавиатурой;
+     3) на iPhone страницу удерживаем на месте: в момент фокуса поле на один кадр «уносится» далеко вверх,
+        и Safari считает, что прокручивать нечего; если страница всё же уехала — возвращаем её;
+     4) пока клавиатура открыта, страницу нельзя сдвинуть пальцем — листается только то, что листается
+        внутри окна.
+     Клавиатура «открыта», если в фокусе текстовое поле и видимая часть заметно ниже обычной высоты экрана.
+     Приближение страницы при фокусе в поле (iPhone) убрано отдельно: шрифт полей 16px и maximum-scale=1. */
   const kbHtml = document.documentElement;
-  let kbBase = { w: 0, h: 0 }, kbRaf = 0, kbOn = false, kbPoll = 0, kbResets = 0;
   const kbTouch = matchMedia('(pointer: coarse)');
-  const isTextField = (el) => !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable
+  const KB_SAVED = 'kb.height.v1';
+  let kbBase = { w: 0, h: 0 }, kbRaf = 0, kbPoll = 0;
+  let kbGuessUntil = 0, kbMiss = 0, kbResets = 0, kbBefore = 0, kbInWindow = false, kbFinger = null, kbTapBroken = false;
+  const isTextField = (el) => !!el && !el.disabled && !el.readOnly && (el.tagName === 'TEXTAREA' || el.isContentEditable
     || (el.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit|reset|file|color|image|hidden)$/i.test(el.type)));
+  // только сенсорные экраны: на ноутбуке окно браузера просто сделали ниже — это не клавиатура
+  const kbField = (el) => kbTouch.matches && isTextField(el);
+
+  function kbMeasure() {
+    // обычная высота экрана — наибольшая, что была при этой ширине (поворот экрана её сбрасывает)
+    if (Math.abs(innerWidth - kbBase.w) > 1) kbBase = { w: innerWidth, h: 0 };
+    kbBase.h = Math.max(kbBase.h, innerHeight, kbHtml.clientHeight);
+  }
+  // Высота клавиатуры, запомненная с прошлого раза, — отдельно для экрана стоя и лёжа
+  function kbSaved() {
+    try { const v = JSON.parse(localStorage.getItem(KB_SAVED) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
+  }
+  function kbRemember(height) {
+    if (!(height > 120)) return;
+    const all = kbSaved(), key = kbBase.h >= kbBase.w ? 'p' : 'l';
+    if (Math.abs((Number(all[key]) || 0) - height) < 2) return;
+    all[key] = Math.round(height);
+    try { localStorage.setItem(KB_SAVED, JSON.stringify(all)); } catch {}
+  }
+  // Какую клавиатуру ждать: как в прошлый раз; если её здесь ещё не видели — на телефоне стоя она занимает около 40% экрана
+  function kbGuessHeight() {
+    const portrait = kbBase.h >= kbBase.w;
+    const saved = Number(kbSaved()[portrait ? 'p' : 'l']) || 0;
+    if (saved > 120 && saved < kbBase.h * 0.8) return saved;
+    return portrait && kbBase.w < 600 ? Math.round(kbBase.h * 0.4) : 0;
+  }
+
+  // Окно приложения — в видимую часть экрана: top — где она начинается (страницу могло сдвинуть), height — её высота
+  function kbPlace(top, height) {
+    const t = Math.max(0, Math.round(top)) + 'px', h = Math.max(100, Math.round(height)) + 'px';
+    if (kbHtml.style.getPropertyValue('--kb-top') !== t) kbHtml.style.setProperty('--kb-top', t);
+    if (kbHtml.style.getPropertyValue('--kb-h') !== h) kbHtml.style.setProperty('--kb-h', h);
+    kbHtml.classList.add('kb-open');
+  }
+  function kbBegin(state) {
+    if (!kbState) document.addEventListener('touchmove', kbHoldPage, { passive: false, capture: true });
+    kbState = state;
+  }
+  function kbEnd() {
+    kbState = '';
+    kbResets = 0;
+    document.removeEventListener('touchmove', kbHoldPage, true);
+    kbHtml.classList.remove('kb-open');
+    kbHtml.style.removeProperty('--kb-top');
+    kbHtml.style.removeProperty('--kb-h');
+    // iPhone иногда оставляет страницу сдвинутой после того, как клавиатура спряталась
+    if (window.scrollY || document.scrollingElement.scrollTop) window.scrollTo(0, 0);
+    // показывая поле над клавиатурой, браузер мог сдвинуть и то, что двигаться не должно (у этих блоков overflow: hidden)
+    for (const box of [document.body, win, authScreen]) {
+      if (box && (box.scrollTop || box.scrollLeft)) { box.scrollTop = 0; box.scrollLeft = 0; }
+    }
+    relayoutApp();   // пока клавиатура была открыта, карту не пересчитывали
+  }
+
   function syncKeyboard() {
     kbRaf = 0;
     const vv = window.visualViewport;
     if (!vv) return;
-    // обычная высота экрана — наибольшая, что была при этой ширине (поворот экрана её сбрасывает)
-    if (Math.abs(innerWidth - kbBase.w) > 1) kbBase = { w: innerWidth, h: 0 };
-    kbBase.h = Math.max(kbBase.h, innerHeight, kbHtml.clientHeight);
-    // только сенсорные экраны: на ноутбуке окно браузера просто сделали ниже — это не клавиатура
+    kbMeasure();
     const field = document.activeElement;
-    const on = kbTouch.matches && isTextField(field) && vv.scale < 1.05 && kbBase.h - vv.height > 120;
-    if (on) {
-      /* Поле в окне приложения уже стоит над клавиатурой, сдвигать страницу незачем — возвращаем её на место.
-         Иначе iPhone держит страницу уехавшей вверх и на каждой новой строке двигает её снова. Если телефон
-         упорно сдвигает обратно (kbResets) — не спорим и просто ставим окно в видимую часть. */
-      if (kbOn && vv.offsetTop > 0.5 && kbResets < 6 && field.closest('#window')) { kbResets++; window.scrollTo(0, 0); }
-      const top = Math.max(0, Math.round(vv.offsetTop)) + 'px', h = Math.round(vv.height) + 'px';
-      if (kbHtml.style.getPropertyValue('--kb-top') !== top) kbHtml.style.setProperty('--kb-top', top);
-      if (kbHtml.style.getPropertyValue('--kb-h') !== h) kbHtml.style.setProperty('--kb-h', h);
+    const typing = kbField(field) && vv.scale < 1.05;   // страницу увеличили пальцами — её раскладку не трогаем
+    const visible = vv.height * vv.scale;
+    if (typing && kbBase.h - visible > 120) {
+      const first = kbState !== 'open';
+      kbBegin('open');
+      kbMiss = 0;
+      kbInWindow = !!field.closest('#window');
+      /* Страница всё же уехала вверх (так делает iPhone) — возвращаем её: окно и так стоит над клавиатурой.
+         Не вышло за несколько попыток — не спорим с телефоном: окно встанет в видимую часть там, куда она уехала. */
+      if (kbInWindow && kbResets < 3 && (vv.offsetTop > 0.5 || window.scrollY > 0.5)) { kbResets++; window.scrollTo(0, 0); }
+      kbPlace(vv.offsetTop, vv.height);
+      if (first) {
+        kbRemember((kbBefore > visible + 120 ? kbBefore : kbBase.h) - visible);
+        if (kbInWindow) kbReveal(field);
+        syncKeyboardSoon();   // сразу перепроверяем: после возврата страницы положение видимой части меняется
+      }
+      return;
     }
-    if (on === kbOn) return;
-    kbOn = on;
-    kbResets = 0;
-    kbHtml.classList.toggle('kb-open', on);
-    if (on) {
-      // окно ужалось — поле, в которое печатают, должно остаться на виду внутри него; и сразу перепроверяем сдвиг
-      if (field.closest('#window') && field.id !== 'chat-text') { try { field.scrollIntoView({ block: 'nearest' }); } catch {} }
-      syncKeyboardSoon();
-    } else {
-      kbHtml.style.removeProperty('--kb-top');
-      kbHtml.style.removeProperty('--kb-h');
-      // iPhone иногда оставляет страницу сдвинутой после того, как клавиатура спряталась
-      if (window.scrollY || document.scrollingElement.scrollTop) window.scrollTo(0, 0);
+    if (kbState === 'guess' && typing) {
+      if (performance.now() < kbGuessUntil) return;   // клавиатура ещё выезжает
+      kbMiss++;                                        // поле в фокусе, а клавиатуры нет — подключена настоящая; дважды так — больше не угадываем
     }
+    if (kbState) kbEnd();
   }
   const syncKeyboardSoon = () => { if (!kbRaf) kbRaf = requestAnimationFrame(syncKeyboard); };
+
+  // Окно стало ниже — поле, в которое печатают, должно остаться на виду: прокручиваем содержимое окна, а не страницу
+  function kbReveal(field) {
+    if (!field || field.id === 'chat-text') return;   // поле чата и так стоит у нижнего края окна
+    for (let box = field.parentElement; box && box !== document.body; box = box.parentElement) {
+      if (box.scrollHeight <= box.clientHeight + 1 || !/auto|scroll/.test(getComputedStyle(box).overflowY)) continue;
+      const b = box.getBoundingClientRect(), f = field.getBoundingClientRect();
+      const foot = box.querySelector('.pe-foot');   // кнопки, прилипшие к низу окна, закрывают его нижнюю часть
+      const low = b.bottom - 16 - (foot ? foot.offsetHeight : 0);
+      if (f.bottom > low) box.scrollTop += f.bottom - low;
+      else if (f.top < b.top + 16) box.scrollTop -= b.top + 16 - f.top;
+      return;
+    }
+  }
+
+  /* iPhone, отдав фокус полю, прокручивает страницу так, чтобы поле встало посередине видимой части.
+     На один кадр «уносим» поле далеко вверх: Safari видит, что оно выше экрана, прокручивать вверх некуда —
+     и страница остаётся на месте. */
+  function kbHoldStill(el) {
+    if (el.kbHeld) return;
+    el.kbHeld = true;
+    const was = el.style.transform;
+    el.style.transform = 'translateY(-2000px)';
+    const back = () => { if (el.kbHeld) { el.style.transform = was; el.kbHeld = false; } };
+    requestAnimationFrame(back);
+    setTimeout(back, 150);   // страховка: поле вернётся на место, даже если кадр не отрисуется
+  }
+
+  function kbOnFocus(e) {
+    const el = e.target;
+    kbInWindow = !!(el && el.closest && el.closest('#window'));
+    if (kbInWindow && kbField(el)) {
+      if (IS_IOS) kbHoldStill(el);
+      const vv = window.visualViewport;
+      if (!kbState && vv.scale < 1.05) {
+        kbMeasure();
+        kbBefore = vv.height * vv.scale;
+        // клавиатура выедет через долю секунды — окно ужимаем уже сейчас, чтобы поле не оказалось под ней
+        const guess = kbMiss < 2 && kbBase.h - kbBefore < 120 ? kbGuessHeight() : 0;
+        if (guess && kbBefore - guess > 160) {
+          kbBegin('guess');
+          kbGuessUntil = performance.now() + 1100;
+          kbPlace(vv.offsetTop, kbBefore - guess);
+        }
+      }
+    }
+    syncKeyboardSoon();
+    watchKeyboard();
+  }
+
+  // Палец на экране: откуда начал движение и что было под ним
+  document.addEventListener('touchstart', (e) => {
+    const t = e.touches.length === 1 ? e.touches[0] : null;
+    kbFinger = t ? { x: t.clientX, y: t.clientY, at: performance.now(), target: e.target, mode: '' } : null;
+  }, { passive: true, capture: true });
+
+  // Может ли что-то под пальцем прокрутиться в эту сторону (dy > 0 — палец идёт вниз, содержимое едет к началу)
+  function kbCanScroll(el, dy) {
+    for (let box = el; box && box.nodeType === 1 && box !== document.body; box = box.parentElement) {
+      if (box.scrollHeight <= box.clientHeight + 1 || !/auto|scroll/.test(getComputedStyle(box).overflowY)) continue;
+      if (dy > 0 ? box.scrollTop > 0 : box.scrollTop + box.clientHeight < box.scrollHeight - 1) return true;
+    }
+    return false;
+  }
+  /* Пока клавиатура открыта, страница под ней «свободна»: iPhone и часть браузеров на Android дают сдвинуть её
+     пальцем вместе со всем приложением. Оставляем только прокрутку внутри окна (лента сообщений, списки).
+     Обработчик подключается, только пока открыта клавиатура: без неё прокрутка пальцем не ждёт скрипт. */
+  function kbHoldPage(e) {
+    const f = kbFinger;
+    if (!f || !kbState || !kbInWindow || e.touches.length !== 1) return;   // два пальца — щипок, его не трогаем
+    if (f.mode === 'hold') { if (e.cancelable) e.preventDefault(); return; }
+    if (f.mode) return;
+    const t = e.touches[0], dx = t.clientX - f.x, dy = t.clientY - f.y;
+    if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;   // палец лишь дрогнул при нажатии — это не прокрутка, нажатие не трогаем
+    // вбок страница не едет; в самом поле ввода палец двигает курсор и выделение — это не трогаем
+    if (Math.abs(dx) > Math.abs(dy) || (f.target === document.activeElement && isTextField(f.target))) { f.mode = 'free'; return; }
+    f.mode = kbCanScroll(f.target, dy) ? 'free' : 'hold';
+    if (f.mode === 'hold' && e.cancelable) e.preventDefault();
+  }
+
+  /* Нажатие на поле ввода на iPhone. Фокус отдаём полю сами — уже «унесённому» и с запретом прокрутки:
+     если ждать, пока это сделает Safari, он успевает запомнить место поля и всё равно двигает страницу.
+     Курсор при этом встаёт в конец текста; чтобы поставить его в середину, по полю нажимают ещё раз. */
+  function kbTapFocus(e) {
+    const f = kbFinger, t = e.changedTouches[0], el = e.target;
+    if (kbTapBroken || !f || f.mode || !t || e.touches.length || !e.cancelable) return;
+    if (performance.now() - f.at > 500 || Math.hypot(t.clientX - f.x, t.clientY - f.y) > 10) return;   // не нажатие: держали или вели пальцем
+    if (!kbField(el) || el === document.activeElement || !el.closest('#window')) return;
+    e.preventDefault();
+    kbHoldStill(el);
+    try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+    if (document.activeElement !== el) kbTapBroken = true;   // фокус не встал — дальше поля нажимаются как обычно
+  }
+  if (IS_IOS) document.addEventListener('touchend', kbTapFocus, { capture: true });
+
   /* У приложения, установленного на экран «Домой», iPhone не всегда сообщает, что клавиатура выехала
      (события visualViewport теряются). Поэтому, пока в фокусе текстовое поле, перепроверяем сами. */
   function watchKeyboard() {
     clearInterval(kbPoll); kbPoll = 0;
-    if (!kbTouch.matches || !isTextField(document.activeElement)) return;
+    if (!kbField(document.activeElement)) return;
     let n = 0;
     kbPoll = setInterval(() => {
-      if (!isTextField(document.activeElement)) { clearInterval(kbPoll); kbPoll = 0; }
-      if (++n < 12 || n % 4 === 0) syncKeyboardSoon();   // первые ~1,5 с часто, дальше — раз в полсекунды
+      if (!kbField(document.activeElement)) { clearInterval(kbPoll); kbPoll = 0; }
+      if (++n < 14 || n % 4 === 0) syncKeyboardSoon();   // первые полторы секунды часто, дальше — раз в полсекунды
     }, 120);
   }
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', syncKeyboardSoon);
     visualViewport.addEventListener('scroll', syncKeyboardSoon);
-    document.addEventListener('focusin', () => { syncKeyboardSoon(); watchKeyboard(); });
+    addEventListener('scroll', syncKeyboardSoon, { passive: true });
+    document.addEventListener('focusin', kbOnFocus);
     // фокус ушёл — клавиатура уезжает; проверяем ещё раз, когда она уже спряталась
     document.addEventListener('focusout', () => { syncKeyboardSoon(); setTimeout(syncKeyboardSoon, 350); });
   }
   if (window.ResizeObserver) new ResizeObserver(relayoutApp).observe(document.getElementById('map'));
 
+  /* ── Версия приложения и её обновление ──
+     Страница открывается из кеша мгновенно, а свежая в это время подгружается в фоне (sw.js). Раньше свежая
+     включалась только со следующего запуска: после обновления сайта приложение нужно было открыть дважды,
+     и до этого исправления выглядели «не дошедшими». Теперь страница сама смотрит, какая версия лежит в кеше
+     (метка app-build в самом начале страницы):
+     — приложение только что открыли и в нём ещё ничего не делают — оно сразу перезагружается на новую версию;
+     — позже, чтобы не прерывать человека, новая версия ждёт: включится при следующем запуске, после долгого
+       простоя в фоне (UPDATE_IDLE_MS) или кнопкой «Обновить приложение» в настройках. */
+  const APP_BUILD = (document.querySelector('meta[name="app-build"]') || {}).content || '';
+  let appUpdateReady = false, appUpdating = false;
+  function appBuildLabel() {
+    const m = /^(\d{4})-(\d\d)-(\d\d) (\d\d:\d\d)$/.exec(APP_BUILD);
+    return m ? `${m[3]}.${m[2]}.${m[1]}, ${m[4]}` : (APP_BUILD || 'не указана');
+  }
+  function paintAppBuild() {
+    const el = document.getElementById('app-build-sub');
+    if (el) el.textContent = appUpdating ? 'Обновляем…' : appUpdateReady ? 'Доступна новая версия' : 'Версия от ' + appBuildLabel();
+  }
+  // Метка сборки страницы, которая лежит в кеше сервис-воркера (читаем только её начало)
+  async function cachedAppBuild() {
+    if (!window.caches) return '';
+    const url = new URL('./index.html', location.href).href;
+    let newest = '';
+    for (const name of await caches.keys()) {
+      if (!name.startsWith('groupis-') || name.startsWith('groupis-static-')) continue;
+      const res = await (await caches.open(name)).match(url);
+      if (!res || !res.body) continue;
+      const reader = res.body.getReader();
+      let head = new Uint8Array(0);
+      while (head.length < 4096) {
+        const { value, done } = await reader.read();
+        if (value) { const next = new Uint8Array(head.length + value.length); next.set(head); next.set(value, head.length); head = next; }
+        if (done) break;
+      }
+      reader.cancel().catch(() => {});
+      const m = /<meta\s+name="app-build"\s+content="([^"]*)"/.exec(new TextDecoder().decode(head.subarray(0, 8192)));
+      if (m && m[1] > newest) newest = m[1];
+    }
+    return newest;
+  }
+  const AUTOUPDATE_KEY = 'groupis.autoupdate';
+  // В кеше лежит версия новее той, что на экране
+  function appUpdateFound() {
+    appUpdateReady = true;
+    paintAppBuild();
+    /* Приложение только что открыли и в нём ещё ничего не делают — новую версию включаем сразу.
+       Не чаще раза в две минуты: что бы ни случилось, страница не должна перезагружаться по кругу. */
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(AUTOUPDATE_KEY)) || 0; } catch {}
+    const idle = performance.now() < 25000 && !chat && !isTextField(document.activeElement)
+      && !document.querySelector('.photo-viewer, .crop-backdrop, .modal-backdrop');
+    if (!idle || Date.now() - last < 120000) return;
+    try { sessionStorage.setItem(AUTOUPDATE_KEY, String(Date.now())); } catch { return; }
+    saveScreenState();
+    location.reload();
+  }
+  async function checkAppUpdate() {
+    if (!APP_BUILD || appUpdateReady) return appUpdateReady;
+    let cached = '';
+    try { cached = await cachedAppBuild(); } catch (err) { console.warn('[update] check:', err); return false; }
+    if (!(cached > APP_BUILD)) return false;   // метки — «год-месяц-день часы:минуты», сравниваются как строки
+    if (!appUpdateReady) appUpdateFound();
+    return true;
+  }
+  // «Обновить приложение» в настройках: забыть сохранённую страницу и загрузить её с сервера заново
+  async function forceAppUpdate() {
+    if (appUpdating) return;
+    if (!navigator.onLine) { alert('Нет соединения с интернетом — обновить приложение сейчас не получится.'); return; }
+    appUpdating = true;
+    paintAppBuild();
+    const soon = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await soon(reg.update().catch(() => {}), 8000);
+      }
+      if (window.caches) {
+        const names = (await caches.keys()).filter((n) => n.startsWith('groupis-') && !n.startsWith('groupis-static-'));
+        await soon(Promise.all(names.map((n) => caches.delete(n))), 4000);
+      }
+    } catch (err) { console.warn('[update] force:', err); }
+    try { sessionStorage.setItem(AUTOUPDATE_KEY, String(Date.now())); } catch {}   // после этой перезагрузки ещё одна, автоматическая, не нужна
+    saveScreenState();
+    location.reload();
+  }
+  if (window.caches) {
+    // сервис-воркер подгружает свежую страницу в первые секунды после запуска — тогда и смотрим, не новее ли она
+    [3000, 7000, 13000, 21000].forEach((ms) => setTimeout(checkAppUpdate, ms));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(checkAppUpdate, 6000); });
+  }
+
   if ('serviceWorker' in navigator) {
-    /* Вышла новая версия: страница открывается из кеша мгновенно, а свежая подгружается в фоне и
-       открывается при следующем запуске. Раньше она включалась перезагрузкой, как только приложение
-       сворачивали, — и на ноутбуке переход на соседнюю вкладку браузера на пару секунд перезагружал
-       страницу. Теперь сама страница перезагружается, только если приложение было свёрнуто долго
-       (UPDATE_IDLE_MS): тогда это незаметно — как новый запуск. */
+    /* Новая версия, которую не включили сразу (см. выше), включается сама, только если приложение было
+       свёрнуто долго (UPDATE_IDLE_MS): тогда это незаметно — как новый запуск. Раньше она включалась
+       перезагрузкой, как только приложение сворачивали, — и на ноутбуке переход на соседнюю вкладку
+       браузера на пару секунд перезагружал страницу. */
     const UPDATE_IDLE_MS = 30 * 60 * 1000;
     const hadController = !!navigator.serviceWorker.controller;
     let updateReady = false, hiddenAt = 0, updateTimer = 0, updateCheckedAt = 0;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController) updateReady = true;   // первая установка — перезагружать незачем
+    navigator.serviceWorker.addEventListener('controllerchange', async () => {
+      if (!hadController) return;   // первая установка — обновлять нечего
+      updateReady = true;
+      if (await checkAppUpdate()) return;   // в кеше страница новее — она уже отмечена, а то и включена
+      /* Метки совпали. Либо страница только что сама перезагрузилась на эту версию (тогда всё уже сделано),
+         либо метку сборки забыли поменять — тогда новый сервис-воркер сам по себе признак новой версии. */
+      let last = 0;
+      try { last = Number(sessionStorage.getItem(AUTOUPDATE_KEY)) || 0; } catch {}
+      if (!appUpdateReady && Date.now() - last > 120000) appUpdateFound();
     });
     document.addEventListener('visibilitychange', () => {
       clearTimeout(updateTimer);
       if (document.hidden) {
         hiddenAt = Date.now();
-        updateTimer = setTimeout(() => { if (updateReady && document.hidden) location.reload(); }, UPDATE_IDLE_MS);
+        updateTimer = setTimeout(() => { if ((updateReady || appUpdateReady) && document.hidden) location.reload(); }, UPDATE_IDLE_MS);
         return;
       }
       // телефон «заморозил» свёрнутое приложение и таймер не сработал — обновляемся при возвращении после долгого перерыва
-      if (updateReady && hiddenAt && Date.now() - hiddenAt >= UPDATE_IDLE_MS) location.reload();
+      if ((updateReady || appUpdateReady) && hiddenAt && Date.now() - hiddenAt >= UPDATE_IDLE_MS) location.reload();
       hiddenAt = 0;
     });
     addEventListener('load', () => {
