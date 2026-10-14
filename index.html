@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-14 07:40">
+  <meta name="app-build" content="2026-10-14 14:56">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -2310,12 +2310,16 @@
       .friend-fit .photo-hero { height: clamp(160px, calc(100dvh - 446px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 420px); }
     }
 
-    /* ── Профиль собеседника: вкладки «Аватар / Медиа / Ссылки / Файлы» — что прислали друг другу в личном чате ──
-       Вкладки появляются под кнопкой «Написать», только если в переписке есть фото, видео, ссылки или файлы
-       (см. sharedFromMessages). Полоса вкладок прилипает к верху окна, пока листают длинный список. */
+    /* ── Вкладки «Медиа / Ссылки / Файлы» — что прислали в чат (sharedTabs) ──
+       В профиле собеседника они под кнопкой «Написать» рядом с «Аватаром», в карточке группы и союза — на месте
+       состава, рядом с «Участниками». Появляются, только если в переписке есть фото, видео, ссылки или файлы.
+       Полоса вкладок прилипает к верху окна, пока листают длинный список. */
     .pm-bar { position: sticky; top: 0; z-index: 3; min-width: 0; margin: 0 -4px; padding: 6px 4px; background: var(--win); }
+    /* ширина вкладки — по подписи: «Участники» длиннее остальных и на узком телефоне не помещалась в равную долю */
+    .pm-bar .chat-tab { flex: 1 1 auto; min-width: 0; padding: 0 6px; white-space: nowrap; }
     .pm-pane { min-width: 0; }
-    .has-tabs .friend-avatar-card > .user-profile-section-title { display: none; }   /* подпись «Аватар» теперь на вкладке */
+    /* подписи «Аватар» и «Участники» теперь на вкладке */
+    .has-tabs :is(.friend-avatar-card, .pm-members) > .user-profile-section-title { display: none; }
     /* с вкладками под фото остаётся меньше места: фото чуть ниже, чтобы аватар по-прежнему помещался без прокрутки */
     .friend-fit.has-tabs .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 412px), 420px); }
     @media (max-width: 640px) {
@@ -3659,7 +3663,6 @@
     .win-peer[hidden] { display: none; }
     .win-peer:active { transform: scale(.88); }
     .win-peer.is-group { border-radius: 14px; }
-    .win-peer.is-static { cursor: default; }
     .win-peer > .avatar { width: 40px !important; height: 40px !important; font-size: 16px; }
     /* Редактирование: плашка над полем ввода, кнопка отправки — галочка */
     .chat-reply-bar.is-edit .chat-pin-cap { color: var(--you); }
@@ -9808,10 +9811,11 @@
     return [{ ...owner, id: g.ownerId, leader: true }, ...(g.members || []).filter((m) => m.id !== g.ownerId)];
   }
 
-  // Открытая карточка группы и куда из неё ведёт «назад» (список групп или карта)
+  // Открытая карточка группы, куда из неё ведёт «назад» (список групп, карта, чат группы) и открыта ли она из чата группы
   let groupDetailsId = null;
   let groupDetailsBack = null;
-  function reopenGroupDetails() { if (groupDetailsId) showGroupDetailsScreen(groupDetailsId, groupDetailsBack); }
+  let groupDetailsChat = false;
+  function reopenGroupDetails() { if (groupDetailsId) showGroupDetailsScreen(groupDetailsId, groupDetailsBack, groupDetailsChat); }
 
   // Кнопки ответа на входящий запрос match; viewGid — группа, которую можно посмотреть, прежде чем ответить
   function matchResponseButtonsHtml(m, viewGid = null) {
@@ -9893,10 +9897,13 @@
     }).join('')}</ul>`;
   }
 
-  function showGroupDetailsScreen(groupId, backFn) {
+  /* Карточка группы. fromChat — открыта нажатием на шапку чата этой группы: «назад» и «Открыть чат группы»
+     возвращают в тот же чат. У участника под составом — вкладки «Медиа», «Ссылки», «Файлы» из чата группы (sharedTabs) */
+  function showGroupDetailsScreen(groupId, backFn, fromChat = false) {
     const back = backFn || (() => showGroupsScreen());
     groupDetailsId = groupId;
     groupDetailsBack = back;
+    groupDetailsChat = !!fromChat;
     setScreen(() => {
       const g = groupById(groupId);
       winBody.scrollTop = 0;
@@ -9953,8 +9960,13 @@
             </form>`
           : `<div class="match-hint">Группа пока не опубликовала желание.</div>`;
 
+      const token = String(++sharedSeq);
+      // открыта из чата группы — кнопка возвращает в него («назад»), а не открывает чат ещё раз поверх карточки
+      const chatBtn = fromChat
+        ? `<button type="button" class="btn btn-primary" data-action="back-to-groups">Открыть чат группы</button>`
+        : `<button type="button" class="btn btn-primary" data-open-group-chat="${escapeHtml(g.id)}">Открыть чат группы</button>`;
       winBody.innerHTML = `
-        <div class="user-profile-view">
+        <div class="user-profile-view" data-pm="${token}">
           <div class="user-profile-hero">
             <div class="user-profile-avatar no-3d" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</div>
             <div class="user-profile-name">${escapeHtml(g.name)}</div>
@@ -9962,12 +9974,15 @@
           </div>
           <div><div class="user-profile-section-title">Желание группы</div>${wishHtml}</div>
           <div><div class="user-profile-section-title">Match</div>${isMember ? ownGroupMatchesHtml(g) : groupMatchSectionHtml(g)}</div>
-          <div><div class="user-profile-section-title">Участники</div>${isMember ? mapNote : ''}<ul class="rows">${peopleHtml}${invitedHtml}</ul></div>
+          <div class="pm-members"><div class="user-profile-section-title">Участники</div>${isMember ? mapNote : ''}<ul class="rows">${peopleHtml}${invitedHtml}</ul></div>
           <div class="edit-actions">
             <button type="button" class="btn" data-action="back-to-groups">Назад</button>
-            ${isMember ? `<button type="button" class="btn btn-primary" data-open-group-chat="${escapeHtml(g.id)}">Открыть чат группы</button>` : ''}
+            ${isMember ? chatBtn : ''}
           </div>
         </div>`;
+      // что прислали в чат группы — видно только её участникам
+      if (isMember) sharedTabs({ type: 'group', groupId: String(g.id) }, () => membersTabPlace(token),
+        () => !win.hidden && !!winBody.querySelector(`[data-pm="${token}"]`)).load();
 
       const wishForm = winBody.querySelector('#group-wish-form');
       if (wishForm) {
@@ -9981,12 +9996,20 @@
     }, back);
   }
 
-  /* ── Карточка союза: открывается из списка групп. Две группы (каждую можно открыть), все участники и общий чат ── */
-  let unionDetails = null;   // { id, back } — открытая карточка союза, чтобы к ней вернуться
-  function reopenUnionDetails() { if (unionDetails) showUnionDetailsScreen(unionDetails.id, unionDetails.back); }
-  function showUnionDetailsScreen(matchId, backFn) {
+  // Где встают вкладки в карточке группы или союза: первая — «Участники» (состав, .pm-members), за ней — что прислали в чат
+  function membersTabPlace(token) {
+    const el = winBody.querySelector(`[data-pm="${token}"] > .pm-members`);
+    return el ? { root: el.parentElement, after: el.previousElementSibling, first: { id: 'members', label: 'Участники', el } } : null;
+  }
+
+  /* ── Карточка союза (и любого match двух групп): открывается из списка групп и нажатием на шапку совместного чата.
+     Две группы (каждую можно открыть), все участники, вкладки «Медиа», «Ссылки», «Файлы» из совместного чата и сам чат.
+     fromChat — открыта из этого чата: «назад» и «Открыть чат» возвращают в него ── */
+  let unionDetails = null;   // { id, back, fromChat } — открытая карточка союза, чтобы к ней вернуться
+  function reopenUnionDetails() { if (unionDetails) showUnionDetailsScreen(unionDetails.id, unionDetails.back, unionDetails.fromChat); }
+  function showUnionDetailsScreen(matchId, backFn, fromChat = false) {
     const back = backFn || (() => showGroupsScreen());
-    unionDetails = { id: String(matchId), back };
+    unionDetails = { id: String(matchId), back, fromChat: !!fromChat };
     setScreen(() => {
       const m = groupMatches.find((x) => x.id === String(matchId));
       const a = m && groupById(m.fromGroup), b = m && groupById(m.toGroup);
@@ -10026,20 +10049,27 @@
             ${isMe ? '' : '<span class="chev">›</span>'}
           </li>`;
       }).join('');
+      const token = String(++sharedSeq);
+      // союз закреплён голосованием — «Союз», пока нет — просто match двух групп
+      const kind = m.voteState === 'approved' ? 'Союз' : 'Match';
       winBody.innerHTML = `
-        <div class="user-profile-view" data-union-card>
+        <div class="user-profile-view" data-union-card data-pm="${token}">
           <div class="user-profile-hero">
             <div class="union-hero-ava">${featAvatarHtml(m, 128)}</div>
             <div class="user-profile-name">${escapeHtml(matchTitle(m))}</div>
-            <div class="user-profile-handle">Союз · ${escapeHtml(membersLabel(people.length))}</div>
+            <div class="user-profile-handle">${kind} · ${escapeHtml(membersLabel(people.length))}</div>
           </div>
           <div><div class="user-profile-section-title">Группы</div><ul class="rows">${groupRow(a)}${groupRow(b)}</ul></div>
-          <div><div class="user-profile-section-title">Участники</div><ul class="rows">${peopleHtml}</ul></div>
+          <div class="pm-members"><div class="user-profile-section-title">Участники</div><ul class="rows">${peopleHtml}</ul></div>
           <div class="edit-actions">
             <button type="button" class="btn" data-action="back-to-groups">Назад</button>
-            <button type="button" class="btn btn-primary" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>
+            ${fromChat
+              ? `<button type="button" class="btn btn-primary" data-action="back-to-groups">Открыть чат</button>`
+              : `<button type="button" class="btn btn-primary" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>`}
           </div>
         </div>`;
+      sharedTabs({ type: 'match', matchId: String(m.id) }, () => membersTabPlace(token),
+        () => !win.hidden && !!winBody.querySelector(`[data-pm="${token}"]`)).load();
     }, back);
   }
 
@@ -11632,8 +11662,12 @@
       if (!chat) return;
       const near = chatNearEnd(body);
       /* Лента только что сама доехала до нового сообщения, а человек её не трогал — значит, это запоздалое
-         событие прокрутки (iPhone досылает их после инерции): ленту не отцепляем от конца, а возвращаем вниз */
-      if (!near && chat.stick && performance.now() < chatFollowUntil && !chatUserScrolling()) { scrollChatToBottom(); return; }
+         событие прокрутки (iPhone досылает их после инерции): ленту не отцепляем от конца, а возвращаем вниз.
+         Так же — если ленту с тех пор, как её поставил вниз скрипт (autoTop), никто не трогал: событие пришло ровно
+         туда, куда её поставили, или за это время выросла сама лента — догрузились фото, размер которых не был известен
+         заранее (браузер при этом сам сдвигает ленту, чтобы видимое не прыгало) */
+      const own = body.autoTop != null && (Math.abs(body.scrollTop - body.autoTop) < 2 || body.scrollHeight !== body.autoHeight);
+      if (!near && chat.stick && (own || performance.now() < chatFollowUntil) && !chatUserScrolling()) { scrollChatToBottom(); return; }
       chat.stick = near;
       // вернулись к концу ленты — то, что пришло, пока её листали, теперь увидено
       if (chat.stick && chat.below) { chat.below = 0; markChatRead(chat); }
@@ -11740,6 +11774,7 @@
     const el = chatBubbleEl(id);
     if (!el) return;
     chatFollowUntil = 0;   // человек сам ушёл к старому сообщению — лента больше не держится у конца
+    el.parentElement.autoTop = null;
     el.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
     el.classList.remove('is-flash'); void el.offsetWidth; el.classList.add('is-flash');
   }
@@ -11871,6 +11906,7 @@
     if (smooth && !reduceMotion) { body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' }); return; }
     body.scrollTop = body.scrollHeight;
     body.autoTop = body.scrollTop;   // эту прокрутку сделал скрипт — плавающая дата на неё не показывается
+    body.autoHeight = body.scrollHeight;
   }
   /* «У конца ленты» — до низа меньше CHAT_END_GAP или последнее сообщение хотя бы краем на экране.
      У конца новые сообщения ведут ленту за собой; дальше от него лента стоит, а на кнопке «вниз» растёт счётчик.
@@ -12062,6 +12098,7 @@
 
   // Новое сообщение из realtime (личное или групповое)
   function onIncomingChatRow(m) {
+    if (sharedLive) sharedLive.offer(m);   // открыт профиль или карточка этого чата — фото, ссылка, файл появляются во вкладках
     const c = chat;
     const belongs = c && (
       c.type === 'dm'
@@ -12691,6 +12728,7 @@
     const el = chatBubbleEl(pins[idx].id);
     if (el) {
       chatFollowUntil = 0;   // переход к закреплённому — лента больше не держится у конца
+      el.parentElement.autoTop = null;
       el.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
       el.classList.remove('is-flash'); void el.offsetWidth; el.classList.add('is-flash');
     }
@@ -13049,7 +13087,8 @@
   }
 
   /* ── Шапка открытого чата: имя собеседника или группы, под ним статус, справа — аватар ──
-     Нажатие на имя или аватар открывает профиль собеседника или карточку группы; «назад» вернёт в чат. */
+     Нажатие на имя или аватар открывает профиль собеседника, карточку группы или карточку союза (совместный чат):
+     участники, что прислали в чат (медиа, ссылки, файлы); «назад» вернёт в чат. */
   const winPeer = document.getElementById('win-peer');
   function chatHeaderAvatarHtml(c) {
     if (c.type === 'dm') {
@@ -13066,12 +13105,10 @@
   }
   function paintChatHeader(c) {
     if (chat !== c) return;
-    const link = c.type !== 'match';
-    winTitle.classList.add('has-sub');
-    winTitle.classList.toggle('is-link', link);
+    winTitle.classList.add('has-sub', 'is-link');
     winTitle.innerHTML = `<span class="win-title-name">${escapeHtml(c.winTitle)}</span><span class="win-title-sub" id="win-sub"></span>`;
     winPeer.innerHTML = chatHeaderAvatarHtml(c);
-    winPeer.className = 'win-peer' + (c.type === 'dm' ? '' : ' is-group') + (link ? '' : ' is-static');
+    winPeer.className = 'win-peer' + (c.type === 'dm' ? '' : ' is-group');
     winPeer.setAttribute('aria-label', c.type === 'dm' ? 'Профиль: ' + c.winTitle : c.winTitle);
     winPeer.hidden = false;
     paintChatSub(c);
@@ -13103,13 +13140,14 @@
   }
   function openChatPeer() {
     const c = chat;
-    if (!c || c.type === 'match') return;
+    if (!c) return;
     const spec = { type: c.type, peerId: c.peerId, groupId: c.groupId, matchId: c.matchId };
     const back = c.backFn, reopen = () => openChat(spec, back);
     leaveChat();
     winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
     if (spec.type === 'dm') showFriendProfile(spec.peerId, personById(spec.peerId), reopen);
-    else showGroupDetailsScreen(spec.groupId, reopen);
+    else if (spec.type === 'match') showUnionDetailsScreen(spec.matchId, reopen, true);
+    else showGroupDetailsScreen(spec.groupId, reopen, true);
   }
   // Аватар автора в групповом чате — профиль этого человека; «назад» возвращает в чат
   function openChatMember(uid) {
@@ -14636,14 +14674,17 @@
   }
   function showUserProfileScreen() { showProfileScreen(); }
 
-  /* ── Профиль собеседника: что прислали друг другу в личном чате ──
-     Как в Telegram: под кнопкой «Написать» появляются вкладки «Медиа» (фото и видео), «Ссылки» и «Файлы» —
-     только те, для которых в переписке что-то есть (и от меня, и от собеседника); рядом с ними «Аватар» —
-     3D-аватар, который был в профиле и раньше. Ничего такого не присылали — профиль выглядит по-прежнему.
-     Сообщения, удалённые «у себя», и переписку до «Удалить чат» сюда не берём — как и в самом чате. */
+  /* ── Что прислали в чат: вкладки «Медиа» (фото и видео), «Ссылки» и «Файлы» ──
+     Как в Telegram: в профиле собеседника (личный чат), в карточке группы (чат группы) и в карточке союза
+     (совместный чат двух групп). Видны только те вкладки, для которых в переписке что-то есть; первая вкладка —
+     своя у каждого экрана: «Аватар» у собеседника, «Участники» у группы и союза. Ничего такого не присылали —
+     экран выглядит по-прежнему. Сообщения, удалённые «у себя», и переписку до «Удалить чат» сюда не берём —
+     как и в самом чате. */
   const SHARED_MAX = 400;   // сколько сообщений каждого вида просим у сервера
   const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"'`]+/gi;
   let sharedMediaWatch = null;   // следит, какие плитки «Медиа» попали на экран (файлы подгружаются только для них)
+  let sharedLive = null;         // открытый экран с вкладками: присланное в этот чат появляется на нём сразу
+  let sharedSeq = 0;             // метка каждого показа такого экрана (data-pm)
 
   // Ссылки в тексте сообщения: только http и https; знаки препинания и «лишняя» скобка после ссылки — не её часть
   function linksInText(text) {
@@ -14671,13 +14712,13 @@
     return out;
   }
 
-  // Сообщения личного чата → { media, links, files }, свежие первыми
-  function sharedFromMessages(list, peerId) {
-    const cleared = chatClearedAt('dm:' + peerId);
+  // Сообщения чата spec ({ type, peerId | groupId | matchId }) → { media, links, files }, свежие первыми
+  function sharedFromMessages(list, spec) {
+    const cleared = chatClearedAt(chatKey(spec));
     const seen = new Set(), media = [], links = [], files = [];
     for (const m of [...list].sort((a, b) => msgTs(b) - msgTs(a))) {
       const id = String(m.id);
-      if (seen.has(id) || m.pending || isHiddenMsg('dm', id) || msgTs(m) <= cleared) continue;
+      if (seen.has(id) || m.pending || isHiddenMsg(spec.type, id) || msgTs(m) <= cleared) continue;
       seen.add(id);
       if ((m.kind === 'image' || m.kind === 'video') && m.mediaPath) media.push(m);
       else if (m.kind === 'file' && m.mediaPath) files.push(m);
@@ -14689,16 +14730,28 @@
   /* Вся переписка на устройстве не лежит (только последние CHAT_KEEP сообщений), поэтому фото, видео, файлы
      и сообщения со ссылками спрашиваем у сервера отдельно — двумя запросами, чтобы сбой одного не оставил без другого.
      Ответ — { files, texts }; у запроса, который не удался, вместо списка null */
-  async function loadSharedMessages(peerId) {
-    if (!currentUser || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(peerId))) return { files: null, texts: null };
-    const pair = `and(from_id.eq.${currentUser.id},to_id.eq.${peerId}),and(from_id.eq.${peerId},to_id.eq.${currentUser.id})`;
+  async function loadSharedMessages(spec) {
+    const none = { files: null, texts: null };
+    if (!currentUser) return none;
+    let table, norm, scope;
+    if (spec.type === 'dm') {
+      const peerId = String(spec.peerId);
+      if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(peerId)) return none;
+      const pair = `and(from_id.eq.${currentUser.id},to_id.eq.${peerId}),and(from_id.eq.${peerId},to_id.eq.${currentUser.id})`;
+      [table, norm, scope] = ['dm_messages', normDmRow, (q) => q.or(pair)];
+    } else if (spec.type === 'match') {
+      if (!/^\d+$/.test(String(spec.matchId))) return none;
+      [table, norm, scope] = ['match_messages', normMatchRow, (q) => q.eq('match_id', Number(spec.matchId))];
+    } else {
+      [table, norm, scope] = ['group_messages', normGroupRow, (q) => q.eq('group_id', String(spec.groupId))];
+    }
     const ask = async (narrow) => {
       try {
-        const { data, error } = await narrow(supabaseClient.from('dm_messages').select('*').or(pair))
+        const { data, error } = await narrow(scope(supabaseClient.from(table).select('*')))
           .order('created_at', { ascending: false }).limit(SHARED_MAX);
-        if (error) { console.warn('[profile media] load:', error.message); return null; }
-        return (data || []).map(normDmRow);
-      } catch (err) { console.warn('[profile media] load:', err); return null; }
+        if (error) { console.warn('[shared media] load:', error.message); return null; }
+        return (data || []).map(norm);
+      } catch (err) { console.warn('[shared media] load:', err); return null; }
     };
     const [files, texts] = await Promise.all([
       ask((q) => q.in('kind', ['image', 'video', 'file'])),
@@ -14760,6 +14813,161 @@
     }).join('')}</div>`;
   }
 
+  /* Вкладки на экране. spec — чей это чат; place() — где они встают, пока экран открыт: { root, after, first } или null.
+     root — сам экран (ему ставится has-tabs); first — первая вкладка экрана { id, label, el }, её содержимое el уже
+     нарисовано: полоса вкладок встаёт прямо перед ним, остальные панели — сразу за ним. Нет first — полоса встаёт
+     после after. alive() — экран ещё открыт. mount() — встроить вкладки заново (экран перерисовали),
+     load() — найти, что есть в переписке: сразу — в сообщениях на устройстве, следом — полный список с сервера. */
+  function sharedTabs(spec, place, alive) {
+    const key = chatKey(spec);
+    let shared = null, sign = '', tab = '', base = [], extra = [];
+    const sender = (m) => (isMyMsg(m) ? 'Вы' : (m.authorName || chatPersonById(m.fromId).name || 'Участник').trim().split(/\s+/)[0]);
+    // Адрес фото или видео: файл, уже лежащий на устройстве, иначе временная ссылка из хранилища
+    const mediaUrl = async (m, signIt) => {
+      let url = m.localUrl || mediaBlobUrls.get(m.mediaPath) || null;
+      if (!url && m.kind === 'image') url = await cachedMediaUrl(m.mediaPath);
+      if (!url) url = freshSignedUrl(m.mediaPath);
+      if (!url && signIt) { await signMediaPaths([m.mediaPath]); url = freshSignedUrl(m.mediaPath); }
+      return url || '';
+    };
+    // Встроить вкладки в уже нарисованный экран (и убрать их, если показывать нечего)
+    const mount = () => {
+      const at = place();
+      if (!at) return;
+      const { root, after, first } = at;
+      if (sharedMediaWatch) { sharedMediaWatch.disconnect(); sharedMediaWatch = null; }
+      root.querySelectorAll('.pm-bar, .pm-pane').forEach((el) => el.remove());
+      const canvas = first && first.el.querySelector('canvas');
+      const tabs = [];
+      if (shared && shared.media.length) tabs.push(['media', 'Медиа']);
+      if (shared && shared.links.length) tabs.push(['links', 'Ссылки']);
+      if (shared && shared.files.length) tabs.push(['files', 'Файлы']);
+      root.classList.toggle('has-tabs', tabs.length > 0);
+      if (!tabs.length) {   // ничего не присылали — экран выглядит как раньше
+        if (first) first.el.hidden = false;
+        if (canvas && canvas.__avatarPause) canvas.__avatarPause(false);
+        return;
+      }
+      if (first) tabs.unshift([first.id, first.label]);
+      if (!tabs.some(([id]) => id === tab)) tab = tabs[0][0];
+      const barHtml = `<div class="pm-bar"><div class="chat-tabs" role="tablist" aria-label="Что есть в переписке">${
+        tabs.map(([id, label]) => `<button type="button" class="chat-tab" role="tab" data-pm-tab="${id}" aria-selected="false">${label}</button>`).join('')
+      }</div></div>`;
+      if (first) first.el.insertAdjacentHTML('beforebegin', barHtml); else after.insertAdjacentHTML('afterend', barHtml);
+      const bar = root.querySelector('.pm-bar');
+      (first ? first.el : bar).insertAdjacentHTML('afterend', sharedMediaHtml(shared.media) + sharedLinksHtml(shared.links, sender) + sharedFilesHtml(shared.files, sender));
+
+      // «Медиа»: файл подгружается, только когда плитка попала на экран (или близко к нему)
+      const startMedia = () => {
+        const pane = root.querySelector('[data-pm-pane="media"]');
+        const cells = [...pane.querySelectorAll('.pm-cell')];
+        const near = new WeakSet();   // плитки на экране и рядом с ним
+        const fill = async (cell) => {
+          const m = shared.media[Number(cell.dataset.pmOpen)], el = cell.firstElementChild;
+          if (!m || el.getAttribute('src')) return;
+          const url = await mediaUrl(m, false);
+          if (!url || el.getAttribute('src')) return;
+          if (m.kind !== 'video') { el.src = url; if (watch) watch.unobserve(cell); return; }
+          if (watch && !near.has(cell)) return;   // пока узнавали адрес, плитку уже пролистали
+          // у видео показываем кадр из самого начала, а не чёрную плитку
+          el.src = url.startsWith('blob:') ? url : url + '#t=0.1';
+        };
+        // видео, ушедшее далеко за экран, отпускаем (вернётся — загрузится снова): телефон держит
+        // одновременно лишь несколько видео, а плиток может быть много
+        const release = (cell) => {
+          const el = cell.firstElementChild;
+          if (el.tagName !== 'VIDEO' || !el.getAttribute('src')) return;
+          el.removeAttribute('src');
+          el.load();
+        };
+        const watch = sharedMediaWatch = window.IntersectionObserver
+          ? new IntersectionObserver((entries) => {
+              for (const en of entries) {
+                if (en.isIntersecting) { near.add(en.target); fill(en.target); }
+                else { near.delete(en.target); release(en.target); }
+              }
+            }, { root: winBody, rootMargin: '300px 0px' })
+          : null;
+        const look = () => {
+          for (const cell of cells) {
+            if (cell.firstElementChild.getAttribute('src')) continue;
+            if (watch) { watch.unobserve(cell); watch.observe(cell); } else fill(cell);
+          }
+        };
+        look();
+        // временные ссылки на файлы просим порциями: первые плитки появляются сразу, остальные — по мере прокрутки
+        (async () => {
+          const paths = shared.media.map((m) => m.mediaPath).filter((path) => !mediaBlobUrls.has(path) && !freshSignedUrl(path));
+          for (let i = 0; i < paths.length && pane.isConnected; i += 60) {
+            await signMediaPaths(paths.slice(i, i + 60));
+            if (pane.isConnected) look();
+          }
+        })();
+      };
+      // «Файлы»: со ссылкой, готовой заранее, файл открывается сразу по нажатию — иначе браузер может не дать открыть вкладку
+      const startFiles = async () => {
+        const pane = root.querySelector('[data-pm-pane="files"]');
+        await signMediaPaths(shared.files.map((m) => m.mediaPath));
+        for (const row of pane.querySelectorAll('[data-chat-file]')) {
+          const url = freshSignedUrl(row.dataset.mediaPath);
+          if (url) row.href = url;
+        }
+      };
+      const started = new Set();
+      const select = (id) => {
+        tab = id;
+        bar.querySelectorAll('[data-pm-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.pmTab === id)));
+        root.querySelectorAll('.pm-pane').forEach((pane) => { pane.hidden = pane.dataset.pmPane !== id; });
+        if (first) first.el.hidden = id !== first.id;
+        if (canvas && canvas.__avatarPause) canvas.__avatarPause(id !== first.id);   // 3D-аватар не рисуется, пока его не видно
+        if (started.has(id)) return;
+        started.add(id);
+        if (id === 'media') startMedia(); else if (id === 'files') startFiles();
+      };
+      bar.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-pm-tab]');
+        if (btn) select(btn.dataset.pmTab);
+      });
+      const mediaPane = root.querySelector('[data-pm-pane="media"]');
+      if (mediaPane) mediaPane.addEventListener('click', (e) => {
+        const cell = e.target.closest('[data-pm-open]');
+        if (!cell) return;
+        // просмотр листает все фото и видео переписки; адрес каждого узнаётся, когда до него долистали
+        openMediaViewer(shared.media.map((m) => ({ kind: m.kind, resolve: () => mediaUrl(m, true) })), Number(cell.dataset.pmOpen));
+      });
+      select(tab);
+    };
+    // Списки изменились — вкладки встраиваются заново, иначе экран не трогаем
+    const refresh = () => {
+      const next = sharedFromMessages([...extra, ...base], spec);
+      const s = [next.media.map((m) => m.id), next.links.map((l) => l.m.id + ' ' + l.href), next.files.map((m) => m.id)].map((ids) => ids.join(',')).join('|');
+      if (s === sign) return;
+      sign = s;
+      shared = next;
+      mount();
+    };
+    // Пока экран открыт, в этот чат что-то прислали — оно появляется во вкладках сразу
+    const offer = (m) => {
+      if (msgChatKey(m) !== key || extra.some((x) => String(x.id) === String(m.id))) return;
+      if (!alive()) { if (sharedLive && sharedLive.offer === offer) sharedLive = null; return; }
+      extra.push(m);
+      refresh();
+    };
+    const load = async () => {
+      sharedLive = { offer };
+      let local = chatHistoryCache.get(key) || null;
+      if (!local && currentUser) {
+        const saved = await KV.get(`chat:${currentUser.id}:${key}`);
+        if (Array.isArray(saved)) local = saved;
+      }
+      if (!alive()) return;
+      if (local && local.length) { base = local; refresh(); }
+      const remote = await loadSharedMessages(spec);
+      if (alive() && (remote.files || remote.texts)) { base = mergeSharedMessages(local || [], remote); refresh(); }
+    };
+    return { mount, load };
+  }
+
   /* Профиль человека показывается сразу из кеша (память или устройство), а с сервера перечитывается
      следом; экран перерисовывается, только если данные изменились */
   const friendProfileCache = new Map();   // userId → { p, photos }
@@ -14776,131 +14984,14 @@
       let shown = null;
 
       /* ── вкладки «Аватар / Медиа / Ссылки / Файлы»: что прислали друг другу в личном чате ── */
-      let shared = null, sharedSign = '', sharedTab = '';
-      const sender = (m) => (isMyMsg(m) ? 'Вы' : (chatPersonById(m.fromId).name || 'Собеседник').trim().split(/\s+/)[0]);
-      // Адрес фото или видео: файл, уже лежащий на устройстве, иначе временная ссылка из хранилища
-      const mediaUrl = async (m, sign) => {
-        let url = m.localUrl || mediaBlobUrls.get(m.mediaPath) || null;
-        if (!url && m.kind === 'image') url = await cachedMediaUrl(m.mediaPath);
-        if (!url) url = freshSignedUrl(m.mediaPath);
-        if (!url && sign) { await signMediaPaths([m.mediaPath]); url = freshSignedUrl(m.mediaPath); }
-        return url || '';
-      };
-      // Встроить вкладки в уже нарисованный профиль (и убрать их, если показывать нечего)
-      const mountShared = () => {
-        const root = winBody.querySelector(`[data-fp-root="${CSS.escape(String(userId))}"]`);
-        const view = root && root.querySelector('.user-profile-view');
-        const actions = view && view.querySelector('.friend-actions');
-        if (!actions) return;
-        if (sharedMediaWatch) { sharedMediaWatch.disconnect(); sharedMediaWatch = null; }
-        view.querySelectorAll('.pm-bar, .pm-pane').forEach((el) => el.remove());
-        const avatarCard = view.querySelector('.friend-avatar-card');
-        const canvas = avatarCard && avatarCard.querySelector('canvas');
-        const tabs = [];
-        if (shared && shared.media.length) tabs.push(['media', 'Медиа']);
-        if (shared && shared.links.length) tabs.push(['links', 'Ссылки']);
-        if (shared && shared.files.length) tabs.push(['files', 'Файлы']);
-        root.classList.toggle('has-tabs', tabs.length > 0);
-        if (!tabs.length) {   // ничего не присылали — профиль выглядит как раньше
-          if (avatarCard) avatarCard.hidden = false;
-          if (canvas && canvas.__avatarPause) canvas.__avatarPause(false);
-          return;
-        }
-        if (avatarCard) tabs.unshift(['avatar', 'Аватар']);
-        if (!tabs.some(([id]) => id === sharedTab)) sharedTab = tabs[0][0];
-        actions.insertAdjacentHTML('afterend', `<div class="pm-bar"><div class="chat-tabs" role="tablist" aria-label="Что есть в переписке">${
-          tabs.map(([id, label]) => `<button type="button" class="chat-tab" role="tab" data-pm-tab="${id}" aria-selected="false">${label}</button>`).join('')
-        }</div></div>`);
-        view.insertAdjacentHTML('beforeend', sharedMediaHtml(shared.media) + sharedLinksHtml(shared.links, sender) + sharedFilesHtml(shared.files, sender));
-
-        // «Медиа»: файл подгружается, только когда плитка попала на экран (или близко к нему)
-        const startMedia = () => {
-          const pane = view.querySelector('[data-pm-pane="media"]');
-          const cells = [...pane.querySelectorAll('.pm-cell')];
-          const near = new WeakSet();   // плитки на экране и рядом с ним
-          const fill = async (cell) => {
-            const m = shared.media[Number(cell.dataset.pmOpen)], el = cell.firstElementChild;
-            if (!m || el.getAttribute('src')) return;
-            const url = await mediaUrl(m, false);
-            if (!url || el.getAttribute('src')) return;
-            if (m.kind !== 'video') { el.src = url; if (watch) watch.unobserve(cell); return; }
-            if (watch && !near.has(cell)) return;   // пока узнавали адрес, плитку уже пролистали
-            // у видео показываем кадр из самого начала, а не чёрную плитку
-            el.src = url.startsWith('blob:') ? url : url + '#t=0.1';
-          };
-          // видео, ушедшее далеко за экран, отпускаем (вернётся — загрузится снова): телефон держит
-          // одновременно лишь несколько видео, а плиток может быть много
-          const release = (cell) => {
-            const el = cell.firstElementChild;
-            if (el.tagName !== 'VIDEO' || !el.getAttribute('src')) return;
-            el.removeAttribute('src');
-            el.load();
-          };
-          const watch = sharedMediaWatch = window.IntersectionObserver
-            ? new IntersectionObserver((entries) => {
-                for (const en of entries) {
-                  if (en.isIntersecting) { near.add(en.target); fill(en.target); }
-                  else { near.delete(en.target); release(en.target); }
-                }
-              }, { root: winBody, rootMargin: '300px 0px' })
-            : null;
-          const look = () => {
-            for (const cell of cells) {
-              if (cell.firstElementChild.getAttribute('src')) continue;
-              if (watch) { watch.unobserve(cell); watch.observe(cell); } else fill(cell);
-            }
-          };
-          look();
-          // временные ссылки на файлы просим порциями: первые плитки появляются сразу, остальные — по мере прокрутки
-          (async () => {
-            const paths = shared.media.map((m) => m.mediaPath).filter((path) => !mediaBlobUrls.has(path) && !freshSignedUrl(path));
-            for (let i = 0; i < paths.length && pane.isConnected; i += 60) {
-              await signMediaPaths(paths.slice(i, i + 60));
-              if (pane.isConnected) look();
-            }
-          })();
-        };
-        // «Файлы»: со ссылкой, готовой заранее, файл открывается сразу по нажатию — иначе браузер может не дать открыть вкладку
-        const startFiles = async () => {
-          const pane = view.querySelector('[data-pm-pane="files"]');
-          await signMediaPaths(shared.files.map((m) => m.mediaPath));
-          for (const row of pane.querySelectorAll('[data-chat-file]')) {
-            const url = freshSignedUrl(row.dataset.mediaPath);
-            if (url) row.href = url;
-          }
-        };
-        const started = new Set();
-        const select = (id) => {
-          sharedTab = id;
-          view.querySelectorAll('[data-pm-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.pmTab === id)));
-          view.querySelectorAll('.pm-pane').forEach((pane) => { pane.hidden = pane.dataset.pmPane !== id; });
-          if (avatarCard) avatarCard.hidden = id !== 'avatar';
-          if (canvas && canvas.__avatarPause) canvas.__avatarPause(id !== 'avatar');
-          if (started.has(id)) return;
-          started.add(id);
-          if (id === 'media') startMedia(); else if (id === 'files') startFiles();
-        };
-        view.querySelector('.pm-bar').addEventListener('click', (e) => {
-          const tab = e.target.closest('[data-pm-tab]');
-          if (tab) select(tab.dataset.pmTab);
-        });
-        const mediaPane = view.querySelector('[data-pm-pane="media"]');
-        if (mediaPane) mediaPane.addEventListener('click', (e) => {
-          const cell = e.target.closest('[data-pm-open]');
-          if (!cell) return;
-          // просмотр листает все фото и видео переписки; адрес каждого узнаётся, когда до него долистали
-          openMediaViewer(shared.media.map((m) => ({ kind: m.kind, resolve: () => mediaUrl(m, true) })), Number(cell.dataset.pmOpen));
-        });
-        select(sharedTab);
-      };
-      const setShared = (list) => {
-        const next = sharedFromMessages(list, userId);
-        const sign = [next.media.map((m) => m.id), next.links.map((l) => l.m.id + ' ' + l.href), next.files.map((m) => m.id)].map((ids) => ids.join(',')).join('|');
-        if (sign === sharedSign) return;
-        sharedSign = sign;
-        shared = next;
-        mountShared();
-      };
+      const token = String(++sharedSeq);
+      const tabs = sharedTabs({ type: 'dm', peerId: userId }, () => {
+        const root = winBody.querySelector(`[data-pm="${token}"]`);
+        const after = root && root.querySelector('.friend-actions');
+        if (!after) return null;
+        const card = root.querySelector('.friend-avatar-card');
+        return { root, after, first: card ? { id: 'avatar', label: 'Аватар', el: card } : null };
+      }, alive);
 
       const paint = (p, photoRows, fade) => {
         if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
@@ -14942,7 +15033,7 @@
 
         // Фото + 3D-аватар: ужимаем фото по высоте окна, чтобы аватар был виден без прокрутки
         winBody.innerHTML = `
-          <div class="${avatarBelow ? 'friend-fit' : ''}" data-fp-root="${escapeHtml(userId)}">
+          <div class="${avatarBelow ? 'friend-fit' : ''}" data-fp-root="${escapeHtml(userId)}" data-pm="${token}">
           ${headHtml}
             <div class="friend-actions">
               <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
@@ -14976,24 +15067,13 @@
 
         const chatBtn = winBody.querySelector('#friend-open-chat');
         if (chatBtn) chatBtn.addEventListener('click', () => showDmScreen(userId));
-        mountShared();   // профиль перерисовали — вкладки с тем, что есть в переписке, возвращаются на место
+        tabs.mount();   // профиль перерисовали — вкладки с тем, что есть в переписке, возвращаются на место
       };
       const sign = (p, photos) => JSON.stringify([p.name, p.username, p.bio, p.avatar, (photos || []).map((x) => x.id || x.url),
         avatarCfgKey(userAvatarCfgById.get(userId) || null)]);
 
       // что есть в переписке: сразу — из сообщений, лежащих на устройстве, следом — полный список с сервера
-      (async () => {
-        const key = 'dm:' + userId;
-        let local = chatHistoryCache.get(key) || null;
-        if (!local && currentUser) {
-          const saved = await KV.get(`chat:${currentUser.id}:${key}`);
-          if (Array.isArray(saved)) local = saved;
-        }
-        if (!alive()) return;
-        if (local && local.length) setShared(local);
-        const remote = await loadSharedMessages(userId);
-        if (alive() && (remote.files || remote.texts)) setShared(mergeSharedMessages(local || [], remote));
-      })();
+      tabs.load();
 
       (async () => {
         let cached = friendProfileCache.get(userId);
