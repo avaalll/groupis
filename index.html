@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-13 12:21">
+  <meta name="app-build" content="2026-10-14 03:26">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -153,6 +153,11 @@
       -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
       -webkit-user-select: none; user-select: none;
     }
+    /* iPhone и iPad сами «укрупняют» текст в широких блоках (text autosizing): иногда это случается посреди
+       переписки — у части сообщений буквы становятся в полтора раза крупнее остальных и остаются такими, пока чат
+       не открыть заново. Значение 100% Safari здесь не всегда соблюдает; none выключает укрупнение полностью.
+       Увеличение страницы пальцами и масштаб из настроек Safari работают как прежде */
+    html.is-ios, html.is-ios body { -webkit-text-size-adjust: none; text-size-adjust: none; }
     button { font: inherit; color: inherit; }
 
     .map-app { position: fixed; inset: 0; z-index: 1; }
@@ -1295,11 +1300,12 @@
       border-bottom-left-radius: 4px;
     }
     :root[data-theme="dark"] .chat-msg.them { background: rgba(255,255,255,.08); }
+    /* Время — справа внизу, как в Telegram: на последней строке текста, если там хватает места, иначе строкой ниже.
+       Это float сразу после текста — на последнюю строку его ставит или переносит сам браузер */
     .chat-msg .chat-msg-time {
-      display: block; margin-top: 4px;
-      font-size: 11px; opacity: .75; text-align: right;
+      float: right; margin: 7px 0 0 10px;
+      font-size: 11px; opacity: .75; white-space: nowrap;
     }
-    .chat-msg.them .chat-msg-time { text-align: left; }
     .support-chat-form {
       display: flex; gap: 8px;
       padding: 8px 10px 10px;
@@ -1373,7 +1379,7 @@
     .chat-msg-author { display: block; font-size: 12px; font-weight: 700; color: var(--you-soft); margin-bottom: 2px; }
     .chat-msg.has-media { padding: 4px; }
     .chat-msg.has-media .chat-msg-author { padding: 2px 6px 0; }
-    .chat-msg.has-media .chat-msg-time { padding: 0 6px 2px; }
+    .chat-msg.has-media > .chat-msg-time { margin-top: 4px; padding: 0 6px 2px; }
     .chat-msg.is-pending { opacity: .6; }
     .chat-photo, .chat-video {
       display: block; max-width: min(260px, 100%); max-height: 320px;
@@ -1381,7 +1387,9 @@
       border-radius: 11px; background: rgba(0,0,0,.18); object-fit: cover;
     }
     .chat-photo { cursor: zoom-in; }
-    .chat-caption { padding: 4px 6px 0; }
+    /* подпись переносится по ширине фото или видео и не раздвигает пузырь — иначе справа от фото пустая полоса
+       (width: 0 убирает её из расчёта ширины пузыря, min-width растягивает на всю ширину) */
+    .chat-caption { padding: 4px 6px 2px; width: 0; min-width: 100%; }
     .chat-voice { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
     .chat-voice audio { width: 220px; max-width: 100%; height: 38px; }
     .chat-voice-dur { font-size: 11px; opacity: .8; font-variant-numeric: tabular-nums; }
@@ -3387,7 +3395,7 @@
     .msg-menu-list .pop-back { color: var(--ink-soft); }
     .msg-menu-list .pop-back .pop-chev { margin: 0 2px 0 0; }
     /* Реакции под сообщением: нажатие на свою снимает её, на чужую — ставит такую же */
-    .chat-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .chat-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; clear: both; }   /* под временем — оно стоит в строке текста */
     .chat-msg.has-media .chat-reacts { margin: 6px 4px 0; }
     .chat-msg.is-circle .chat-reacts { margin-top: 4px; }
     .chat-react {
@@ -5701,7 +5709,7 @@
       } else if (step === 'photo') {
         body.innerHTML = `
           <div class="auth-avatar-row">
-            <div class="auth-avatar-preview" id="reg-avatar">${draft.avatar ? '' : escapeHtml((draft.name || '?').charAt(0).toUpperCase() || '?')}</div>
+            <div class="auth-avatar-preview" id="reg-avatar">${draft.avatar ? '' : escapeHtml(firstChar(draft.name || '?').toUpperCase() || '?')}</div>
             <div class="auth-avatar-side">
               <button type="button" class="btn" id="reg-avatar-pick">Выбрать фото</button>
               <button type="button" class="btn-ghost" id="reg-avatar-remove" ${draft.avatar ? '' : 'hidden'}>Удалить</button>
@@ -5732,7 +5740,7 @@
         rm.addEventListener('click', () => {
           draft.avatar = ''; draft.photo = ''; draft.crop = null;
           prev.style.backgroundImage = '';
-          prev.textContent = (draft.name || '?').charAt(0).toUpperCase() || '?';
+          prev.textContent = firstChar(draft.name || '?').toUpperCase() || '?';
           rm.hidden = true;
         });
       } else if (step === 'bio') {
@@ -6734,18 +6742,17 @@
     }
     if (!names.length) return '';   // не из общей группы и не из группы с match — подписи нет
     let first = names[0];
-    if (first.length > 16) first = first.slice(0, 15) + '…';
+    first = ellipsize(first, 16);
     return names.length > 1 ? `${first} +${names.length - 1}` : first;
   }
 
   // Плашка группы на карте: фото, название, число участников
   function mapGroupChipHtml(g, extraClass = '', attrs = '') {
-    let name = (g.name || 'Группа').trim();
-    if (name.length > 22) name = name.slice(0, 21) + '…';
+    const name = ellipsize((g.name || 'Группа').trim(), 22);
     const count = (g.members || []).length + 1; // участники + лидер
     const ava = g.photo
       ? `<span class="map-group-ava" style="background-image:url('${safeUrl(g.photo)}')"></span>`
-      : `<span class="map-group-ava">${escapeHtml((g.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+      : `<span class="map-group-ava">${escapeHtml(firstChar((g.name || '?').trim()).toUpperCase() || '?')}</span>`;
     return `<div class="map-group-chip ${extraClass}" ${attrs}>
         ${ava}
         <span class="map-group-name">${escapeHtml(name)}</span>
@@ -6770,9 +6777,8 @@
   }
 
   function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = []) {
-    const nameInitial = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
-    let label = (person.name || '').trim() || person.handle || 'Пользователь';
-    if (label.length > 18) label = label.slice(0, 17) + '…';
+    const nameInitial = firstChar((person.name || '?').trim()).toUpperCase() || '?';
+    const label = ellipsize((person.name || '').trim() || person.handle || 'Пользователь', 18);
 
     const avatarInner = person.avatar
       ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(person.avatar)}')"></div>`
@@ -7092,8 +7098,6 @@
       .in('user_id', ids);
     if (error) { console.warn('[user_locations] load:', error.message); return; }
 
-    console.log('[user_locations] rows:', data);
-
     const found = new Set();
     for (const row of (data || [])) {
       found.add(row.user_id);
@@ -7106,7 +7110,8 @@
     }
     const shown = new Set();
     for (const [userId, coords] of userLocationsById.entries()) {
-      if (!relevant.has(userId)) continue;
+      // геопозиции на сервере больше нет (человек её убрал) — старые координаты не показываем
+      if (!relevant.has(userId) || !found.has(userId)) continue;
       const person = personById(userId);
       if (!person) continue;
       const isFriend = friends.some((f) => f.id === userId);
@@ -7222,9 +7227,26 @@
     upsertFriendMarker(userId, person, coords, isFriend, cfg);
   }
 
+  /* Геопозиция с телефона при точном режиме приходит часто — в движении до раза в секунду. Каждую на сервер
+     не шлём: это запись в базу и рассылка всем, кто видит человека на карте. Уходит, когда сдвинулись заметно
+     (на 25 м) или прошло 15 секунд; свой маркер на карте при этом двигается сразу */
+  let locSent = null, locTimer = 0;   // что и когда последний раз ушло на сервер; отложенная отправка последней точки
+  function shareMyLocation(coords) {
+    clearTimeout(locTimer);
+    const [lon, lat] = coords;
+    if (locSent) {
+      const wait = 15000 - (Date.now() - locSent.at);
+      const dy = (lat - locSent.lat) * 111320, dx = (lon - locSent.lon) * 111320 * Math.cos(lat * Math.PI / 180);
+      // остановились — новых точек телефон может больше не прислать, поэтому последняя всё равно уйдёт, чуть позже
+      if (wait > 0 && Math.hypot(dx, dy) < 25) { locTimer = setTimeout(() => { if (settings.geolocation) upsertMyLocation(coords); }, wait); return; }
+    }
+    upsertMyLocation(coords);
+  }
   async function upsertMyLocation(coords) {
     if (!currentUser || !Array.isArray(coords) || coords.length !== 2) return;
     const [lon, lat] = coords;
+    clearTimeout(locTimer);
+    locSent = { lon, lat, at: Date.now() };
     const row = { user_id: currentUser.id, lat, lon, updated_at: new Date().toISOString() };
     // аватар отправляем, только когда свой уже загружен — иначе затрём сохранённый на сервере
     if (avatarConfigReady) row.avatar_config = avatarConfig;
@@ -8356,10 +8378,9 @@
     const wrap = document.createElement('div');
     wrap.className = 'user-avatar-wrap';
     wrap.dataset.ownMarker = '1';
-    const nameInitial = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
+    const nameInitial = firstChar((profile.name || '?').trim()).toUpperCase() || '?';
     const displayName = (profile.name || '').trim();
-    let label = displayName || 'Я';
-    if (label.length > 18) label = label.slice(0, 17) + '…';
+    const label = ellipsize(displayName || 'Я', 18);
     const avatarInner = profile.avatar
       ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></div>`
       : `<div class="user-badge-avatar">${escapeHtml(nameInitial)}</div>`;
@@ -8421,7 +8442,7 @@
           lastUserLocation = coords;
           placeUserMarker(coords);
           syncWishMarkers();
-          upsertMyLocation(coords);
+          shareMyLocation(coords);
         },
         (err) => console.info('[гео watch]', err.message),
         { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }
@@ -8429,6 +8450,7 @@
     }
   }
   function stopGeolocation() {
+    clearTimeout(locTimer);
     if (userLocationWatchId !== null) { try { navigator.geolocation.clearWatch(userLocationWatchId); } catch {} userLocationWatchId = null; }
     if (userLocationMarker) { try { if (userAvatarCanvas && userAvatarCanvas.__avatarStop) userAvatarCanvas.__avatarStop(); userLocationMarker.destroy(); } catch {} userLocationMarker = null; }
     userAvatarCanvas = null; lastUserLocation = null;
@@ -8678,7 +8700,7 @@
     const name = (profile.name || 'Я').trim();
     const ava = profile.avatar
       ? `<span class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></span>`
-      : `<span class="user-badge-avatar">${escapeHtml(name.charAt(0).toUpperCase() || '?')}</span>`;
+      : `<span class="user-badge-avatar">${escapeHtml(firstChar(name).toUpperCase() || '?')}</span>`;
     return wishPreviewHtml({
       text: w.text, tone: 'me',
       pillHtml: `<div class="user-badge-inner">${ava}<span class="user-badge-name">${escapeHtml(name)}</span></div>`,
@@ -8750,7 +8772,7 @@
         const id = escapeHtml(g.id);
         const av = g.photo
           ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
-          : `<span class="group-avatar">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+          : `<span class="group-avatar">${escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>`;
         return `<li class="wish-group-row">
             ${av}
             <div class="group-main">
@@ -9035,7 +9057,7 @@
             const membersCount = (g.members || []).length + 1; // + лидер
             const av = g.photo
               ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
-              : `<span class="group-avatar">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+              : `<span class="group-avatar">${escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>`;
             const isOwner = g.ownerId === (currentUser && currentUser.id);
             const invited = isOwner ? pendingInvitesOfGroup(g.id).length : 0;
             const waiting = (invited ? ` · приглашено: ${invited}` : '') + (groupOnMap(g) ? '' : ' · пока не на карте');
@@ -9127,7 +9149,7 @@
       winBody.innerHTML = `
         <form class="group-form" id="group-form" novalidate>
           <div class="group-photo-row">
-            <div id="group-photo" class="group-photo" ${groupPhoto ? `style="background-image:url('${safeUrl(groupPhoto)}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? editing.name.charAt(0).toUpperCase() : 'Г'))}</div>
+            <div id="group-photo" class="group-photo" ${groupPhoto ? `style="background-image:url('${safeUrl(groupPhoto)}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? firstChar(editing.name).toUpperCase() : 'Г'))}</div>
             <div class="avatar-edit-side">
               <button type="button" class="btn" id="group-photo-pick">Выбрать фото</button>
               <button type="button" class="btn-ghost" id="group-photo-remove" ${groupPhoto ? '' : 'hidden'}>Удалить фото</button>
@@ -9422,7 +9444,7 @@
       winBody.innerHTML = `
         <div class="user-profile-view">
           <div class="user-profile-hero">
-            <div class="user-profile-avatar no-3d" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</div>
+            <div class="user-profile-avatar no-3d" ${g.photo ? `style="background-image:url('${safeUrl(g.photo)}')"` : ''}>${g.photo ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</div>
             <div class="user-profile-name">${escapeHtml(g.name)}</div>
             <div class="user-profile-handle">${escapeHtml([membersLabel(people.length), groupStatsText(g)].filter(Boolean).join(' · '))}</div>
           </div>
@@ -9601,6 +9623,7 @@
      «Прочитано» — отметка времени на этом устройстве: до какого сообщения чат уже открывали. */
   const chatLast = new Map();     // ключ чата → последнее сообщение
   const chatUnread = new Map();   // ключ чата → сколько непрочитанных
+  const SUMMARY_LIMIT = 300;      // сколько последних сообщений каждого вида чатов берём для списка чатов
   let chatSummaryLoaded = false, chatSummarySeq = 0, chatSummaryTimer = 0;
   let chatsListShown = '';        // показанный список: при следующем запуске он появляется сразу, без «Загружаем…»
 
@@ -9761,7 +9784,10 @@
     const c = chat, body = winBody.querySelector('#chat-view-body');
     if (!c || !body || !currentUser) return;
     const on = chatReadsReady && !chatReadsMissing;
-    body.classList.toggle('reads-on', on);
+    if (body.classList.contains('reads-on') !== on) {
+      body.classList.toggle('reads-on', on);
+      fitChatBubbles(body.querySelectorAll(':scope > .chat-msg.me'));   // у времени появились (или пропали) галочки — оно стало шире
+    }
     if (!on) return;
     const reads = peerReads.get(chatKey(c)), myId = String(currentUser.id);
     let at = 0;   // до какого момента чат дочитал кто-то, кроме меня
@@ -9986,11 +10012,12 @@
     if (!currentUser) return false;
     const myId = currentUser.id, seq = ++chatSummarySeq;
     const gs = myGroups(), ms = myAcceptedMatches();
-    const last = new Map(), unread = new Map(), done = new Set(), got = [];
+    const last = new Map(), unread = new Map(), done = new Set(), got = [], full = new Set();
     const load = async (kind, norm, query) => {
       try {
-        const { data, error } = query ? await query().order('created_at', { ascending: false }).limit(300) : { data: [] };
+        const { data, error } = query ? await query().order('created_at', { ascending: false }).limit(SUMMARY_LIMIT) : { data: [] };
         if (error) { console.warn(`[${kind} chat] list:`, error.message); return; }
+        if ((data || []).length >= SUMMARY_LIMIT) full.add(kind);   // дальше могли остаться чаты постарше
         for (const r of (data || [])) {
           const m = norm(r);
           if (!isHiddenMsg(kind, m.id)) got.push(m);
@@ -10012,6 +10039,31 @@
       if (!last.has(key)) last.set(key, m);
       if (isUnreadMsg(m, key)) unread.set(key, (unread.get(key) || 0) + 1);
     }
+    /* В выборку попадают SUMMARY_LIMIT последних сообщений всех чатов одного вида сразу. Если с кем-то переписываются
+       много, давние чаты в неё не попадают — и в списке выглядели пустыми («Начните диалог»), без времени и в самом
+       низу. Таким чатам оставляем уже известное последнее сообщение, а неизвестное догружаем — по одному на чат */
+    if (full.size) {
+      const specs = [...gs.map((g) => ({ type: 'group', groupId: g.id })), ...ms.map((m) => ({ type: 'match', matchId: String(m.id) })),
+        ...friends.map((f) => ({ type: 'dm', peerId: f.id }))];
+      const ask = [];
+      for (const spec of specs) {
+        const key = chatKey(spec);
+        if (!full.has(spec.type) || last.has(key)) continue;
+        const prev = chatLast.get(key);
+        if (prev && !isHiddenMsg(spec.type, prev.id) && msgTs(prev) > chatClearedAt(key)) {
+          last.set(key, prev);
+          if (chatUnread.get(key)) unread.set(key, chatUnread.get(key));
+        } else ask.push(spec);
+      }
+      await Promise.all(ask.slice(0, 40).map(async (spec) => {
+        const list = await loadChatHistory(spec, 5);
+        const m = list && list[list.length - 1], key = chatKey(spec);
+        if (!m) return;
+        last.set(key, m);
+        if (isUnreadMsg(m, key)) unread.set(key, 1);
+      }));
+      if (seq !== chatSummarySeq || !currentUser || currentUser.id !== myId) return false;
+    }
     // запрос не удался (нет сети) — по этим чатам остаётся то, что уже знаем
     for (const map of [chatLast, chatUnread]) {
       for (const key of [...map.keys()]) if (done.has(key.split(':')[0])) map.delete(key);
@@ -10023,10 +10075,11 @@
     updateChatBadges();
     return true;
   }
-  // Вернулись в приложение: открытый чат прочитан, а счётчики сверяем с сервером — в фоне realtime мог молчать
+  // Вернулись в приложение: в фоне realtime мог молчать — открытый чат догружает пропущенное (и тогда отмечается
+  // прочитанным), счётчики сверяем с сервером
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !currentUser) return;
-    if (chat) markChatRead(chat);
+    if (chat) refreshOpenChat();
     refreshChatSummariesSoon();
   });
   function refreshChatSummariesSoon() {
@@ -10059,8 +10112,7 @@
     const myId = currentUser && currentUser.id;
     const previewOf = (last, fallback, withAuthor) => {
       if (!last) return fallback;
-      let text = chatPreviewText(last);
-      if (text.length > 34) text = text.slice(0, 34) + '…';
+      const text = ellipsize(chatPreviewText(last), 35);
       const who = last.fromId === myId ? 'Вы: ' : (withAuthor && last.authorName ? last.authorName + ': ' : '');
       return who + text;
     };
@@ -10095,7 +10147,7 @@
         const key = 'group:' + g.id;
         const avatar = g.photo
           ? `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background-image:url('${safeUrl(g.photo)}')"></span>`
-          : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+          : `<span class="avatar group-chat-avatar" style="width:44px;height:44px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>`;
         grs.push({
           ts: msgTs(chatLast.get(key)),
           html: rowHtml({ key, attr: `data-open-group-chat="${escapeHtml(g.id)}"`, avatar, name: g.name || 'Группа', fallback: 'Групповой чат', withAuthor: true }),
@@ -10382,7 +10434,7 @@
     return groups.filter((g) => g.ownerId === myId || (g.members || []).some((m) => m.id === myId));
   }
 
-  async function loadChatHistory(c) {
+  async function loadChatHistory(c, limit = CHAT_KEEP) {
     const q = c.type === 'dm'
       ? supabaseClient.from('dm_messages').select('*')
           .or(`and(from_id.eq.${currentUser.id},to_id.eq.${c.peerId}),and(from_id.eq.${c.peerId},to_id.eq.${currentUser.id})`)
@@ -10390,7 +10442,7 @@
         ? supabaseClient.from('match_messages').select('*').eq('match_id', Number(c.matchId))
         : supabaseClient.from('group_messages').select('*').eq('group_id', c.groupId);
     // последние CHAT_KEEP сообщений: берём с конца и разворачиваем — столько же хранится на устройстве
-    const { data, error } = await q.order('created_at', { ascending: false }).limit(CHAT_KEEP);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(limit);
     if (error) { console.warn('[chat] load:', error.message); return null; }
     const cleared = chatClearedAt(chatKey(c));
     return (data || []).reverse().map(c.type === 'dm' ? normDmRow : c.type === 'match' ? normMatchRow : normGroupRow)
@@ -10496,17 +10548,88 @@
     const cls = ['chat-msg', mine ? 'me' : 'them', isMedia ? 'has-media' : '',
       m.kind === 'circle' ? 'is-circle' : '', m.pending ? 'is-pending' : '',
       chat && chat.selected && chat.selected.has(String(m.id)) ? 'is-selected' : ''].join(' ');
-    const body = isMedia
-      ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}</div>` : '')
-      : `<span class="chat-text">${escapeHtml(m.content)}</span>`;
     // у своих сообщений рядом со временем — отметка: часы, пока отправляется; потом галочки (их расставляет syncChatReadMarks)
     const ticks = mine ? `<span class="chat-ticks" aria-hidden="true">${m.pending ? ICON_TICK_CLOCK : ICON_TICKS}</span>` : '';
-    const time = (m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '') + fmtTime(m.createdAt) + ticks;
+    const time = `<span class="chat-msg-time">${(m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '') + fmtTime(m.createdAt) + ticks}</span>`;
+    // время идёт сразу за текстом (у фото и видео — за подписью): так оно встаёт в его последнюю строку
+    const body = isMedia
+      ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${escapeHtml(m.content)}${time}</div>` : time)
+      : `<span class="chat-text">${escapeHtml(m.content)}</span>${time}`;
     // цитата сообщения, на которое ответили: нажатие перематывает ленту к нему
     const quote = m.reply ? `<div class="chat-reply" data-reply-to="${escapeHtml(m.reply.id)}" role="button"><b>${escapeHtml(m.reply.name || 'Сообщение')}</b><span>${escapeHtml(m.reply.text || 'Сообщение')}</span></div>` : '';
     // пересланное: чьё это сообщение — видно и тому, кто переслал, и тому, кому переслали
     const fwd = m.forward ? `<div class="chat-fwd">Переслано от <b>${escapeHtml(m.forward.name || 'пользователя')}</b></div>` : '';
-    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${mine && !m.pending ? `data-ts="${msgTs(m)}"` : ''}>${author}${fwd}${quote}${body}${chatReactsHtml(m)}<span class="chat-msg-time">${time}</span></div>`;
+    return `<div class="${cls}" data-msg-id="${escapeHtml(m.id)}" data-day="${chatDayKey(m.createdAt)}" ${mine && !m.pending ? `data-ts="${msgTs(m)}"` : ''}>${author}${fwd}${quote}${body}${chatReactsHtml(m)}</div>`;
+  }
+
+  /* ── Пузырь по ширине текста, как в Telegram ──
+     Текст, перенесённый на несколько строк, CSS растягивает до предельной ширины пузыря (fit-content при переносе
+     берёт всё доступное место) — справа остаётся пустая полоса, у одних сообщений шире, у других уже.
+     Поэтому самую длинную строку меряем и ставим пузырю её ширину. Сначала снимаем прежние ширины у всех
+     сообщений, потом всё меряем, потом всё ставим — лента перекладывается один раз, а не на каждое сообщение. */
+  function fitChatBubbles(els) {
+    const list = [];
+    for (const el of els) if (el.classList.contains('chat-msg') && el.querySelector(':scope > .chat-text')) list.push(el);
+    if (!list.length) return;
+    for (const el of list) if (el.style.width) el.style.width = '';
+    const widths = list.map(chatBubbleFitWidth);
+    list.forEach((el, i) => { if (widths[i]) el.style.width = widths[i] + 'px'; });
+  }
+  // Строки текста узла: у каждой — правый край. Куски одной строки (эмодзи, другой шрифт) складываем в одну
+  function chatTextLines(node) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const lines = [];
+    for (const r of range.getClientRects()) {
+      if (r.height < 1) continue;
+      const mid = (r.top + r.bottom) / 2;
+      const ln = lines.find((x) => mid > x.top && mid < x.bottom);
+      if (ln) { ln.right = Math.max(ln.right, r.right); ln.top = Math.min(ln.top, r.top); ln.bottom = Math.max(ln.bottom, r.bottom); }
+      else lines.push({ top: r.top, bottom: r.bottom, right: r.right });
+    }
+    return lines.sort((a, b) => a.top - b.top);
+  }
+  // Ширина пузыря, при которой строки ложатся так же, а справа нет пустоты; 0 — менять нечего
+  function chatBubbleFitWidth(el) {
+    const w = el.offsetWidth;
+    if (!w) return 0;   // лента не на экране
+    const box = el.getBoundingClientRect();
+    const k = box.width / w || 1;   // новое сообщение «выпрыгивает» (scale) — меряем без масштаба
+    const cs = getComputedStyle(el);
+    const padL = parseFloat(cs.paddingLeft) || 0, padR = parseFloat(cs.paddingRight) || 0;
+    const inner = el.clientWidth - padL - padR;   // ширина под текст сейчас
+    const left = box.left + (el.clientLeft + padL) * k;
+    const lines = chatTextLines(el.querySelector(':scope > .chat-text'));
+    if (!lines.length) return 0;
+    const x = (v) => (v - left) / k;
+    let need = Math.max(...lines.map((ln) => x(ln.right)));
+    // время остаётся в последней строке, если помещается в ней и сейчас; иначе оно строкой ниже — пузырь не уже него
+    const time = el.querySelector(':scope > .chat-msg-time');
+    if (time) {
+      const tcs = getComputedStyle(time);
+      const tw = time.getBoundingClientRect().width / k;   // дробная ширина: offsetWidth округлён и «не помещался» на полпикселя
+      const end = x(lines[lines.length - 1].right) + tw + (parseFloat(tcs.marginLeft) || 0) + (parseFloat(tcs.marginRight) || 0);
+      need = Math.max(need, end <= inner + 1 ? end : tw);
+    }
+    // имя автора, «Переслано от …» и цитата должны поместиться целиком (если не помещались и раньше — их обрежет многоточие)
+    const textWidth = (node) => { const r = document.createRange(); r.selectNodeContents(node); return r.getBoundingClientRect().width / k; };
+    for (const head of el.querySelectorAll(':scope > .chat-msg-author, :scope > .chat-fwd')) need = Math.max(need, textWidth(head));
+    const quote = el.querySelector(':scope > .chat-reply');
+    if (quote && quote.firstElementChild) {
+      need = Math.max(need, Math.max(...[...quote.children].map(textWidth)) + quote.offsetWidth - quote.firstElementChild.offsetWidth);
+    }
+    // плашки реакций — в один ряд, как без подгонки
+    const reacts = el.querySelector(':scope > .chat-reacts');
+    if (reacts && reacts.children.length) {
+      need = Math.max(need, [...reacts.children].reduce((s, c) => s + c.offsetWidth, 0) + (parseFloat(getComputedStyle(reacts).columnGap) || 0) * (reacts.children.length - 1));
+    }
+    need = Math.ceil(need + 0.5);
+    if (need >= inner - 1) return 0;   // и так впритык
+    return need + padL + padR + (el.offsetWidth - el.clientWidth);
+  }
+  // шрифт Inter догрузился, когда лента уже нарисована, — строки стали другой ширины
+  if (document.fonts && document.fonts.addEventListener) {
+    document.fonts.addEventListener('loadingdone', () => { const body = winBody.querySelector('#chat-view-body'); if (body) fitChatBubbles(body.children); });
   }
 
   /* ── Реакции ──
@@ -10540,7 +10663,8 @@
     const old = el.querySelector(':scope > .chat-reacts');
     if (old) old.remove();
     const html = chatReactsHtml(m, pop);
-    if (html) el.querySelector(':scope > .chat-msg-time').insertAdjacentHTML('beforebegin', html);
+    if (html) el.insertAdjacentHTML('beforeend', html);   // плашки — последние в сообщении, под текстом и временем
+    fitChatBubbles([el]);   // плашкам может понадобиться пузырь шире
     if (pop) playReactionFx(el.querySelector(':scope > .chat-reacts .chat-react.is-pop'));
   }
 
@@ -10753,6 +10877,16 @@
     const k = Math.min(1, 260 / d[0], 320 / d[1]);
     return `width:${Math.max(1, Math.round(d[0] * k))}px;aspect-ratio:${d[0]}/${d[1]}`;
   }
+  /* Фото, размер которого заранее не знали (новое, ещё не сохранённое на устройстве), загрузилось — ставим ему
+     размер так же, как известным. Иначе пузырь растягивался на исходную ширину снимка (в пикселях камеры),
+     а само фото занимало только его левую часть */
+  function sizeChatPhoto(img) {
+    if (img.style.aspectRatio || !img.naturalWidth || !img.naturalHeight) return;
+    const path = img.dataset.mediaPath;
+    if (!path) return;
+    if (!mediaDims.has(path)) mediaDims.set(path, [img.naturalWidth, img.naturalHeight]);
+    img.style.cssText += chatPhotoSize(path);
+  }
 
   const mediaAttr = (el) => (el.tagName === 'A' ? 'href' : 'src');
   const mediaPending = (el) => !el.getAttribute(mediaAttr(el));
@@ -10798,7 +10932,11 @@
       el.dataset.mediaBound = '1';
       if (el.tagName === 'A') continue;
       // когда медиа загрузится, высота сообщения может вырасти — держим ленту внизу
-      el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (chat && chat.stick) scrollChatToBottom(); });
+      el.addEventListener(el.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => {
+        if (el.tagName === 'IMG') sizeChatPhoto(el);
+        if (chat && chat.stick) scrollChatToBottom();
+      });
+      if (el.tagName === 'IMG' && el.complete) sizeChatPhoto(el);   // уже загрузилось (из кеша браузера) — load не придёт
       el.addEventListener('error', () => onChatMediaError(el));
     }
     await fillChatMedia(els.filter(mediaPending));
@@ -10866,9 +11004,14 @@
     const body = winBody.querySelector('#chat-view-body');
     chat.stick = true;
     chat.below = 0;   // сколько сообщений пришло, пока ленту листали вверх
+    watchChatUserScroll(body);
     body.addEventListener('scroll', () => {
       if (!chat) return;
-      chat.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+      const near = chatNearEnd(body);
+      /* Лента только что сама доехала до нового сообщения, а человек её не трогал — значит, это запоздалое
+         событие прокрутки (iPhone досылает их после инерции): ленту не отцепляем от конца, а возвращаем вниз */
+      if (!near && chat.stick && performance.now() < chatFollowUntil && !chatUserScrolling()) { scrollChatToBottom(); return; }
+      chat.stick = near;
       // вернулись к концу ленты — то, что пришло, пока её листали, теперь увидено
       if (chat.stick && chat.below) { chat.below = 0; markChatRead(chat); }
       syncChatDown();
@@ -10892,6 +11035,14 @@
     new MutationObserver(() => { syncChatDates(body); syncChatReadMarks(); watchSizes(); syncChatDown(); }).observe(body, { childList: true });
     watchSizes();
     syncChatReadMarks();
+    fitChatBubbles(body.children);
+    // окно стало шире или уже — строки переносятся иначе, ширину пузырей подбираем заново
+    let fitWidth = body.clientWidth;
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (body.clientWidth === fitWidth || !body.isConnected) return;
+      fitWidth = body.clientWidth;
+      fitChatBubbles(body.children);
+    }).observe(body);
     hydrateChatMedia(body);
     scrollChatToBottom();
     winBody.querySelector('#chat-composer').addEventListener('submit', (e) => { e.preventDefault(); sendChatText(); });
@@ -10926,7 +11077,7 @@
     return m.authorName || chatPersonById(m.fromId).name;
   }
   function replySnapshot(m) {
-    return { id: String(m.id), name: msgAuthorName(m), text: chatPreviewText(m).slice(0, 140) };
+    return { id: String(m.id), name: msgAuthorName(m), text: cutChars(chatPreviewText(m), 140) };
   }
   function setChatReply(id) {
     const m = id == null ? null : chatMsgById(id);
@@ -10964,6 +11115,7 @@
   function jumpToChatMessage(id) {
     const el = chatBubbleEl(id);
     if (!el) return;
+    chatFollowUntil = 0;   // человек сам ушёл к старому сообщению — лента больше не держится у конца
     el.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
     el.classList.remove('is-flash'); void el.offsetWidth; el.classList.add('is-flash');
   }
@@ -11047,12 +11199,38 @@
     body.scrollTop = body.scrollHeight;
     body.autoTop = body.scrollTop;   // эту прокрутку сделал скрипт — плавающая дата на неё не показывается
   }
+  /* «У конца ленты» — до низа меньше CHAT_END_GAP или последнее сообщение хотя бы краем на экране.
+     У конца новые сообщения ведут ленту за собой; дальше от него лента стоит, а на кнопке «вниз» растёт счётчик.
+     Одна граница на то и другое: раньше лента переставала ехать за сообщениями уже в 80px от низа, а кнопка
+     появлялась только после 160px — между ними новое сообщение уходило под край без кнопки и без счётчика. */
+  const CHAT_END_GAP = 160;
+  function chatNearEnd(body) {
+    const gap = body.scrollHeight - body.scrollTop - body.clientHeight;
+    if (gap < CHAT_END_GAP) return true;
+    const last = body.lastElementChild;
+    return !!last && gap < last.offsetHeight;
+  }
+  // Ведёт ли лента за новыми сообщениями: была у конца после последней прокрутки — или у конца прямо сейчас
+  function chatFollowing(c) {
+    const body = winBody.querySelector('#chat-view-body');
+    return c.stick !== false || (!!body && chatNearEnd(body));
+  }
+  /* Кто двигает ленту: человек (палец, колесо, полоса прокрутки) или скрипт. Пока человек листает — и ещё секунду
+     после, пока лента едет по инерции, — его прокрутку не перебиваем. chatFollowUntil — до какого момента лента
+     держится у конца после того, как сама доехала до нового сообщения */
+  let chatUserAt = 0, chatFingers = 0, chatFollowUntil = 0;
+  const CHAT_FOLLOW_MS = 1500;
+  function watchChatUserScroll(body) {
+    const mark = (e) => { chatUserAt = performance.now(); if (e.touches) chatFingers = e.touches.length; };
+    for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel', 'pointerdown']) body.addEventListener(type, mark, { passive: true });
+  }
+  const chatUserScrolling = () => chatFingers > 0 || performance.now() - chatUserAt < 1000;
   /* Кнопка «вниз», как в Telegram: появляется, когда ленту отлистали вверх, и возвращает к последним сообщениям.
      Пока лента отлистана, новые сообщения не сдёргивают её вниз — на кнопке растёт счётчик (chat.below) */
   function syncChatDown() {
     const body = winBody.querySelector('#chat-view-body'), btn = winBody.querySelector('#chat-down');
     if (!body || !btn || !chat) return;
-    btn.classList.toggle('is-on', body.scrollHeight - body.scrollTop - body.clientHeight > 160);
+    btn.classList.toggle('is-on', !chatNearEnd(body));
     const n = chat.below || 0, badge = btn.lastElementChild;
     badge.hidden = !n;
     badge.textContent = n > 99 ? '99+' : String(n);
@@ -11069,16 +11247,20 @@
     const empty = body.querySelector('.empty-msg');
     if (empty) empty.remove();
     body.insertAdjacentHTML('beforeend', chatBubbleHtml(m));
-    if (body.lastElementChild) body.lastElementChild.classList.add('is-new');   // новое сообщение «выпрыгивает»
+    const el = body.lastElementChild;
+    fitChatBubbles([el]);
+    el.classList.add('is-new');   // новое сообщение «выпрыгивает»
     hydrateChatMedia(body);
-    if (!stay) scrollChatToBottom();
+    if (!stay) { chatFollowUntil = performance.now() + CHAT_FOLLOW_MS; scrollChatToBottom(); }
   }
 
   function replaceChatBubble(oldId, m) {
     const el = chatBubbleEl(oldId);
     if (!el) return;
     el.insertAdjacentHTML('afterend', chatBubbleHtml(m));
+    const next = el.nextElementSibling;
     el.remove();
+    fitChatBubbles([next]);
     hydrateChatMedia(winBody.querySelector('#chat-view-body'));
   }
 
@@ -11220,7 +11402,7 @@
     if (c.typing && c.typing.delete(String(m.fromId))) paintTyping(c);
     if (c.messages.some((x) => x.id === m.id)) return;
     // ленту отлистали вверх — чужое сообщение читающего вниз не сдёргивает: оно ждёт под кнопкой «вниз»
-    const away = c.stick === false && !isMyMsg(m);
+    const away = !isMyMsg(m) && !chatFollowing(c);
     // чат открыт, но приложение свёрнуто (или лента отлистана) — сообщение ещё не видели; отметка снимется позже
     noteChatMessage(m, !document.hidden && !away);
     if (String(m.fromId) === String(currentUser.id)) {
@@ -11731,8 +11913,9 @@
   function rerenderChatBody() {
     const body = winBody.querySelector('#chat-view-body');
     if (!body || !chat) return;
-    const stick = chat.stick !== false;
+    const stick = chatFollowing(chat);
     body.innerHTML = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : chatEmptyHtml();
+    fitChatBubbles(body.children);
     hydrateChatMedia(body);
     if (stick) scrollChatToBottom();
     syncChatPinBar();
@@ -11745,7 +11928,11 @@
     if (!currentUser) return;
     if (payload.eventType === 'DELETE') {
       const id = payload.old && payload.old.id;
-      if (id != null) removeChatMessagesLocal(kind, [id]);
+      if (id != null) {
+        removeChatMessagesLocal(kind, [id]);
+        // удалённое было последним в чате — забываем его: сводка возьмёт новое последнее с сервера
+        for (const [key, m] of chatLast) if (key.startsWith(kind + ':') && String(m.id) === String(id)) chatLast.delete(key);
+      }
       refreshChatSummariesSoon();   // удалённое могло быть последним или непрочитанным
       return;
     }
@@ -11825,6 +12012,7 @@
     const idx = Math.min(chat.pinIdx == null ? pins.length - 1 : chat.pinIdx, pins.length - 1);
     const el = chatBubbleEl(pins[idx].id);
     if (el) {
+      chatFollowUntil = 0;   // переход к закреплённому — лента больше не держится у конца
       el.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
       el.classList.remove('is-flash'); void el.offsetWidth; el.classList.add('is-flash');
     }
@@ -11996,14 +12184,14 @@
      пересылают дальше, автор остаётся прежним — тот, кто написал его первым */
   function forwardSnapshot(m) {
     const from = m.forward || { uid: String(m.fromId), name: isMyMsg(m) ? profile.name || profile.handle || '' : msgAuthorName(m) };
-    return { fwd: true, id: String(m.id), uid: from.uid, name: String(from.name || '').slice(0, 80), text: '' };
+    return { fwd: true, id: String(m.id), uid: from.uid, name: cutChars(from.name, 80), text: '' };
   }
   function forwardTargets() {
     const out = [];
     for (const g of myGroups()) {
       const ava = g.photo
         ? `<span class="avatar group-chat-avatar" style="width:36px;height:36px;background-image:url('${safeUrl(g.photo)}')"></span>`
-        : `<span class="avatar group-chat-avatar" style="width:36px;height:36px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>`;
+        : `<span class="avatar group-chat-avatar" style="width:36px;height:36px;background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>`;
       out.push({ spec: { type: 'group', groupId: g.id }, name: g.name || 'Группа', sub: 'Чат группы', ava });
     }
     for (const m of myAcceptedMatches()) {
@@ -12196,7 +12384,7 @@
     }
     const g = groupById(c.groupId);
     if (g && g.photo) return `<span class="avatar group-chat-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`;
-    return `<span class="avatar group-chat-avatar" style="background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml(((g && g.name) || '?').charAt(0).toUpperCase())}</span>`;
+    return `<span class="avatar group-chat-avatar" style="background:linear-gradient(145deg, var(--c1), var(--c2))">${escapeHtml(firstChar((g && g.name) || '?').toUpperCase())}</span>`;
   }
   function paintChatHeader(c) {
     if (chat !== c) return;
@@ -12446,9 +12634,26 @@
     }
     if (changed.length) { c.pinIdx = null; syncChatPinBar(); syncChatReplyBar(); }
     if (!added.length) return;
+    const follow = chatFollowing(c);   // до вставки: потом до низа далеко уже из-за самих новых сообщений
     body.insertAdjacentHTML('beforeend', added.map(chatBubbleHtml).join(''));
+    fitChatBubbles([...body.children].slice(-added.length));
     hydrateChatMedia(body);
-    if (c.stick) scrollChatToBottom();
+    if (follow) { chatFollowUntil = performance.now() + CHAT_FOLLOW_MS; scrollChatToBottom(); }
+  }
+
+  /* Вернулись в приложение (или вернулась связь), а чат открыт. Пока телефон был заблокирован или приложение
+     свёрнуто, realtime молчал, а пропущенное он не досылает: лента так и стояла без новых сообщений, пока чат
+     не открыть заново, — при этом чат уже отмечался прочитанным. Догружаем переписку и дописываем новое */
+  async function refreshOpenChat(retry = true) {
+    const c = chat;
+    if (!c || c.loading || !currentUser) return;
+    const fresh = await loadChatHistory(c);
+    if (chat !== c || c.loading) return;
+    // телефон только что проснулся, и сети ещё нет — пробуем ещё раз чуть позже
+    if (!fresh) { if (retry) setTimeout(() => { if (chat === c) refreshOpenChat(false); }, 3000); return; }
+    mergeFreshHistory(c, fresh);
+    saveChatCache(c);
+    markChatRead(c);
   }
 
   function showDmScreen(peerId) { return openChat({ type: 'dm', peerId }); }
@@ -12660,7 +12865,7 @@
   }
 
   function avatarCircleHtml(person, size = 40) {
-    const letter = (person.name || '?').trim().charAt(0).toUpperCase() || '?';
+    const letter = firstChar((person.name || '?').trim()).toUpperCase() || '?';
     if (person.avatar) return `<span class="avatar" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(person.avatar)}')"></span>`;
     return `<span class="avatar" style="width:${size}px;height:${size}px;background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml(letter)}</span>`;
   }
@@ -12744,13 +12949,19 @@
 
   function profileAvatarHtml(size = 84) {
     if (profile.avatar) return `<span class="avatar-preview" style="width:${size}px;height:${size}px;background-image:url('${safeUrl(profile.avatar)}')"></span>`;
-    const letter = (profile.name || '?').trim().charAt(0).toUpperCase() || '?';
+    const letter = firstChar((profile.name || '?').trim()).toUpperCase() || '?';
     return `<span class="avatar-preview" style="width:${size}px;height:${size}px">${escapeHtml(letter)}</span>`;
   }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
+  /* Строки режем по символам, а не по половинкам эмодзи: charAt(0) и slice у имени «🏀 Баскетбол» отдают половину
+     мяча — в аватаре и на обрезе подписи появлялся «�», а обрезанная так цитата ответа не сохранялась в базе (JSON) */
+  function firstChar(s) { for (const ch of String(s || '')) return ch; return ''; }
+  function cutChars(s, n) { const a = Array.from(String(s || '')); return a.length > n ? a.slice(0, n).join('') : a.join(''); }
+  // не длиннее n символов вместе с многоточием
+  function ellipsize(s, n) { const a = Array.from(String(s || '')); return a.length > n ? a.slice(0, n - 1).join('') + '…' : a.join(''); }
   /* URL картинки для вставки в HTML-шаблон (src="…" или url('…')).
      Пропускает только data:image/…;base64 и ссылки на наш Supabase, остальное — пустая строка.
      Чужой адрес не пропускаем: картинка с постороннего сервера выдала бы его владельцу IP каждого, кто её увидел. */
@@ -13137,7 +13348,7 @@
       const isMine = p.authorId === (currentUser && currentUser.id);
       return `<article class="post" data-post-id="${escapeHtml(p.id)}">
         <header class="post-head">
-          <span class="avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml((p.author || '?').trim().charAt(0).toUpperCase() || '?')}</span>
+          <span class="avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml(firstChar((p.author || '?').trim()).toUpperCase() || '?')}</span>
           <div class="row-main">
             <div class="post-author ${postWithLabel(p) ? 'is-with' : ''}">${postWithHtml(p) || escapeHtml(p.author || '')}</div>
             <div class="post-place">📍 ${escapeHtml(p.place || '')}</div>
@@ -13408,7 +13619,7 @@
           withList.innerHTML = gs.length ? gs.map((g) => `
             <li class="person-card" data-with-id="${escapeHtml(String(g.id))}" role="radio" aria-checked="false" tabindex="0">
               <span class="person-check"></span>
-              <span class="group-avatar" style="width:36px;height:36px;font-size:15px;${g.photo ? `background-image:url('${safeUrl(g.photo)}')` : ''}">${g.photo ? '' : escapeHtml((g.name || '?').charAt(0).toUpperCase())}</span>
+              <span class="group-avatar" style="width:36px;height:36px;font-size:15px;${g.photo ? `background-image:url('${safeUrl(g.photo)}')` : ''}">${g.photo ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>
               <div class="person-main"><div class="person-name">${escapeHtml(g.name)}</div><div class="person-handle">${escapeHtml(membersLabel((g.members || []).length + 1))}</div></div>
             </li>`).join('') : `<div class="empty-msg">Вы пока не состоите в группах.</div>`;
         } else withList.innerHTML = '';
@@ -13987,7 +14198,7 @@
         const use3D = isThreeAvailable() && cfg && typeof cfg === 'object';
         const name = p.name || 'Пользователь';
         const handle = '@' + (p.username || 'user');
-        const initial = (name.charAt(0) || '?').toUpperCase();
+        const initial = (firstChar(name) || '?').toUpperCase();
 
         // Есть фото — они во всю ширину шапки и листаются, а 3D-аватар показываем ниже, под «Написать».
         // Фото нет — в шапке 3D-аватар (или буква, если и аватара нет).
@@ -15037,6 +15248,7 @@
         refreshMyMarker();
         refreshGroupsList(); refreshFriendsList(); refreshNotifications();
         refreshChatSummariesSoon();
+        refreshOpenChat();   // сообщения, пришедшие в открытый чат, пока не было связи
       } catch (err) { console.warn('[сеть] обновление после возврата связи:', err); }
     }, 1500);
   });
