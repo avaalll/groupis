@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-14 06:28">
+  <meta name="app-build" content="2026-10-14 07:40">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -422,8 +422,9 @@
       display: block; width: 100%; height: 100%;
       pointer-events: none; -webkit-user-drag: none; user-select: none;
     }
+    /* --form-lift — компания вокруг лидера выше одного человека (задние ряды), плашка поднимается над ней */
     .user-badge {
-      position: absolute; left: 50%; bottom: calc(100% + 8px);
+      position: absolute; left: 50%; bottom: calc(100% + 8px + var(--form-lift, 0px)); z-index: 3;
       transform: translateX(-50%);
       display: flex; flex-direction: column; align-items: center;
       gap: 3px; pointer-events: auto;
@@ -546,39 +547,44 @@
     .person-card.is-link:hover { background: rgba(var(--you-rgb), .08); }
     .match-chat-avatar { background: linear-gradient(135deg, var(--you) 0 50%, var(--lime) 50% 100%); color: #fff; font-size: 20px; display: grid; place-items: center; }
 
-    /* ── Голосование о союзе в совместном чате ── */
-    .match-vote {
-      margin: 0 12px 6px; padding: 12px 14px; border-radius: 20px;
-      background: var(--field); display: grid; gap: 9px;
-    }
+    /* ── Голосование о союзе в совместном чате: значок «две сирены» рядом со скрепкой (ICON_SIRENS), нажатие
+       открывает окошко над полем ввода (openVotePop). Закреплённый союз — одна тихая строка над лентой, как плашка даты ── */
+    .match-vote { display: flex; justify-content: center; margin: 0 12px 4px; }
     .match-vote:empty { display: none; }
-    .match-vote[data-state="open"] { background: linear-gradient(135deg, rgba(var(--you-rgb), .16), rgba(var(--lime-rgb), .12)); }
-    .match-vote[data-state="approved"] { background: linear-gradient(135deg, rgba(255, 143, 177, .2), rgba(var(--you-rgb), .2)); }
-    .mv-head { display: flex; align-items: baseline; gap: 10px; }
-    .mv-title { flex: 1; font-weight: 700; font-size: 14px; }
-    .mv-count { font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-    .mv-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(120, 116, 150, .2); }
+    .mv-done {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 11px; border-radius: 999px;
+      background: var(--glass); border: 1px solid var(--glass-edge); color: var(--ink-soft);
+      font: 500 12px/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mv-done svg { flex: none; width: 15px; height: 15px; }
+    .mv-done .ic-fill { fill: url(#prismIcon); stroke: none; }
+    .mv-bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--field); }
     .mv-yes { background: var(--lime); transition: width .5s var(--ease); }
     .mv-no  { background: var(--hot); transition: width .5s var(--ease); margin-left: auto; }
-    .mv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .mv-btn {
-      border: 1.5px solid transparent; border-radius: 14px; padding: 10px 12px; cursor: pointer;
-      font: inherit; font-weight: 700; background: var(--win); color: var(--ink);
-      transition: transform .3s var(--spring), border-color .2s, background .2s;
+      border: 0; border-radius: 999px; padding: 9px 12px; cursor: pointer;
+      font: 600 13px/1.2 var(--font-ui); background: var(--field); color: var(--ink);
+      transition: transform .3s var(--spring), background .2s, color .2s;
     }
     .mv-btn:active { transform: scale(.94); }
     .mv-btn.yes.is-on { background: var(--lime); color: var(--lime-ink); }
     .mv-btn.no.is-on  { background: var(--hot); color: #fff; }
+    .mv-btn.is-start { background: var(--act); color: var(--act-ink); }
     .mv-btn:disabled { opacity: .6; }
-    .mv-hint { font-size: 12px; color: var(--ink-soft); line-height: 1.35; }
-    .mv-start {
-      justify-self: start; border: 0; border-radius: 14px; padding: 10px 16px; cursor: pointer;
-      font: inherit; font-weight: 700; background: var(--lime); color: var(--lime-ink);
-      box-shadow: 0 8px 20px rgba(var(--lime-rgb), .25);
-      transition: transform .3s var(--spring);
-    }
-    .mv-start:active { transform: scale(.94); }
-    .mv-done { font-weight: 700; font-size: 14px; }
+    .popover.vote-pop { width: min(300px, calc(100% - 16px)); min-width: 0; padding: 14px; display: grid; gap: 10px; transform-origin: 0 100%; }
+    .vp-head { display: flex; align-items: baseline; gap: 10px; }
+    .vp-title { flex: 1; font: 600 14px/1.3 var(--font-ui); }
+    .vp-count { font: 500 12px var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .vp-hint { font-size: 12px; line-height: 1.4; color: var(--ink-soft); }
+    .vp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .vp-actions > :only-child { grid-column: 1 / -1; }
+    /* значок: идёт голосование — лампы сирен в цвете схемы и мигают по очереди, пока вы не проголосовали */
+    .vote-tool .ic-fill { fill: transparent; stroke: none; }
+    .vote-tool.is-open .ic-fill { fill: url(#prismIcon); }
+    .vote-tool.is-open:not(.is-voted) .siren-l { animation: siren-blink 1.1s ease-in-out infinite; }
+    .vote-tool.is-open:not(.is-voted) .siren-r { animation: siren-blink 1.1s ease-in-out .55s infinite; }
+    @keyframes siren-blink { 50% { opacity: .2; } }
+    @media (prefers-reduced-motion: reduce) { .vote-tool .ic-fill { animation: none !important; } }
 
     .map-popup {
       width: 220px; padding: 8px;
@@ -749,6 +755,8 @@
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.05);
     }
     .notif-icon svg { width: 22px; height: 22px; }
+    /* приглашение в группу и запрос на match — фото группы; нажатие открывает её карточку */
+    .notif-icon.notif-group { background-size: cover; background-position: center; font-size: 16px; font-weight: 600; cursor: pointer; }
     .notif-unread { position: relative; }
     .notif-unread::before {
       content: ""; position: absolute; left: 2px; top: 50%;
@@ -1238,6 +1246,11 @@
     .group-main { flex: 1; min-width: 0; }
     .group-name { font-weight: 600; }
     .group-sub { color: var(--ink-soft); font-size: 12px; }
+    /* закреплённый союз в списке групп и в шапке его карточки */
+    .union-row .group-card { transition: background .2s, transform .4s var(--spring); }
+    .union-row .group-card:hover { background: var(--row-hover); }
+    .union-row .group-card:active { transform: scale(.975); transition-duration: .08s; }
+    .union-hero-ava .avatar { border-radius: 38px !important; box-shadow: inset 0 0 0 1px var(--win-line), 0 8px 24px var(--glass-shadow); }
 
     .group-form { display: grid; gap: 14px; padding: 16px; }
     .group-photo-row { display: flex; align-items: center; gap: 14px; }
@@ -2522,6 +2535,26 @@
       .dock-item[data-open="true"] .dock-btn::after { animation: none; }
     }
 
+    /* ── Компания на карте: участники группы стоят вместе у лидера, плечом к плечу, рядами (mapFormationHtml).
+       Каждый — снимок 3D-аватара 44×44, ноги на 85% высоты, как у маркера одного человека ── */
+    .map-formation { position: absolute; inset: 0; z-index: 1; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }
+    .mf-person {
+      position: absolute; left: 0; top: 0; width: 44px; height: 44px; transform-origin: 50% 85%;
+      pointer-events: auto; cursor: pointer; animation: mf-in .4s ease both;
+    }
+    .mf-person img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; user-select: none; }
+    .mf-face {
+      position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+      display: grid; place-items: center; font: 600 9px/1 var(--font-ui); color: #fff;
+      background: linear-gradient(145deg, var(--you-2), var(--you-deep)) center / cover;
+      box-shadow: 0 0 0 1.5px #fff;
+    }
+    @keyframes mf-in { from { opacity: 0; } }
+    /* Я стою в компании своей группы — там, где я на самом деле, остаётся только точка «я здесь» */
+    .me-spot { position: relative; width: 18px; height: 18px; pointer-events: auto; cursor: pointer; isolation: isolate; -webkit-tap-highlight-color: transparent; }
+    .me-spot-dot { position: absolute; inset: 3px; border-radius: 50%; background: var(--you); box-shadow: 0 0 0 2.5px #fff, 0 2px 6px rgba(0, 0, 0, .35); }
+    .me-spot .signal-rings { bottom: 9px; }
+
     /* ── Знак «feat»: две группы сливаются — два круга внахлёст, в каждом фото группы (нет фото — её цвет),
        линза пересечения — их общий чат / союз, подсвечивается по состоянию союза (featAvatarHtml) ── */
     .match-chat-avatar { background: var(--field) !important; padding: 0; overflow: hidden; }
@@ -2956,6 +2989,49 @@
     body.app-window .map-tools { opacity: 0; transform: translateY(-8px); pointer-events: none; }
     body.app-window .map-tools #notif-btn, body.app-window .map-tools #filter-btn, body.app-window .map-tools #settings-btn { display: grid !important; }
     body.auth-locked .map-tools { display: none; }
+    /* ── Кнопка «Match»: запрос на match ждёт ответа (syncMatchButton). Капсула с уведомлениями и фильтрами
+       отъезжает влево на ширину кнопки (--mt-shift), а кнопка встаёт на её место и пульсирует «сигналом» ── */
+    .map-tools { transition: opacity .25s ease, transform .55s var(--spring); }
+    body.has-match-btn .map-tools { transform: translateX(var(--mt-shift, 0px)); }
+    body.app-window.has-match-btn .map-tools { transform: translate(var(--mt-shift, 0px), -8px); }
+    .match-btn {
+      position: fixed; z-index: 19; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+      display: flex; align-items: center; gap: 7px; height: 48px; padding: 0 18px 0 13px; border: 0; border-radius: 999px; cursor: pointer;
+      background: var(--act); color: var(--act-ink); box-shadow: var(--prism-glow), 0 16px 36px -14px var(--glass-shadow);
+      font: 600 14px/1 var(--font-ui); letter-spacing: -.005em; -webkit-tap-highlight-color: transparent;
+      animation: match-btn-in .6s var(--spring) .12s backwards;
+      transition: opacity .25s ease, transform .35s var(--ease);
+    }
+    .match-btn svg { width: 22px; height: 22px; flex: none; }
+    .match-btn .ic-fill { fill: currentColor; stroke: none; }
+    .match-btn::before, .match-btn::after {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      animation: match-btn-ping 2.4s cubic-bezier(.2, .7, .3, 1) infinite;
+    }
+    .match-btn::after { animation-delay: 1.2s; }
+    .match-btn.is-waiting::before, .match-btn.is-waiting::after { animation-duration: 4s; }
+    .match-btn.is-waiting::after { animation-delay: 2s; }
+    .match-btn:active { transform: scale(.92); transition-duration: .08s; }
+    .match-btn-count {
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; margin-right: -6px;
+      background: var(--prism); color: var(--prism-ink); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+    }
+    @keyframes match-btn-in { from { opacity: 0; transform: scale(.3); } }
+    @keyframes match-btn-ping {
+      0% { box-shadow: 0 0 0 0 rgba(var(--you-rgb), .55); }
+      100% { box-shadow: 0 0 0 16px rgba(var(--you-rgb), 0); }
+    }
+    body.app-window .match-btn { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+    body.auth-locked .match-btn { display: none; }
+    @media (max-width: 640px) {
+      .match-btn { height: 46px; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); padding: 0 15px 0 11px; font-size: 13px; }
+    }
+    /* тесно — только значок, а если и так не помещается — прячется «Установить» (fitMatchButton) */
+    .match-btn.is-compact .match-btn-label { display: none; }
+    .match-btn.is-compact { padding: 0 12px; }
+    body.match-tight #install-btn { display: none !important; }
+    @media (max-height: 480px) and (orientation: landscape) { .match-btn { top: calc(8px + env(safe-area-inset-top, 0px)); height: 42px; } }
+    @media (prefers-reduced-motion: reduce) { .match-btn::before, .match-btn::after { animation: none; } }
     .geo-btn {
       width: 50px; height: 50px; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-edge); color: var(--ink);
       box-shadow: 0 16px 36px -14px var(--glass-shadow), inset 0 1px 0 var(--rim);
@@ -3915,7 +3991,7 @@
     h1, h2, h3, h4 { font-family: var(--font-ui); }
     /* цифры одной ширины там, где они меняются или стоят столбцом: время, длительность, счётчики */
     .chat-msg .chat-msg-time, .row-time, .chat-row .chat-time, .pm-meta, .chat-voice-dur, .chat-circle-dur, .chat-rec-time,
-    .unread-pill, #notif-btn .badge, .pe-count, .mv-count, .pv-count, .flt-big, .flt-chip, .chat-react b { font-variant-numeric: tabular-nums; }
+    .unread-pill, #notif-btn .badge, .pe-count, .vp-count, .pv-count, .flt-big, .flt-chip, .chat-react b { font-variant-numeric: tabular-nums; }
 
     /* ── заголовки ── */
     .win-title { font-size: 17px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; }
@@ -3925,7 +4001,7 @@
     .auth-card .auth-title { font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -0.022em; }
     .ph-name { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -0.022em; }
     .profile-name, .user-profile-name { font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -0.018em; }
-    .flt-title, .legal-page h3, .mv-title, .filter-title { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+    .flt-title, .legal-page h3, .vp-title, .filter-title { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
     .crop-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
     .flt-big { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; }
 
@@ -3963,7 +4039,7 @@
     /* ── кнопки, вкладки, меню ── */
     .btn { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
     .auth-btn { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-    .chat-tab, .seg-opt, .pe-seg-opt, .flt-chip, .theme-opt, .pal-opt, .avatar-pill, .wa-btn, .friend-add-btn, #install-btn, .mv-btn, .mv-start {
+    .chat-tab, .seg-opt, .pe-seg-opt, .flt-chip, .theme-opt, .pal-opt, .avatar-pill, .wa-btn, .friend-add-btn, #install-btn, .mv-btn {
       font-size: 13px; font-weight: 600; letter-spacing: 0;
     }
     .flt-opt { font-size: 12px; font-weight: 600; letter-spacing: 0; }   /* четыре плитки в ряд — на узком телефоне им нужен размер поменьше */
@@ -4072,6 +4148,17 @@
       <span class="filter-dot" id="filter-dot" hidden></span>
     </button>
   </div>
+
+  <!-- Запрос на match ждёт ответа — кнопка встаёт справа сверху, капсула с инструментами отъезжает влево (syncMatchButton) -->
+  <button id="match-btn" class="match-btn" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="9" cy="12" r="5.6"/>
+      <circle cx="15" cy="12" r="5.6"/>
+      <path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/>
+    </svg>
+    <span class="match-btn-label">Match</span>
+    <span class="match-btn-count" hidden></span>
+  </button>
 
   <!-- Плавающая «таблетка» с логотипом -->
   <header class="menubar">
@@ -5152,6 +5239,7 @@
     chatLast.clear(); chatUnread.clear(); chatSummaryLoaded = false; chatSummarySeq++; clearTimeout(chatSummaryTimer); updateChatBadges();
     pendingIncomingRequests = new Set(); friendRequestOutcome.clear();
     groupMatches = []; groupMatchOutcome.clear(); groupInvites = []; groupInviteOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
+    unionDetails = null; syncMatchButton();
     groupStats = new Map();
     avatarConfig = defaultAvatarFor('male'); avatarConfigReady = false;
     syncPostMarkers(); syncWishMarkers(); updateBadge();
@@ -6276,7 +6364,7 @@
   const groupMatchOutcome = new Map(); // id запроса → 'accepted' | 'declined' (ответ дан в этой сессии)
 
   async function loadGroupMatchesFromDB() {
-    if (!currentUser) { groupMatches = []; return; }
+    if (!currentUser) { groupMatches = []; syncMatchButton(); return; }
     const { data, error } = await supabaseClient.from('group_matches').select('*');
     if (error) { console.warn('[group_matches] load:', error.message); return; }
     groupMatches = (data || []).map((r) => ({
@@ -6286,7 +6374,61 @@
     }));
     scheduleStateSave();
     noteAcceptedMatches();
+    syncMatchButton();
   }
+
+  /* ── Кнопка «Match» ──
+     Пока запрос на match ждёт ответа, у лидеров обеих групп справа сверху пульсирует кнопка «Match»: у того, кому
+     прислали запрос, — открыть группу, которая его прислала, и ответить; у того, кто отправил, — посмотреть, кому
+     он отправлен (там пульс спокойнее). Капсула с уведомлениями и фильтрами отъезжает влево и уступает ей место. */
+  const matchBtn = document.getElementById('match-btn');
+  let matchBtnGroup = null;   // чью карточку открыть по нажатию
+  function syncMatchButton() {
+    const myId = currentUser && currentUser.id;
+    const newest = (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
+    const pending = myId ? groupMatches.filter((m) => m.status === 'pending') : [];
+    const incoming = pending.filter((m) => m.toOwner === myId).sort(newest);
+    const outgoing = pending.filter((m) => m.fromOwner === myId).sort(newest);
+    matchBtnGroup = incoming.length ? incoming[0].fromGroup : outgoing.length ? outgoing[0].toGroup : null;
+    const on = !!matchBtnGroup;
+    matchBtn.hidden = !on;
+    matchBtn.classList.toggle('is-waiting', !incoming.length);
+    const count = matchBtn.querySelector('.match-btn-count');
+    count.hidden = incoming.length < 2;
+    count.textContent = String(incoming.length);
+    const label = incoming.length ? 'Вашей группе предлагают match' : 'Запрос на match ждёт ответа';
+    matchBtn.setAttribute('aria-label', label);
+    matchBtn.title = label;
+    document.body.classList.toggle('has-match-btn', on);
+    fitMatchButton();
+  }
+  /* Капсула отъезжает ровно на ширину кнопки и не должна наехать на логотип слева. Тесно — у кнопки остаётся только
+     значок; всё ещё тесно (узкий экран и кнопка «Установить» рядом с логотипом) — «Установить» прячется, пока кнопка видна */
+  function fitMatchButton() {
+    const body = document.body;
+    body.classList.remove('match-tight');
+    matchBtn.classList.remove('is-compact');
+    if (matchBtn.hidden) return;
+    const logo = document.querySelector('.menubar'), tools = document.getElementById('map-tools');
+    // offsetLeft/offsetWidth — без сдвига капсулы, который ещё может анимироваться
+    const fits = () => logo.offsetLeft + logo.offsetWidth + 8 <= tools.offsetLeft - matchBtn.offsetWidth - 6;
+    if (!fits()) matchBtn.classList.add('is-compact');
+    if (!fits()) {
+      body.classList.add('match-tight');
+      matchBtn.classList.remove('is-compact');   // «Установить» спрятана — может, теперь хватит места и для подписи
+      if (!fits()) matchBtn.classList.add('is-compact');
+    }
+    body.style.setProperty('--mt-shift', -(matchBtn.offsetWidth + 6) + 'px');
+  }
+  matchBtn.addEventListener('click', () => {
+    if (!matchBtnGroup) return;
+    showApp('groups', matchBtn);
+    showGroupDetailsScreen(matchBtnGroup, () => closeApp());
+  });
+  // другой размер экрана, появилась или пропала кнопка «Установить», догрузился шрифт — подгоняем заново
+  addEventListener('resize', fitMatchButton);
+  ['beforeinstallprompt', 'appinstalled'].forEach((type) => addEventListener(type, () => setTimeout(fitMatchButton, 0)));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitMatchButton).catch(() => {});
 
   /* ═══════ АНИМАЦИЯ MATCH ═══════
      Группы сделали match — у всех участников обеих групп, а не только у лидеров, на пару секунд: знаки групп съезжаются
@@ -6916,8 +7058,8 @@
 
   /* ── Союз на карте ──
      Закреплённый голосованием союз двух групп его участники видят одной иконкой: «Группа feat Группа» с общим знаком,
-     над одним из двух лидеров — первым, у кого есть геопозиция. Себя человек на карте видит по имени, поэтому
-     лидеру его иконка видна над вторым лидером. Тот, над кем иконки нет, показан обычной плашкой с именем.
+     над одним из двух лидеров — лидером группы, которая предложила match, а если у него нет геопозиции — над вторым.
+     У всех участников это одно и то же место; остальные участники стоят рядом с ним компанией (mapClusters).
      Возвращает { union, m, a, b, leaders, anchor } или null; anchor — над кем иконка (null — ни у кого нет геопозиции). */
   function unionOnMap() {
     const u = myUnion();
@@ -6926,9 +7068,8 @@
     if (!m || m.status !== 'accepted') return null;
     const a = groupById(m.fromGroup), b = groupById(m.toGroup);
     if (!a || !b) return null;
-    const myId = currentUser && currentUser.id;
     const leaders = [...new Set([a.ownerId, b.ownerId])];
-    const anchor = leaders.find((id) => id !== myId && userLocationsById.has(id)) || null;
+    const anchor = leaders.find((id) => personSpot(id)) || null;
     return { union: true, m, a, b, leaders, anchor };
   }
   function mapUnionChipHtml(u) {
@@ -6947,15 +7088,113 @@
     if (w) clouds.push({ text: w.text, tone: 'me', caption: ((person && person.name) || '').trim().split(/\s+/)[0], attrs: '' });
     return clouds;
   }
-  // Геопозиция лидера союза появилась или пропала — иконка могла перейти к другому лидеру: перерисовываем обоих
-  function refreshUnionLeaderMarkers() {
+  /* ── Компании на карте ──
+     Участники группы, которую я вижу изнутри (моя группа или группа, у которой match с моей), стоят на карте не каждый
+     на своём месте, а вместе — компанией вокруг лидера (mapFormationHtml). У закреплённого союза все участники обеих
+     групп стоят вокруг одного лидера под общей иконкой. Каждый человек на карте ровно один раз: в одной компании или
+     отдельно. Себя человек тоже видит в компании, а там, где он на самом деле, — только точка «я здесь».
+     Чужие группы видны, как и раньше, одной иконкой над лидером: их участников посторонним не показываем. */
+  // Где человек на карте: моё место — с моего устройства, чужое — из user_locations
+  function personSpot(id) {
+    if (currentUser && id === currentUser.id) return settings.geolocation ? lastUserLocation : null;
+    return userLocationsById.get(id) || null;
+  }
+  // Группа, которую я вижу изнутри: я в ней или у неё match с моей группой
+  function groupOpenToMe(g) {
+    const myId = currentUser && currentUser.id;
+    if (!g || !myId) return false;
+    if (isGroupParticipant(g, myId)) return true;
+    const gid = String(g.id);
+    return myAcceptedMatches().some((m) => m.fromGroup === gid || m.toGroup === gid);
+  }
+  /* Кто с кем стоит. centers — Map(id лидера → { union, ids }): ids — кто стоит рядом с ним, по порядку (второй лидер
+     союза, я, остальные); placedIn — Map(id → id лидера, у которого человек стоит). В компанию попадают только те,
+     кого я и так вижу на карте, — меняется лишь, где они стоят */
+  function mapClusters() {
+    const centers = new Map(), placedIn = new Map();
+    if (!currentUser) return { centers, placedIn };
+    const myId = currentUser.id;
+    const relevant = computeRelevantUserIds();
+    const shown = (id) => (id === myId ? !!personSpot(id) : relevant.has(id) && userLocationsById.has(id));
+    const add = (center, id) => {
+      if (id === center || placedIn.has(id) || centers.has(id) || !shown(id)) return;
+      if (!centers.has(center)) centers.set(center, { union: null, ids: [] });
+      centers.get(center).ids.push(id);
+      placedIn.set(id, center);
+    };
     const u = unionOnMap();
-    if (!u) return;
-    for (const id of u.leaders) {
-      const fm = friendMarkerCoords.get(id);
-      if (fm) upsertFriendMarker(id, fm.person, fm.coords, friends.some((f) => f.id === id), userAvatarCfgById.get(id) || null);
+    const inUnion = new Set(u ? [String(u.a.id), String(u.b.id)] : []);
+    if (u && u.anchor) {
+      centers.set(u.anchor, { union: u, ids: [] });
+      for (const id of matchParticipantIds(u.m)) add(u.anchor, id);
     }
-    refreshMyMarker();   // облако группы над собой показывается, только пока иконки союза на карте нет
+    // лидеры групп, которые я вижу изнутри, — середина своих компаний; сначала мои группы, потом группы с match
+    const open = groups.filter((g) => !inUnion.has(String(g.id)) && groupOpenToMe(g) && !placedIn.has(g.ownerId) && personSpot(g.ownerId))
+      .sort((a, b) => (isGroupParticipant(b, myId) ? 1 : 0) - (isGroupParticipant(a, myId) ? 1 : 0));
+    const leaders = new Set(open.map((g) => g.ownerId));
+    for (const g of open) for (const mem of g.members || []) if (!leaders.has(mem.id)) add(g.ownerId, mem.id);
+    for (const [center, c] of centers) {
+      const second = c.union ? c.union.leaders.find((id) => id !== center) : null;
+      const rank = (id) => (id === second ? 0 : id === myId ? 1 : 2);
+      c.ids.sort((a, b) => rank(a) - rank(b) || String(a).localeCompare(String(b)));
+    }
+    return { centers, placedIn };
+  }
+
+  /* Компания: лидер — в середине первого ряда, остальные — плечом к плечу рядами за ним, каждый ряд сдвинут на полшага,
+     как на общем фото; кто стоит сбоку, чуть повёрнут к середине. Больше FORM_MAX человек не рисуем (число — на иконке) */
+  const FORM_MAX = 16, FORM_STEP = 11, FORM_ROW = 7;
+  function formationSlots(n) {
+    const slots = [];
+    for (let row = 0; slots.length < n; row++) {
+      const m = Math.min(3 + row, n - slots.length), len = row ? 3 + row : m;
+      const xs = Array.from({ length: len }, (_, j) => (j - (len - 1) / 2) * FORM_STEP)
+        .sort((a, b) => Math.abs(a) - Math.abs(b) || a - b);
+      for (const x of xs.slice(0, m)) slots.push({ x, row });
+    }
+    return slots;
+  }
+  function formationPeople(centerId, ids) {
+    const myId = currentUser && currentUser.id;
+    return [centerId, ...ids].slice(0, FORM_MAX).map((id) => (id === myId
+      ? { id, cfg: avatarConfig, person: { name: profile.name, avatar: profile.avatar } }
+      : { id, cfg: userAvatarCfgById.get(id) || null, person: personById(id) || chatPersonById(id) }));
+  }
+  function formationKey(people) {
+    return people.map((p) => [p.id, avatarCfgKey(p.cfg), (p.person.avatar || '').length].join(':')).join(',');
+  }
+  // на сколько задние ряды выше первого — на столько поднимается плашка над компанией
+  function formationLift(n) { return formationSlots(n).reduce((top, s) => Math.max(top, s.row), 0) * FORM_ROW; }
+  function mapFormationHtml(people) {
+    const slots = formationSlots(people.length);
+    return `<span class="map-formation">${people.map((p, i) => {
+      const { x, row } = slots[i];
+      const src = p.cfg ? getAvatarSnapshotDataURL(p.cfg, 'full', x < -1 ? 0.5 : x > 1 ? -0.5 : 0) : null;
+      const photo = safeUrl(p.person.avatar);
+      const face = src ? `<img src="${src}" alt="" draggable="false">`
+        : `<span class="mf-face"${photo ? ` style="background-image:url('${photo}')"` : ''}>${photo ? '' : escapeHtml(firstChar((p.person.name || '?').trim()).toUpperCase() || '?')}</span>`;
+      const z = 40 - row * 10 - Math.round(Math.abs(x) / FORM_STEP);
+      return `<span class="mf-person" data-member-id="${escapeHtml(p.id)}" title="${escapeHtml(p.person.name || '')}" style="transform:translate(${x}px, ${-row * FORM_ROW}px) scale(${(1 - row * 0.07).toFixed(2)});z-index:${z}">${face}</span>`;
+    }).join('')}</span>`;
+  }
+  // Над компанией — желания групп и лидера, а если остаётся место — тех, кто стоит рядом (облаков видно два)
+  function withMemberWishes(clouds, ids) {
+    const out = clouds.slice(0, 2);
+    const myId = currentUser && currentUser.id;
+    for (const id of ids) {
+      if (out.length >= 2) break;
+      const w = currentWishOf(id);
+      if (!w) continue;
+      const name = id === myId ? profile.name : (personById(id) || chatPersonById(id)).name;
+      out.push({ text: w.text, tone: 'me', caption: (name || '').trim().split(/\s+/)[0], attrs: id === myId ? 'data-wish-mine' : '' });
+    }
+    return out;
+  }
+  // Нажали на человека в компании — его профиль (себя — свой профиль)
+  function openMemberProfile(id, person) {
+    showApp('profile');
+    if (currentUser && id === currentUser.id) showUserProfileScreen();
+    else showFriendProfile(id, person || personById(id) || chatPersonById(id));
   }
 
   function sharesGroupWithMe(userId) {
@@ -6963,7 +7202,8 @@
     return !!myId && groups.some((g) => isGroupParticipant(g, myId) && isGroupParticipant(g, userId));
   }
 
-  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = []) {
+  // formation — компания, которая стоит у этого человека (formationPeople), или null
+  function buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = [], formation = null) {
     const nameInitial = firstChar((person.name || '?').trim()).toUpperCase() || '?';
     const label = ellipsize((person.name || '').trim() || person.handle || 'Пользователь', 18);
 
@@ -6972,7 +7212,7 @@
       : `<div class="user-badge-avatar" style="background:linear-gradient(145deg, var(--you-2), var(--you-deep))">${escapeHtml(nameInitial)}</div>`;
 
     const cfg = (avatarCfg && typeof avatarCfg === 'object') ? avatarCfg : null;
-    const imgUrl = cfg ? getAvatarSnapshotDataURL(cfg) : null;
+    const imgUrl = cfg && !formation ? getAvatarSnapshotDataURL(cfg) : null;
     const isLeader = ownedGroups.length > 0;
 
     // Цвет плашки: друг из общей группы — зелёная, не друг — коричневая, просто друг — обычная
@@ -6980,11 +7220,12 @@
     const tone = isFriend ? (groupLabel ? 'is-friend-group' : '') : (groupLabel ? 'is-group' : '');
     const dotColor = { '': 'var(--you)', 'is-friend-group': '#0D8A98', 'is-group': '#131318' }[tone];
 
-    const bottom = imgUrl
-      ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
-      : isLeader
-        ? `<div class="user-dot-marker is-leader"></div>`
-        : `<div class="user-dot-marker ${tone}" style="background:${dotColor}"></div>`;
+    const bottom = formation ? mapFormationHtml(formation)
+      : imgUrl
+        ? `<div class="user-avatar-marker"><img src="${imgUrl}" alt=""></div>`
+        : isLeader
+          ? `<div class="user-dot-marker is-leader"></div>`
+          : `<div class="user-dot-marker ${tone}" style="background:${dotColor}"></div>`;
 
     // Лидер чужой группы: вместо плашки с именем — иконка группы. Облака желаний — над плашкой
     const badge = isLeader
@@ -7000,9 +7241,9 @@
 
     return `
       <div class="user-avatar-wrap" data-clickable="true" data-user-id="${escapeHtml(userId)}"
-           style="pointer-events:auto;cursor:pointer;">
+           style="pointer-events:auto;cursor:pointer;${formation ? `--form-lift:${formationLift(formation.length)}px` : ''}">
         ${badge}
-        ${isLeader ? signalRingsHtml('is-group') : ''}
+        ${isLeader || formation ? signalRingsHtml('is-group') : ''}
         ${bottom}
       </div>`;
   }
@@ -7239,14 +7480,11 @@
     declutterWishes();
   }, true);
 
-  // Желания изменились: облака на местах, над моей иконкой и над друзьями
+  // Желания изменились: облака на местах, над моей иконкой, над друзьями и над компаниями
   function refreshWishClouds() {
     if (!map2gis) return;
     syncWishMarkers();
-    refreshMyMarker();
-    for (const [uid, fm] of [...friendMarkerCoords.entries()]) {
-      upsertFriendMarker(uid, fm.person, fm.coords, friends.some((f) => f.id === uid), userAvatarCfgById.get(uid) || null);
-    }
+    syncPeopleMarkers();
   }
   // Шрифт догрузился — размеры текста другие: перемеряем облака
   if (document.fonts && document.fonts.ready) {
@@ -7273,32 +7511,52 @@
 
   /* Реальный DOM-элемент маркера друга с обработчиком клика —
      так же, как у твоего собственного маркера и маркеров воспоминаний. */
-  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = []) {
+  function buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups = [], clouds = [], formation = null) {
     const tpl = document.createElement('div');
-    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds).trim();
+    tpl.innerHTML = buildFriendMarkerHTML(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds, formation).trim();
     const el = tpl.firstElementChild;
 
     const openProfile = (e) => {
       if (openMapGroup(e)) return;
       e.stopPropagation();
-      showApp('profile');                 // окно скрыто, пока ты на карте — сначала открываем его
-      showFriendProfile(userId, person);  // затем показываем профиль друга
+      // моё желание в облаке над компанией — к моим желаниям
+      if (e.target.closest('[data-wish-mine]')) { showApp('profile'); showWishesScreen(); return; }
+      // в компании — профиль того, кого нажали; окно скрыто, пока ты на карте, — openMemberProfile сначала открывает его
+      const who = e.target.closest('[data-member-id]');
+      openMemberProfile(who ? who.dataset.memberId : userId, who && who.dataset.memberId !== userId ? null : person);
     };
     el.addEventListener('click', openProfile);
     return el;
   }
 
+  /* Маркеры людей — заново по текущим данным: кто стоит отдельно, кто — в компании у лидера (mapClusters).
+     После загрузки геопозиций, при каждом изменении чьей-то геопозиции, групп и желаний */
+  let peopleSyncRaf = 0;
+  function scheduleSyncPeople() {
+    if (!peopleSyncRaf) peopleSyncRaf = requestAnimationFrame(() => { peopleSyncRaf = 0; syncPeopleMarkers(); });
+  }
+  function syncPeopleMarkers() {
+    if (!map2gis || !currentUser) return;
+    const relevant = computeRelevantUserIds();
+    const cl = mapClusters();
+    const shown = new Set();
+    for (const [userId, coords] of userLocationsById.entries()) {
+      if (!relevant.has(userId)) continue;
+      const person = personById(userId);
+      if (!person) continue;
+      const isFriend = friends.some((f) => f.id === userId);
+      if (upsertFriendMarker(userId, person, coords, isFriend, userAvatarCfgById.get(userId) || null, cl)) shown.add(userId);
+    }
+    // Убираем всех, кого не показали в этом проходе: больше не друг и не участник группы, нет геопозиции, нет профиля
+    // или человек стоит в компании у лидера — иначе на карте остаётся лишний маркер
+    for (const userId of [...friendMarkers.keys()]) if (!shown.has(userId)) removeFriendMarker(userId);
+    if (lastUserLocation && settings.geolocation) placeUserMarker(lastUserLocation, cl);
+  }
+
   async function loadUserLocations() {
     if (!map2gis || !currentUser) return;
     const relevant = computeRelevantUserIds();
-    if (!relevant.size) {
-      for (const [id, fm] of [...friendMarkers.entries()]) {
-        try { fm.marker.destroy(); } catch {}
-        friendMarkers.delete(id);
-        friendMarkerCoords.delete(id);
-      }
-      return;
-    }
+    if (!relevant.size) { syncPeopleMarkers(); return; }
     const ids = [...relevant];
     const { data, error } = await supabaseClient.from('user_locations')
       .select('user_id, lat, lon, updated_at, avatar_config')
@@ -7317,21 +7575,7 @@
     }
     // геопозиции на сервере больше нет (человек её убрал) — старые координаты забываем
     for (const id of [...userLocationsById.keys()]) if (relevant.has(id) && !found.has(id)) userLocationsById.delete(id);
-    const shown = new Set();
-    for (const [userId, coords] of userLocationsById.entries()) {
-      if (!relevant.has(userId)) continue;
-      const person = personById(userId);
-      if (!person) continue;
-      const isFriend = friends.some((f) => f.id === userId);
-      const cfg = userAvatarCfgById.get(userId) || null;
-      upsertFriendMarker(userId, person, coords, isFriend, cfg);
-      shown.add(userId);
-    }
-    // Убираем всех, кого не показали в этом проходе: больше не друг и не участник группы,
-    // нет геопозиции или нет профиля — иначе на карте остаётся устаревший маркер
-    for (const userId of [...friendMarkers.keys()]) {
-      if (!shown.has(userId) || !found.has(userId)) removeFriendMarker(userId);
-    }
+    syncPeopleMarkers();
   }
 
   function removeFriendMarker(userId) {
@@ -7341,24 +7585,30 @@
     friendMarkerCoords.delete(userId);
   }
 
-  function upsertFriendMarker(userId, person, coords, isFriend, avatarCfg) {
-    if (!map2gis) return;
+  // Возвращает false, если человек стоит в компании у другого и своего маркера у него нет (cl — mapClusters)
+  function upsertFriendMarker(userId, person, coords, isFriend, avatarCfg, cl = mapClusters()) {
+    if (!map2gis) return false;
+    if (cl.placedIn.has(userId)) { removeFriendMarker(userId); return false; }
     const existing = friendMarkers.get(userId);
     const cfgKey = avatarCfgKey(avatarCfg);
+    // у лидера стоит компания: участники его группы (или обеих групп союза) — рядом с ним
+    const center = cl.centers.get(userId) || null;
+    const formation = center && center.ids.length ? formationPeople(userId, center.ids) : null;
+    const formKey = formation ? formationKey(formation) : '';
     // Со мной в одной группе — вижу его по имени с названием нашей группы;
     // иконку группы вместо имени показываем только лидерам групп, где меня нет
     const sharesGroup = sharesGroupWithMe(userId);
     const groupLabel = sharesGroup || !isFriend ? sharedGroupsLabel(userId) : '';
-    // лидер закреплённого союза: над одним из двух лидеров — общая иконка союза, второй — просто по имени (unionOnMap)
-    const union = unionOnMap(), unionLeader = !!union && union.leaders.includes(userId);
-    const ownedGroups = unionLeader ? (userId === union.anchor ? [union] : []) : sharesGroup ? [] : visibleGroupsOfLeader(userId);
+    // лидер, над которым стоит союз, — под общей иконкой союза (второй лидер стоит рядом в компании)
+    const union = center && center.union;
+    const ownedGroups = union ? [union] : sharesGroup ? [] : visibleGroupsOfLeader(userId);
     const groupsKey = mapGroupsKey(ownedGroups);
-    // Облака: над иконкой группы — её желание; над человеком — его желание и желание его группы.
-    // Желания групп союза — над иконкой союза, а пока её на карте нет — как обычно, над лидером
+    // Облака: над иконкой группы — её желание; над человеком — его желание и желание его группы;
+    // над союзом — желания обеих групп; над компанией, если остаётся место, — желания тех, кто в ней
     const asGroupIcon = ownedGroups.length > 0;
-    const clouds = unionLeader && union.anchor
-      ? (userId === union.anchor ? unionWishClouds(union, userId, person) : personWishClouds(userId, person, [], false))
+    let clouds = union ? unionWishClouds(union, userId, person)
       : personWishClouds(userId, person, asGroupIcon ? ownedGroups : wishGroupsOf(userId), asGroupIcon);
+    if (center) clouds = withMemberWishes(clouds, center.ids);
     const cloudsKey = wishCloudsKey(clouds);
     if (existing) {
       const same =
@@ -7367,6 +7617,7 @@
         existing.groupLabel === groupLabel &&
         existing.groupsKey === groupsKey &&
         existing.cloudsKey === cloudsKey &&
+        existing.formKey === formKey &&
         existing.personName === (person.name || '') &&
         existing.personAvatar === (person.avatar || '');
       if (same) {
@@ -7374,12 +7625,12 @@
         existing.location = coords;
         friendMarkerCoords.set(userId, { coords, person });
         scheduleWishDeclutter();
-        return;
+        return true;
       }
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
-    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds);
+    const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds, formation);
     const marker = new mapgl.HtmlMarker(map2gis, {
       coordinates: coords,
       html,
@@ -7394,11 +7645,13 @@
       groupLabel,
       groupsKey,
       cloudsKey,
+      formKey,
       personName: person.name || '',
       personAvatar: person.avatar || '',
     });
     friendMarkerCoords.set(userId, { coords, person });
     scheduleWishDeclutter();
+    return true;
   }
 
   async function applyUserLocationChange(payload) {
@@ -7412,37 +7665,27 @@
     // Человек больше не друг и не участник группы — его маркера на карте быть не должно
     if (!relevant.has(userId)) { removeFriendMarker(userId); return; }
 
-    const union = unionOnMap();
-    const anchorWas = union && union.anchor;
     if (payload.eventType === 'DELETE') {
       userLocationsById.delete(userId);
       userAvatarCfgById.delete(userId);
-      removeFriendMarker(userId);
-      if (union && union.leaders.includes(userId)) refreshUnionLeaderMarkers();
+      scheduleSyncPeople();   // мог стоять в компании или быть её серединой
       return;
     }
 
-    const coords = [row.lon, row.lat];
-    userLocationsById.set(userId, coords);
+    userLocationsById.set(userId, [row.lon, row.lat]);
     if (row.avatar_config && typeof row.avatar_config === 'object') {
       userAvatarCfgById.set(userId, row.avatar_config);
     } else {
       userAvatarCfgById.delete(userId);
     }
 
-    let person = personById(userId);
-    if (!person) {
+    if (!personById(userId)) {
       const { data, error } = await supabaseClient.from('profiles').select('id,name,username,avatar').eq('id', userId).maybeSingle();
       if (error || !data) return;
       groupMemberProfiles.set(userId, { id: data.id, name: data.name, handle: '@' + data.username, avatar: data.avatar || '' });
-      person = groupMemberProfiles.get(userId);
     }
-    if (!person) return;
-    const isFriend = friends.some((f) => f.id === userId);
-    const cfg = userAvatarCfgById.get(userId) || null;
-    upsertFriendMarker(userId, person, coords, isFriend, cfg);
-    // у лидера союза впервые появилась геопозиция — иконка союза может перейти к нему от второго лидера
-    if (union && union.leaders.includes(userId) && (unionOnMap() || {}).anchor !== anchorWas) refreshUnionLeaderMarkers();
+    // лидер передвинулся — с ним вся его компания; человек появился или пропал — компании меняются: всё заново, раз в кадр
+    scheduleSyncPeople();
   }
 
   /* Геопозиция с телефона при точном режиме приходит часто — в движении до раза в секунду. Каждую на сервер
@@ -8532,7 +8775,7 @@
      Предыдущая сцена освобождается только после отрисовки следующей — так шейдеры не собираются заново.
      После 15 секунд простоя рендерер освобождается: число контекстов WebGL у браузера ограничено. */
   let avatarSnap = null;
-  function avatarSnapshotRender(cfg, size, framing) {
+  function avatarSnapshotRender(cfg, size, framing, yaw = 0.3) {
     const THREE = window.THREE;
     if (!avatarSnap) {
       const canvas = document.createElement('canvas');
@@ -8544,7 +8787,7 @@
     clearTimeout(snap.timer);
     snap.renderer.setSize(size, size, false);
     const av = createAvatarScene(THREE, cfg, { framing });
-    av.animate(0, 0.3, 0);
+    av.animate(0, yaw, 0);
     snap.renderer.render(av.scene, av.camera);
     const dataUrl = snap.canvas.toDataURL('image/png');
     if (snap.prev) snap.prev.dispose();
@@ -8556,12 +8799,13 @@
     return dataUrl;
   }
 
-  function getAvatarSnapshotDataURL(cfg, framing = 'full') {
+  // yaw — поворот фигуры: 0 — лицом к зрителю, больше нуля — к правому краю экрана, меньше — к левому
+  function getAvatarSnapshotDataURL(cfg, framing = 'full', yaw = 0.3) {
     if (!isThreeAvailable() || !cfg || typeof cfg !== 'object') return null;
-    const key = avatarCfgKey(cfg) + '|' + framing;
+    const key = avatarCfgKey(cfg) + '|' + framing + '|' + yaw;
     if (avatarSnapshotCache.has(key)) return avatarSnapshotCache.get(key);
     try {
-      const dataUrl = avatarSnapshotRender(cfg, framing === 'bust' ? 128 : 112, framing);
+      const dataUrl = avatarSnapshotRender(cfg, framing === 'bust' ? 128 : 112, framing, yaw);
       avatarSnapshotCache.set(key, dataUrl);
       return dataUrl;
     } catch (err) {
@@ -8576,16 +8820,29 @@
   let userLocationWatchId = null;
   let lastUserLocation = null;
   let userAvatarCanvas = null;
-  let userMarkerKey = '';
+  let userMarkerKey = '', myMapSig = '';
 
-  function placeUserMarker(coords) {
+  /* Свой маркер. Я стою в компании у другого лидера — здесь, где я на самом деле, только точка «я здесь»;
+     у меня самого стоит компания (я лидер или надо мной союз) — она вокруг меня; иначе — я с именем, как раньше */
+  function placeUserMarker(coords, cl = currentUser ? mapClusters() : null) {
     if (!map2gis) return;
-    // Над собой: моё текущее желание и желание группы, где я лидер. В закреплённом союзе желания групп висят
-    // над иконкой союза — пока она на карте, над собой их не повторяем
-    const union = currentUser ? unionOnMap() : null;
-    const ownWishGroups = !currentUser ? [] : union && union.anchor && union.leaders.includes(currentUser.id) ? [] : wishGroupsOf(currentUser.id);
-    const clouds = currentUser ? personWishClouds(currentUser.id, profile, ownWishGroups, false) : [];
-    const key = [profile.name, profile.avatar, avatarCfgKey(avatarConfig), wishCloudsKey(clouds)].join('§');
+    const myId = currentUser && currentUser.id;
+    const absorbed = !!cl && cl.placedIn.has(myId);
+    const center = cl && !absorbed ? cl.centers.get(myId) || null : null;
+    const union = center && center.union;
+    const formation = center && center.ids.length ? formationPeople(myId, center.ids) : null;
+    // Над собой: моё текущее желание и желание группы, где я лидер; надо мной союз — желания обеих групп
+    let clouds = [];
+    if (currentUser && !absorbed) {
+      clouds = union ? unionWishClouds(union, myId, profile) : personWishClouds(myId, profile, wishGroupsOf(myId), false);
+      if (center) clouds = withMemberWishes(clouds, center.ids);
+    }
+    // Изменилось то, что видно в чужих компаниях (я появился на карте или исчез, сменил аватар, имя или фото), —
+    // маркеры остальных тоже перестраиваются
+    const sig = [!!personSpot(myId), avatarCfgKey(avatarConfig), profile.name, profile.avatar].join('§');
+    if (currentUser && sig !== myMapSig) { myMapSig = sig; scheduleSyncPeople(); }
+    const key = [absorbed ? 'spot' : 'me', profile.name, profile.avatar, avatarCfgKey(avatarConfig), wishCloudsKey(clouds),
+      formation ? formationKey(formation) : '', union ? mapGroupsKey([union]) : ''].join('§');
     // Ничего не поменялось — только двигаем маркер, не пересоздавая 3D-аватар
     if (userLocationMarker && key === userMarkerKey) {
       try { userLocationMarker.setCoordinates(coords); scheduleWishDeclutter(); return; } catch {}
@@ -8595,10 +8852,20 @@
       try { if (userAvatarCanvas && userAvatarCanvas.__avatarStop) userAvatarCanvas.__avatarStop(); userLocationMarker.destroy(); } catch {}
       userLocationMarker = null; userAvatarCanvas = null;
     }
-    const use3D = isThreeAvailable();
     const wrap = document.createElement('div');
-    wrap.className = 'user-avatar-wrap';
     wrap.dataset.ownMarker = '1';
+    if (absorbed) {
+      wrap.className = 'me-spot';
+      wrap.title = 'Вы здесь';
+      wrap.innerHTML = `${signalRingsHtml('is-me')}<span class="me-spot-dot"></span>`;
+      wrap.addEventListener('click', (e) => { e.stopPropagation(); showApp('profile'); showUserProfileScreen(); });
+      userLocationMarker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html: wrap, anchor: [0.5, 0.5], preventMapInteractions: true });
+      scheduleWishDeclutter();
+      return;
+    }
+    const use3D = isThreeAvailable();
+    wrap.className = 'user-avatar-wrap';
+    if (formation) wrap.style.setProperty('--form-lift', formationLift(formation.length) + 'px');
     const nameInitial = firstChar((profile.name || '?').trim()).toUpperCase() || '?';
     const displayName = (profile.name || '').trim();
     const label = ellipsize(displayName || 'Я', 18);
@@ -8606,9 +8873,9 @@
       ? `<div class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></div>`
       : `<div class="user-badge-avatar">${escapeHtml(nameInitial)}</div>`;
     const badge = document.createElement('div');
-    badge.className = 'user-badge'; badge.dataset.clickable = 'true';
-    // Себя я всегда вижу просто по имени — иконку группы видят только те, кто не в ней
-    badge.innerHTML = `
+    badge.className = 'user-badge' + (union ? ' is-leader' : ''); badge.dataset.clickable = 'true';
+    // Себя я вижу по имени — иконку группы видят те, кто не в ней; только над союзом — его общая иконка
+    badge.innerHTML = union ? `${wishAnchorsHtml(clouds)}${mapUnionChipHtml(union)}` : `
       ${wishAnchorsHtml(clouds)}
       <div class="user-badge-inner">
         ${avatarInner}
@@ -8616,14 +8883,22 @@
         <span class="user-badge-status" aria-hidden="true"></span>
       </div>`;
     badge.addEventListener('click', (e) => {
-      if (openMapGroup(e)) return;                     // облако группы — карточка группы
+      if (openMapGroup(e)) return;                     // облако группы — карточка группы, иконка союза — общий чат
       e.stopPropagation();
       showApp('profile');
       if (e.target.closest('[data-wish-mine]')) showWishesScreen(); else showUserProfileScreen();
     });
     wrap.appendChild(badge);
     wrap.insertAdjacentHTML('beforeend', signalRingsHtml('is-me'));
-    if (use3D) {
+    if (formation) {
+      wrap.insertAdjacentHTML('beforeend', mapFormationHtml(formation));
+      wrap.addEventListener('click', (e) => {
+        const who = e.target.closest('[data-member-id]');
+        if (!who) return;
+        e.stopPropagation();
+        openMemberProfile(who.dataset.memberId);
+      });
+    } else if (use3D) {
       const inner = document.createElement('div'); inner.className = 'user-avatar-marker';
       const canvas = document.createElement('canvas'); canvas.width = 44; canvas.height = 44;
       inner.appendChild(canvas); wrap.appendChild(inner);
@@ -8632,7 +8907,7 @@
     } else {
       const dot = document.createElement('div'); dot.className = 'user-dot-marker'; wrap.appendChild(dot);
     }
-    userLocationMarker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html: wrap, anchor: use3D ? [0.5, 0.85] : [0.5, 0.5], preventMapInteractions: true });
+    userLocationMarker = new mapgl.HtmlMarker(map2gis, { coordinates: coords, html: wrap, anchor: use3D || formation ? [0.5, 0.85] : [0.5, 0.5], preventMapInteractions: true });
     scheduleWishDeclutter();
   }
 
@@ -8676,6 +8951,8 @@
     if (userLocationMarker) { try { if (userAvatarCanvas && userAvatarCanvas.__avatarStop) userAvatarCanvas.__avatarStop(); userLocationMarker.destroy(); } catch {} userLocationMarker = null; }
     userAvatarCanvas = null; lastUserLocation = null;
     const btn = document.getElementById('geo-btn'); if (btn) btn.classList.remove('is-active');
+    myMapSig = '';
+    scheduleSyncPeople();   // меня больше нет на карте — компании, где я стоял или был серединой, перестраиваются
   }
   function goToUserLocation() {
     if (!map2gis) return;
@@ -9273,8 +9550,21 @@
   function groupsListMarkup() {
       // В groups теперь все группы (их видно на карте) — здесь только мои
       const mine = myGroups();
+      // закреплённый союз — первой строкой: две группы под общим знаком
+      const u = myUnion(), um = u ? matchBetween(u.mine.id, u.partner.id) : null;
+      const unionHtml = um && um.status === 'accepted' ? `
+              <li class="union-row">
+                <div class="group-card" data-union-id="${escapeHtml(um.id)}" role="button" tabindex="0">
+                  ${featAvatarHtml(um, 44)}
+                  <div class="group-main">
+                    <div class="group-name">${escapeHtml(matchTitle(um))}</div>
+                    <div class="group-sub">Союз · ${escapeHtml(membersLabel(matchParticipantIds(um).length))}</div>
+                  </div>
+                  <span class="chev">›</span>
+                </div>
+              </li>` : '';
       const rowsHtml = mine.length
-        ? `<ul class="rows">${mine.map((g) => {
+        ? `<ul class="rows">${unionHtml}${mine.map((g) => {
             const membersCount = (g.members || []).length + 1; // + лидер
             const av = g.photo
               ? `<span class="group-avatar" style="background-image:url('${safeUrl(g.photo)}')"></span>`
@@ -9523,12 +9813,13 @@
   let groupDetailsBack = null;
   function reopenGroupDetails() { if (groupDetailsId) showGroupDetailsScreen(groupDetailsId, groupDetailsBack); }
 
-  // Кнопки ответа на входящий запрос match
-  function matchResponseButtonsHtml(m) {
+  // Кнопки ответа на входящий запрос match; viewGid — группа, которую можно посмотреть, прежде чем ответить
+  function matchResponseButtonsHtml(m, viewGid = null) {
     const id = escapeHtml(m.id);
     return `<div class="notif-actions">
       <button class="btn btn-primary" type="button" data-gm-accept="${id}">Принять match</button>
       <button class="btn" type="button" data-gm-decline="${id}">Отклонить</button>
+      ${viewGid ? `<button class="btn" type="button" data-view-group="${escapeHtml(viewGid)}">Посмотреть группу</button>` : ''}
     </div>`;
   }
 
@@ -9589,7 +9880,7 @@
         action = `<button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>`;
       } else if (m.toGroup === gid && m.toOwner === myId) {
         sub = 'Хотят match с вашей группой';
-        action = matchResponseButtonsHtml(m);
+        action = matchResponseButtonsHtml(m, otherId);
       } else {
         sub = m.toGroup === gid ? 'Ждёт ответа лидера' : 'Запрос отправлен, ждём ответа';
         action = '';
@@ -9687,6 +9978,68 @@
           if (await saveGroupWish(g.id, input.value)) rerenderWishContext();
         });
       }
+    }, back);
+  }
+
+  /* ── Карточка союза: открывается из списка групп. Две группы (каждую можно открыть), все участники и общий чат ── */
+  let unionDetails = null;   // { id, back } — открытая карточка союза, чтобы к ней вернуться
+  function reopenUnionDetails() { if (unionDetails) showUnionDetailsScreen(unionDetails.id, unionDetails.back); }
+  function showUnionDetailsScreen(matchId, backFn) {
+    const back = backFn || (() => showGroupsScreen());
+    unionDetails = { id: String(matchId), back };
+    setScreen(() => {
+      const m = groupMatches.find((x) => x.id === String(matchId));
+      const a = m && groupById(m.fromGroup), b = m && groupById(m.toGroup);
+      winBody.scrollTop = 0;
+      if (!m || m.status !== 'accepted' || !a || !b) {
+        winTitle.textContent = 'Союз';
+        winBody.innerHTML = `<div class="empty-msg">Этого союза больше нет.</div>`;
+        return;
+      }
+      const myId = currentUser && currentUser.id;
+      winTitle.textContent = matchTitle(m);
+      const groupRow = (g) => {
+        const url = safeUrl(g.photo);
+        return `
+          <li class="person-card is-link" data-union-group="${escapeHtml(g.id)}" role="button" tabindex="0">
+            <span class="group-avatar" style="width:40px;height:40px;font-size:16px;${url ? `background-image:url('${url}')` : ''}">${url ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(g.name)}</div>
+              <div class="person-handle">${escapeHtml(membersLabel(groupPeople(g).length))}${isGroupParticipant(g, myId) ? ' · ваша группа' : ''}</div>
+            </div>
+            <span class="chev">›</span>
+          </li>`;
+      };
+      const seen = new Set();
+      const people = [a, b].flatMap((g) => groupPeople(g).map((p) => ({ ...p, from: g })))
+        .filter((p) => !seen.has(p.id) && seen.add(p.id));
+      const peopleHtml = people.map((p) => {
+        const isMe = p.id === myId;
+        const name = p.name && p.name !== 'Лидер группы' ? p.name : chatPersonById(p.id).name;
+        return `
+          <li class="person-card ${isMe ? '' : 'is-link'}" ${isMe ? '' : `data-view-profile="${escapeHtml(p.id)}" data-profile-back="union" role="button" tabindex="0"`}>
+            ${avatarCircleHtml({ name, avatar: p.avatar }, 40)}
+            <div class="person-main">
+              <div class="person-name">${escapeHtml(name || 'Пользователь')}${isMe ? ' (вы)' : ''}</div>
+              <div class="person-handle">${p.leader ? '👑 Лидер · ' : ''}${escapeHtml(p.from.name || 'Группа')}</div>
+            </div>
+            ${isMe ? '' : '<span class="chev">›</span>'}
+          </li>`;
+      }).join('');
+      winBody.innerHTML = `
+        <div class="user-profile-view" data-union-card>
+          <div class="user-profile-hero">
+            <div class="union-hero-ava">${featAvatarHtml(m, 128)}</div>
+            <div class="user-profile-name">${escapeHtml(matchTitle(m))}</div>
+            <div class="user-profile-handle">Союз · ${escapeHtml(membersLabel(people.length))}</div>
+          </div>
+          <div><div class="user-profile-section-title">Группы</div><ul class="rows">${groupRow(a)}${groupRow(b)}</ul></div>
+          <div><div class="user-profile-section-title">Участники</div><ul class="rows">${peopleHtml}</ul></div>
+          <div class="edit-actions">
+            <button type="button" class="btn" data-action="back-to-groups">Назад</button>
+            <button type="button" class="btn btn-primary" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button>
+          </div>
+        </div>`;
     }, back);
   }
 
@@ -10552,6 +10905,17 @@
   const ICON_MIC = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>`;
   const ICON_CIRCLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16z"/><path fill="currentColor" d="M8 9.5h5.5a1 1 0 0 1 1 1v.7l2-1.2v4l-2-1.2v.7a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/></svg>`;
   const ICON_SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6V10l12.6 2-12.6 2z"/></svg>`;
+  /* Голосование о союзе: две сирены смотрят друг на друга — зрачки повёрнуты к соседке, над каждой — вспышка.
+     Пока идёт голосование, зрачки горят цветом схемы (siren-l, siren-r) */
+  const ICON_SIRENS = `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path fill="currentColor" fill-rule="evenodd" d="M2.5 18V11.5a3.5 3.5 0 0 1 7 0V18zM7.3 10.8a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 1 0 0-2.8zM14.5 18V11.5a3.5 3.5 0 0 1 7 0V18zM16.7 10.8a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 1 0 0-2.8z"/>
+    <path fill="currentColor" d="M1.5 18.75h9a1 1 0 0 1 0 2h-9a1 1 0 0 1 0-2zM13.5 18.75h9a1 1 0 0 1 0 2h-9a1 1 0 0 1 0-2z"/>
+    <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M6 5.6V3.4M18 5.6V3.4M2.6 6.4 1.5 5.3M21.4 6.4l1.1-1.1"/>
+    <circle class="ic-fill siren-l" cx="7.3" cy="12.2" r="1.4"/>
+    <circle class="ic-fill siren-r" cx="16.7" cy="12.2" r="1.4"/>
+  </svg>`;
+  // Знак союза в строке «Союз закреплён»: два круга внахлёст
+  const ICON_FEAT_MINI = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="12" r="5.6"/><circle cx="15" cy="12" r="5.6"/><path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/></svg>`;
   // Телефон или планшет без мыши: Enter на экранной клавиатуре — новая строка, а не отправка
   const touchTyping = matchMedia('(hover: none) and (pointer: coarse)');
   /* Поле ввода растёт вместе с текстом: длинная строка переносится, после ~6 строк появляется прокрутка
@@ -11238,6 +11602,7 @@
         <div class="chat-pin chat-reply-bar" id="chat-reply-bar" hidden></div>
         <form class="support-chat-form chat-composer" id="chat-composer">
           <button type="button" class="chat-tool" data-chat-attach title="Фото, видео или файл" aria-label="Прикрепить фото, видео или файл">${ICON_CLIP}</button>
+          ${chat.type === 'match' ? `<button type="button" class="chat-tool vote-tool" id="chat-vote-tool" data-vote-tool hidden title="Голосование о союзе" aria-label="Голосование о союзе">${ICON_SIRENS}</button>` : ''}
           <input type="file" id="chat-file" multiple hidden>
           <textarea class="support-chat-input chat-textarea" id="chat-text" rows="1" placeholder="Сообщение…" maxlength="1000" autocomplete="off" enterkeyhint="enter"></textarea>
           <button type="button" class="chat-tool" data-chat-rec="voice" title="Голосовое сообщение" aria-label="Записать голосовое сообщение">${ICON_MIC}</button>
@@ -11390,34 +11755,83 @@
     renderMatchVotePanel(m, votes);
   }
 
+  /* Союз закреплён — над лентой одна тихая строка. Само голосование — значок «две сирены» рядом со скрепкой:
+     лидеру — чтобы начать его, всем — пока оно идёт; нажатие открывает окошко над полем ввода (openVotePop) */
   function renderMatchVotePanel(m, votes) {
+    if (chat && chat.type === 'match') chat.vote = { m, votes };
     const el = winBody.querySelector('#match-vote');
-    if (!el) return;
+    if (el) {
+      el.dataset.state = m.voteState;
+      el.innerHTML = m.voteState === 'approved' ? `<span class="mv-done">${ICON_FEAT_MINI}Союз закреплён</span>` : '';
+    }
+    const tool = winBody.querySelector('#chat-vote-tool');
+    if (tool) {
+      const myId = currentUser && currentUser.id;
+      const open = m.voteState === 'open', voted = votes.some((v) => v.user_id === myId);
+      tool.hidden = !(open || (m.voteState === 'none' && isMatchLeader(m, myId)));
+      tool.classList.toggle('is-open', open);
+      tool.classList.toggle('is-voted', voted);
+      const label = open ? (voted ? 'Голосование о союзе: вы проголосовали' : 'Голосование о союзе: проголосуйте') : 'Начать голосование о союзе';
+      tool.title = label;
+      tool.setAttribute('aria-label', label);
+      if (tool.hidden) closeVotePop();
+    }
+    if (votePop && votePop.isConnected) { votePop.innerHTML = votePopHtml(m, votes); placeVotePop(); }
+  }
+
+  let votePop = null;
+  function votePopHtml(m, votes) {
     const myId = currentUser && currentUser.id;
     const total = Math.max(1, matchParticipantIds(m).length);
+    const what = '«за» — на карте вы будете видеть только друг друга, «против» — союз распадётся и чат удалится.';
+    if (m.voteState !== 'open') {
+      return `
+        <div class="vp-title">Остаться только друг с другом?</div>
+        <div class="vp-hint">Решат участники обеих групп: ${what}</div>
+        <div class="vp-actions"><button type="button" class="mv-btn is-start" data-vote-start>Начать голосование</button></div>`;
+    }
     const yes = votes.filter((v) => v.vote).length;
     const no = votes.filter((v) => !v.vote).length;
     const mine = votes.find((v) => v.user_id === myId);
-    const need = Math.ceil(total / 2);
-    el.dataset.state = m.voteState;
-    if (m.voteState === 'approved') {
-      el.innerHTML = `<div class="mv-done">💞 Союз закреплён — на карте вы видите только друг друга</div>`;
-    } else if (m.voteState === 'open') {
-      el.innerHTML = `
-        <div class="mv-head"><span class="mv-title">Остаёмся только друг с другом?</span><span class="mv-count">${yes + no} из ${total}</span></div>
-        <div class="mv-bar"><span class="mv-yes" style="width:${(yes / total * 100).toFixed(1)}%"></span><span class="mv-no" style="width:${(no / total * 100).toFixed(1)}%"></span></div>
-        <div class="mv-actions">
-          <button type="button" class="mv-btn yes ${mine && mine.vote ? 'is-on' : ''}" data-vote-yes>❤ За · ${yes}</button>
-          <button type="button" class="mv-btn no ${mine && !mine.vote ? 'is-on' : ''}" data-vote-no>✕ Против · ${no}</button>
-        </div>
-        <div class="mv-hint">Решает ${need} из ${total}: «за» — группы видят только друг друга, «против» — союз распадётся и чат удалится</div>`;
-    } else if (isMatchLeader(m, myId)) {
-      el.innerHTML = `
-        <button type="button" class="mv-start" data-vote-start>🗳 Начать голосование</button>
-        <div class="mv-hint">Остаться только друг с другом или разойтись — решат участники обеих групп</div>`;
-    } else {
-      el.innerHTML = `<div class="mv-hint">🗳 Голосование о союзе может начать лидер одной из групп</div>`;
-    }
+    return `
+      <div class="vp-head"><span class="vp-title">Остаёмся только друг с другом?</span><span class="vp-count">${yes + no} из ${total}</span></div>
+      <div class="mv-bar"><span class="mv-yes" style="width:${(yes / total * 100).toFixed(1)}%"></span><span class="mv-no" style="width:${(no / total * 100).toFixed(1)}%"></span></div>
+      <div class="vp-actions">
+        <button type="button" class="mv-btn yes ${mine && mine.vote ? 'is-on' : ''}" data-vote-yes>За · ${yes}</button>
+        <button type="button" class="mv-btn no ${mine && !mine.vote ? 'is-on' : ''}" data-vote-no>Против · ${no}</button>
+      </div>
+      <div class="vp-hint">Решает ${Math.ceil(total / 2)} из ${total}: ${what}</div>`;
+  }
+  // над полем ввода, левым краем — у значка
+  function placeVotePop() {
+    const tool = winBody.querySelector('#chat-vote-tool');
+    if (!votePop || !tool) return;
+    const r = winBody.getBoundingClientRect(), a = tool.getBoundingClientRect();
+    votePop.style.left = Math.max(8, Math.min(a.left - r.left - 6, r.width - votePop.offsetWidth - 8)) + 'px';
+    votePop.style.top = Math.max(8, a.top - r.top - votePop.offsetHeight - 10 + winBody.scrollTop) + 'px';
+  }
+  function closeVotePop() {
+    if (votePop) votePop.remove();
+    votePop = null;
+  }
+  function openVotePop() {
+    const c = chat;
+    if (!c || !c.vote) return;
+    closePostMenus();
+    const pop = document.createElement('div');
+    pop.className = 'popover vote-pop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Голосование о союзе');
+    pop.innerHTML = votePopHtml(c.vote.m, c.vote.votes);
+    winBody.appendChild(pop);
+    votePop = pop;
+    placeVotePop();
+    const onDocDown = (ev) => {
+      if (pop.contains(ev.target) || (ev.target.closest && ev.target.closest('#chat-vote-tool'))) return;
+      if (votePop === pop) closeVotePop();
+      document.removeEventListener('pointerdown', onDocDown, true);
+    };
+    setTimeout(() => document.addEventListener('pointerdown', onDocDown, true), 0);
   }
 
   // match изменился (realtime или наш голос): распался — закрываем чат, иначе обновляем панель
@@ -12998,7 +13412,7 @@
           <ul class="rows">
             ${notifications.map((n) => `
               <li class="row ${n.read ? '' : 'notif-unread'}" data-notif-id="${escapeHtml(n.id)}" role="button" tabindex="0">
-                ${notifIconHtml(n.type)}
+                ${notifAvatarHtml(n)}
                 <div class="row-main">
                   <div class="row-name">${escapeHtml(n.title || '')}</div>
                   <div class="row-sub">${escapeHtml(n.text || '')}</div>
@@ -13313,12 +13727,32 @@
     const m = groupMatches.find((x) => x.id === n.requestId);
     if (m && m.status === 'accepted') return `<div class="notif-actions"><button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Открыть чат</button></div>`;
     if (!pendingIncomingMatch(n.requestId)) return `<div class="notif-status">Запрос уже обработан</div>`;
-    return matchResponseButtonsHtml(m);
+    // прежде чем ответить, можно посмотреть группу, которая прислала запрос
+    return matchResponseButtonsHtml(m, m.fromGroup);
   }
   function notifIconHtml(type) {
     const svg = NOTIF_ICON[type] || NOTIF_ICON.system;
     const bg = NOTIF_COLOR[type] || NOTIF_COLOR.system;
     return `<span class="notif-icon" style="background:${bg}">${svg}</span>`;
+  }
+  /* Значок уведомления: у приглашения в группу и у запроса на match — фото группы (нажатие открывает её карточку),
+     у match и голосования о союзе — общий знак двух групп, у остальных — значок по типу */
+  function notifAvatarHtml(n) {
+    let g = null, m = null;
+    if (n.requestId && n.type === 'group') {
+      const inv = groupInvites.find((i) => i.id === n.requestId);
+      g = inv ? groupById(inv.groupId) : null;
+    } else if (n.requestId && /^(group_match|group_match_accept|match_vote|match_vote_result)$/.test(n.type)) {
+      m = groupMatches.find((x) => x.id === n.requestId) || null;
+      if (m && n.type === 'group_match') g = groupById(m.fromGroup);
+    }
+    if (g) {
+      const url = safeUrl(g.photo);
+      return `<span class="notif-icon notif-group" data-view-group="${escapeHtml(g.id)}" role="button" title="${escapeHtml(g.name || 'Группа')}"
+        style="${url ? `background-image:url('${url}')` : `background:${NOTIF_COLOR.group}`}">${url ? '' : escapeHtml(firstChar((g.name || '?').trim()).toUpperCase() || '?')}</span>`;
+    }
+    if (m && groupById(m.fromGroup) && groupById(m.toGroup)) return featAvatarHtml(m, 40);
+    return notifIconHtml(n.type);
   }
   function unreadCount() { return notifications.filter((n) => !n.read).length; }
   function updateBadge() {
@@ -14901,7 +15335,8 @@
       await showGroupChatScreen(gid, fromList ? null : () => showGroupDetailsScreen(gid, back));
       return;
     }
-    // ── голосование о союзе в совместном чате ──
+    // ── голосование о союзе в совместном чате: значок у скрепки открывает и закрывает окошко голосования ──
+    if (e.target.closest('[data-vote-tool]')) { if (votePop && votePop.isConnected) closeVotePop(); else openVotePop(); return; }
     if (e.target.closest('[data-vote-start]') && chat && chat.type === 'match') { await startMatchVote(chat.matchId); return; }
     const voteBtn = e.target.closest('[data-vote-yes], [data-vote-no]');
     if (voteBtn && chat && chat.type === 'match') {
@@ -14911,10 +15346,28 @@
     }
     const matchChatBtn = e.target.closest('[data-open-match-chat]');
     if (matchChatBtn) {
-      // «назад»: в список чатов, в уведомления или в карточку группы — откуда пришли
+      // «назад»: в список чатов, в карточку союза, в уведомления или в карточку группы — откуда пришли
       const back = winBody.querySelector('#chats-list') ? null
-        : openApp === 'notifications' ? () => showApp('notifications') : reopenGroupDetails;
+        : winBody.querySelector('[data-union-card]') ? reopenUnionDetails
+        : openApp === 'notifications' && !currentBackHandler ? () => showApp('notifications') : reopenGroupDetails;
       await showMatchChatScreen(matchChatBtn.dataset.openMatchChat, back);
+      return;
+    }
+    // ── союз: карточка из списка групп, из неё — карточки двух групп ──
+    const unionCard = e.target.closest('[data-union-id]');
+    if (unionCard) { showUnionDetailsScreen(unionCard.dataset.unionId); return; }
+    const unionGroup = e.target.closest('[data-union-group]');
+    if (unionGroup) { showGroupDetailsScreen(unionGroup.dataset.unionGroup, reopenUnionDetails); return; }
+    // ── посмотреть группу: из уведомления (фото группы, «Посмотреть группу») или из запроса в карточке своей группы ──
+    const viewGroup = e.target.closest('[data-view-group]');
+    if (viewGroup) {
+      e.stopPropagation();
+      const gid = viewGroup.dataset.viewGroup;
+      if (!groupById(gid)) { alert('Этой группы больше нет.'); return; }
+      let back = null;
+      if (openApp === 'notifications' && !currentBackHandler) back = () => showApp('notifications');
+      else if (groupDetailsId) { const id = groupDetailsId, b = groupDetailsBack; back = () => showGroupDetailsScreen(id, b); }
+      showGroupDetailsScreen(gid, back);
       return;
     }
 
@@ -14937,8 +15390,9 @@
     // кнопки внутри строки («Чат», «×») обрабатываются ниже — профиль по ним не открываем
     if (viewProfile && !e.target.closest('button')) {
       const uid = viewProfile.dataset.viewProfile;
-      const back = viewProfile.dataset.profileBack === 'friends' ? showFriendsScreen : reopenGroupDetails;
-      showFriendProfile(uid, personById(uid), back);
+      const from = viewProfile.dataset.profileBack;
+      const back = from === 'friends' ? showFriendsScreen : from === 'union' ? reopenUnionDetails : reopenGroupDetails;
+      showFriendProfile(uid, personById(uid) || chatPersonById(uid), back);
       return;
     }
     // ── желание группы: изменить / загадать / удалить ──
@@ -14962,8 +15416,9 @@
       const matchId = accept ? gmBtn.dataset.gmAccept : gmBtn.dataset.gmDecline;
       gmBtn.closest('.notif-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
       const ok = await respondGroupMatch(matchId, accept);
-      if (openApp === 'notifications') refreshNotifications();
-      else if (ok && winBody.querySelector('.match-rows')) quietly(reopenGroupDetails);
+      // отвечали из карточки группы (её могли открыть и из уведомления) — обновляется карточка, иначе — список уведомлений
+      if (winBody.querySelector('.match-rows')) quietly(reopenGroupDetails);
+      else if (openApp === 'notifications') refreshNotifications();
       if (ok && accept) {
         await matchFxIdle();   // сначала доигрывает анимация match
         const doIt = await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже' });
