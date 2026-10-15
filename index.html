@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-15 10:20">
+  <meta name="app-build" content="2026-10-15 11:30">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -1245,6 +1245,9 @@
       .group-row:hover .group-actions { transform: translateX(0); }
       .group-row:hover .group-card { transform: translateX(-144px); }
     }
+    /* участник (не лидер): одна кнопка «Покинуть» вместо «Настройки» и «Удалить» */
+    .group-row.is-member.revealed .group-card { transform: translateX(-72px); }
+    @media (hover: hover) and (pointer: fine) { .group-row.is-member:hover .group-card { transform: translateX(-72px); } }
     .group-card {
       display: flex; align-items: center; gap: 12px;
       padding: 10px 12px; border-radius: 10px; cursor: pointer;
@@ -1398,6 +1401,9 @@
     .gx-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
     .gx-actions .gx-wide { grid-column: 1 / -1; }
     .gx-share { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn.gx-leave { width: 100%; margin-top: 4px; background: transparent; color: var(--hot); box-shadow: inset 0 0 0 1px var(--win-line); }
+    .btn.gx-leave:hover { background: rgba(240, 62, 110, .08); }
+    .group-action-btn.leave svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .gx-share svg { width: 18px; height: 18px; flex: none; }
 
     /* ── Создание и настройки группы (showCreateGroupScreen): поверх стилей .pe ── */
@@ -3332,9 +3338,12 @@
     .match-btn.is-waiting::before, .match-btn.is-waiting::after { animation-duration: 4s; }
     .match-btn.is-waiting::after { animation-delay: 2s; }
     .match-btn:active { transform: scale(.92); transition-duration: .08s; }
+    /* значок в правом верхнем углу кнопки: стоит поверх неё и не меняет её ширину — капсула рядом не дёргается */
     .match-btn-count {
-      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; margin-right: -6px;
-      background: var(--prism); color: var(--prism-ink); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+      position: absolute; top: -5px; right: -5px; z-index: 1; pointer-events: none;
+      min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px;
+      background: var(--prism); color: var(--prism-ink); font-size: 11px; font-weight: 700; line-height: 19px; text-align: center;
+      font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--land);
     }
     @keyframes match-btn-in { from { opacity: 0; transform: scale(.3); } }
     @keyframes match-btn-ping {
@@ -6894,9 +6903,12 @@
     const on = !!matchBtnGroup;
     matchBtn.hidden = !on;
     matchBtn.classList.toggle('is-waiting', !incoming.length);
+    // в углу кнопки — сколько всего запросов (полученные и отправленные), по отдельности — во вкладках колоды
+    const total = new Set([...incoming, ...outgoing].map((m) => m.id)).size;
     const count = matchBtn.querySelector('.match-btn-count');
-    count.hidden = incoming.length < 2;
-    count.textContent = String(incoming.length);
+    const shown = total > 99 ? '99+' : String(total);
+    if (count.textContent !== shown) count.textContent = shown;
+    count.hidden = !total;
     const label = incoming.length ? 'Вашей группе предлагают match' : 'Запрос на match ждёт ответа';
     matchBtn.setAttribute('aria-label', label);
     matchBtn.title = label;
@@ -10622,10 +10634,11 @@
             const invited = isOwner ? pendingInvitesOfGroup(g.id).length : 0;
             const waiting = (invited ? ` · приглашено: ${invited}` : '') + (groupOnMap(g) ? '' : ' · пока не на карте');
             return `
-              <li class="group-row" data-group-row="${escapeHtml(g.id)}">
+              <li class="group-row${isOwner ? '' : ' is-member'}" data-group-row="${escapeHtml(g.id)}">
                 <div class="group-actions">
                   ${isOwner ? `<button class="group-action-btn settings" type="button" data-group-settings="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.4-2.6h-3.9l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.5 11a7.6 7.6 0 0 0-.1 1 7.6 7.6 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h3.9l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
-                    <button class="group-action-btn danger" type="button" data-group-delete="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2zm2 6v9h2v-9h-2zm4 0v9h2v-9h-2z"/></svg></button>` : ''}
+                    <button class="group-action-btn danger" type="button" data-group-delete="${escapeHtml(g.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-3h6l1 2h4v2H4V6h4l1-2zm2 6v9h2v-9h-2zm4 0v9h2v-9h-2z"/></svg></button>`
+                    : `<button class="group-action-btn danger leave" type="button" data-leave-group="${escapeHtml(g.id)}" aria-label="Покинуть группу" title="Покинуть группу"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>`}
                 </div>
                 <div class="group-card" data-group-id="${escapeHtml(g.id)}" role="button" tabindex="0">
                   ${av}
@@ -11212,6 +11225,7 @@
           <section class="gx-match">${matchHtml.includes('gx-cta') ? '' : '<div class="user-profile-section-title">Match</div>'}${matchHtml}</section>
           <section><div class="user-profile-section-title">Желание</div>${wishHtml}</section>
           <div class="pm-members"><div class="user-profile-section-title">Участники</div>${isMember ? mapNote : ''}<ul class="rows">${peopleHtml}${invitedHtml}</ul></div>
+          ${isMember ? `<button type="button" class="btn gx-leave" data-leave-group="${escapeHtml(g.id)}">Покинуть группу</button>` : ''}
         </div>`;
       // что прислали в чат группы — видно только её участникам
       if (isMember) sharedTabs({ type: 'group', groupId: String(g.id) }, () => membersTabPlace(token),
@@ -13251,16 +13265,60 @@
   // match изменился (realtime или наш голос): распался — закрываем чат, иначе обновляем панель
   function onMatchesChanged() {
     const c = chat;
-    if (!c || c.type !== 'match') return;
-    const m = groupMatches.find((x) => x.id === String(c.matchId));
-    if (!m || m.status !== 'accepted') {
+    if (!c) return;
+    const kick = (text) => {
       leaveChat();
       winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
       showMessengerScreen();
-      setTimeout(() => alert('Союз распался — совместный чат удалён'), 50);
+      setTimeout(() => alert(text), 50);
+    };
+    // открыт чат группы, а меня в ней больше нет (вышел на другом устройстве) или группа исчезла
+    if (c.type === 'group') {
+      const g = groupById(c.groupId);
+      if (!g) kick('Группы больше нет — её чат удалён');
+      else if (!isGroupParticipant(g, currentUser && currentUser.id)) kick('Вы больше не в этой группе');
       return;
     }
+    if (c.type !== 'match') return;
+    const m = groupMatches.find((x) => x.id === String(c.matchId));
+    if (!m) { kick('Одной из групп больше нет — совместный чат удалён'); return; }
+    if (m.status !== 'accepted') { kick('Союз распался — совместный чат удалён'); return; }
+    // вышел из своей группы — из совместного чата её match тоже
+    if (!myAcceptedMatches().some((x) => x.id === m.id)) { kick('Вы больше не в группе этого match — совместный чат закрыт'); return; }
     refreshMatchVotePanel();
+  }
+
+  /* ── Покинуть группу ──
+     Выйти может любой участник и лидер (у лидера лидерство переходит другому участнику). Остаётся меньше двух
+     человек — группа исчезает целиком, вместе с чатом и match. Из совместных чатов match человек пропадает сам:
+     они видны только участникам групп. Всё это делает функция leave_group на сервере (supabase_leave_group.sql) */
+  async function leaveGroup(gid) {
+    const g = groupById(gid), myId = currentUser && currentUser.id;
+    if (!g || !isGroupParticipant(g, myId)) return;
+    const vanish = groupPeople(g).length - 1 < 2;
+    const inMatch = groupMatches.some((m) => m.status === 'accepted' && (m.fromGroup === String(gid) || m.toGroup === String(gid)));
+    const text = vanish
+      ? `В группе останется меньше двух человек — она исчезнет вместе с чатом${inMatch ? ' и match' : ''}.`
+      : `${g.ownerId === myId ? 'Лидером станет другой участник. ' : ''}Вы пропадёте из чата группы${inMatch ? ' и из совместных чатов её match' : ''}.`;
+    const ok = await confirmModal({ title: `Покинуть «${ellipsize(g.name || 'Группа', 40)}»?`, text, confirmLabel: 'Покинуть' });
+    if (!ok) return;
+    const { error } = await supabaseClient.rpc('leave_group', { gid: String(gid) });
+    if (error) {
+      console.error('[rpc leave_group]', error);
+      alert('Не удалось покинуть группу: ' + error.message
+        + (/function|schema cache|could not find/i.test(error.message || '') ? '\n\nВыполните supabase_leave_group.sql в Supabase.' : ''));
+      return;
+    }
+    // чат группы и совместные чаты её match у меня больше не открываются
+    const keys = ['group:' + gid, ...groupMatches.filter((m) => m.fromGroup === String(gid) || m.toGroup === String(gid)).map((m) => 'match:' + m.id)];
+    for (const key of keys) { chatLast.delete(key); chatUnread.delete(key); chatHistoryCache.delete(key); }
+    if (chat && keys.includes(chatKey(chat))) leaveChat();
+    groupDetailsId = null;
+    await refreshGroupsWorld();
+    if (openApp === 'groups') showGroupsScreen();
+    refreshGroupsList();
+    paintChatsList();
+    refreshChatSummariesSoon();
   }
 
   async function startMatchVote(matchId) {
@@ -17145,6 +17203,8 @@
       return;
     }
 
+    const leaveBtn = e.target.closest('[data-leave-group]');
+    if (leaveBtn) { e.stopPropagation(); await leaveGroup(leaveBtn.dataset.leaveGroup); return; }
     const gearBtn = e.target.closest('[data-group-settings]');
     if (gearBtn) { e.stopPropagation(); showCreateGroupScreen(gearBtn.dataset.groupSettings); return; }
     const delBtn = e.target.closest('[data-group-delete]');
