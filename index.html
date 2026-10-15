@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-15 11:30">
+  <meta name="app-build" content="2026-10-15 13:40">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -3578,6 +3578,32 @@
     .avatar-pill { border-radius: 999px; padding: 8px 15px; font-weight: 600; transition: background .2s, color .2s, transform .4s var(--spring); }
     .avatar-pill:active, .avatar-swatch:active { transform: scale(.9); transition-duration: .08s; }
     .user-avatar-wrap { width: 44px; height: 44px; }
+    /* Человек идёт: аватар шагает — покачивается с ноги на ногу, а из-под ног назад, против хода, утекает след из светящихся точек */
+    .user-avatar-wrap.is-walking .user-avatar-marker,
+    .user-avatar-wrap.is-walking .user-dot-marker { animation: walk-step .38s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+    @keyframes walk-step {
+      0%   { transform: translateY(0) rotate(-5deg); }
+      50%  { transform: translateY(-3px) rotate(0); }
+      100% { transform: translateY(0) rotate(5deg); }
+    }
+    .walk-trail { position: absolute; left: 50%; top: 85%; width: 0; height: 0; z-index: 0; pointer-events: none; transform: rotate(var(--walk-angle, 0rad)); }
+    .user-avatar-wrap:not(.is-walking) .walk-trail { display: none; }
+    .walk-trail i {
+      position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 0 1.5px var(--you), 0 0 8px 1px var(--you);
+      opacity: 0; animation: walk-trail .9s linear infinite;
+    }
+    .walk-trail i:nth-child(2) { animation-delay: .3s; }
+    .walk-trail i:nth-child(3) { animation-delay: .6s; }
+    @keyframes walk-trail {
+      0%   { opacity: 0; transform: translateX(-4px) scale(1); }
+      15%  { opacity: .95; }
+      100% { opacity: 0; transform: translateX(-30px) scale(.35); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .user-avatar-wrap.is-walking .user-avatar-marker, .user-avatar-wrap.is-walking .user-dot-marker, .walk-trail i { animation: none; }
+      .walk-trail i { opacity: .6; transform: translateX(-12px); }
+    }
     .user-profile-avatar:not(.no-3d) { background: radial-gradient(circle at 50% 80%, rgba(var(--you-rgb), .2), transparent 70%), var(--field); }
     /* выбор пола при регистрации — портреты аватаров */
     .gender-opt .gender-ava {
@@ -4107,6 +4133,16 @@
     .chat-circle-dur { bottom: 12px; padding: 3px 9px; border-radius: 999px; font: 500 11px var(--font-ui); letter-spacing: .02em; }
     .chat-circle-sound { right: 33px; bottom: 33px; width: 28px; height: 28px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
     .chat-circle-sound svg { width: 15px; height: 15px; display: block; }
+    /* Кружок со звуком: чуть крупнее, по контуру — сколько уже прослушано (paintCircleRing, от верха по часовой).
+       Растёт в сторону ленты, а не за край экрана */
+    .chat-circle-wrap { transition: transform .4s var(--spring); transform-origin: 0 50%; }
+    .chat-msg.me .chat-circle-wrap { transform-origin: 100% 50%; }
+    .chat-circle-wrap.is-playing { transform: scale(1.1); z-index: 2; }
+    .chat-circle-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; opacity: 0; transition: opacity .25s; }
+    .chat-circle-wrap.is-playing .chat-circle-ring { opacity: 1; }
+    .chat-circle-ring circle { fill: none; stroke: rgba(255, 255, 255, .28); stroke-width: 2.6; }
+    .chat-circle-ring .ccr-on { stroke: #fff; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; }
+    @media (prefers-reduced-motion: reduce) { .chat-circle-wrap { transition: none; } }
 
     /* ── Карточка «Включить уведомления?» над панелью вкладок ── */
     .push-ask {
@@ -7682,6 +7718,92 @@
   let userAvatarCfgById = new Map();
   let groupMemberProfiles = new Map();
 
+  /* ── Человек идёт ──
+     Пока у друга открыто приложение, его телефон в движении присылает новую точку раз в несколько секунд.
+     Маркер не прыгает к ней, а равномерно доходит за то же время, что прошло с прошлой точки, — к приходу
+     следующей как раз на месте, и движение выглядит непрерывным. Пока человек в пути, аватар шагает
+     (класс is-walking); перестали приходить новые места — через 15 секунд останавливается */
+  const walkById = new Map();    // userId → { at: когда пришла прошлая точка, until: идёт до, dur: ход до новой точки, angle }
+  const glideById = new Map();   // userId → { from, to, t0, dur }: маркер в пути
+  let glideRaf = 0;
+  function metersBetween(a, b) {
+    const dy = (b[1] - a[1]) * 111320, dx = (b[0] - a[0]) * 111320 * Math.cos(a[1] * Math.PI / 180);
+    return Math.hypot(dx, dy);
+  }
+  // направление хода на экране (с поворотом и наклоном карты), радианы от оси x по часовой
+  function screenAngle(a, b) {
+    try {
+      const xy = (p) => Array.isArray(p) ? p : [p.x, p.y];
+      const p = xy(map2gis.project(a)), q = xy(map2gis.project(b));
+      if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 0.5) return Math.atan2(q[1] - p[1], q[0] - p[0]);
+    } catch {}
+    return Math.atan2(-(b[1] - a[1]), (b[0] - a[0]) * Math.cos(a[1] * Math.PI / 180));
+  }
+  // Новая точка человека по realtime: шагнул ли он и как долго вести маркер
+  function noteMovement(userId, prev, next) {
+    const now = Date.now();
+    const w = walkById.get(userId) || { at: 0, until: 0, dur: 0, angle: 0, timer: 0 };
+    const gap = w.at ? now - w.at : 2000;
+    w.at = now;
+    clearTimeout(w.timer);
+    const d = prev ? metersBetween(prev, next) : 0;
+    if (d >= 6 && d < 400) {
+      w.dur = Math.min(Math.max(gap, 800), 8000);
+      w.angle = screenAngle(prev, next);
+      w.until = now + Math.max(w.dur + 6000, 15000);
+      w.timer = setTimeout(() => { w.until = 0; paintWalk(userId); }, w.until - now);
+    } else {
+      // стоит на месте, или перенёсся далеко (ехал, открыл приложение в другом месте) — без шагов
+      w.dur = 0; w.until = 0;
+    }
+    walkById.set(userId, w);
+  }
+  function isWalking(userId) { const w = walkById.get(userId); return !!(w && w.until > Date.now()); }
+  function paintWalk(userId) {
+    const fm = friendMarkers.get(userId);
+    if (!fm || !fm.el) return;
+    const on = isWalking(userId);
+    fm.el.classList.toggle('is-walking', on);
+    if (!on) return;
+    fm.el.style.setProperty('--walk-angle', walkById.get(userId).angle + 'rad');
+    if (fm.el.querySelector('.walk-trail')) return;
+    fm.el.insertAdjacentHTML('afterbegin', '<span class="walk-trail" aria-hidden="true"><i></i><i></i><i></i></span>');
+    // у кружка вместо фигурки след выходит из самого кружка
+    const dot = fm.el.querySelector(':scope > .user-dot-marker');
+    if (dot) { const c = (dot.offsetWidth || 14) / 2; Object.assign(fm.el.firstElementChild.style, { left: dot.offsetLeft + c + 'px', top: dot.offsetTop + c + 'px' }); }
+  }
+  function moveFriendMarker(userId, fm, to) {
+    const g = glideById.get(userId);
+    if (g && g.to[0] === to[0] && g.to[1] === to[1]) return;   // уже идёт туда
+    const from = fm.shown || fm.location || to;
+    fm.location = to;
+    const w = walkById.get(userId);
+    const dur = isWalking(userId) ? w.dur : 0;
+    if (!dur || document.hidden || metersBetween(from, to) > 400) {
+      glideById.delete(userId);
+      try { fm.marker.setCoordinates(to); } catch {}
+      fm.shown = to;
+      return;
+    }
+    glideById.set(userId, { from, to, t0: performance.now(), dur });
+    if (!glideRaf) glideRaf = requestAnimationFrame(glideStep);
+  }
+  function glideStep(t) {
+    glideRaf = 0;
+    let arrived = false;
+    for (const [id, g] of glideById) {
+      const fm = friendMarkers.get(id);
+      if (!fm) { glideById.delete(id); continue; }
+      const k = Math.min(1, (t - g.t0) / g.dur);
+      const p = [g.from[0] + (g.to[0] - g.from[0]) * k, g.from[1] + (g.to[1] - g.from[1]) * k];
+      try { fm.marker.setCoordinates(p); } catch {}
+      fm.shown = p;
+      if (k >= 1) { glideById.delete(id); arrived = true; }
+    }
+    if (arrived) scheduleWishDeclutter();
+    if (glideById.size) glideRaf = requestAnimationFrame(glideStep);
+  }
+
   /* Кого показываем на карте:
      — друзей;
      — участников моих групп (где я лидер);
@@ -8467,6 +8589,7 @@
     if (fm) { try { fm.marker.destroy(); } catch {} }
     friendMarkers.delete(userId);
     friendMarkerCoords.delete(userId);
+    glideById.delete(userId);
   }
 
   // Возвращает false, если человек стоит в компании у другого и своего маркера у него нет (cl — mapClusters)
@@ -8506,8 +8629,8 @@
         existing.personName === (person.name || '') &&
         existing.personAvatar === (person.avatar || '');
       if (same) {
-        try { existing.marker.setCoordinates(coords); } catch {}
-        existing.location = coords;
+        moveFriendMarker(userId, existing, coords);
+        paintWalk(userId);
         friendMarkerCoords.set(userId, { coords, person });
         scheduleWishDeclutter();
         return true;
@@ -8515,16 +8638,20 @@
       try { existing.marker.destroy(); } catch {}
       friendMarkers.delete(userId);
     }
+    // маркер собирается заново посреди пути — встаёт туда, где был, и продолжает идти
+    const start = (existing && glideById.has(userId) && existing.shown) || coords;
     const html = buildFriendMarkerElement(person, isFriend, avatarCfg, userId, groupLabel, ownedGroups, clouds, formation);
     const marker = new mapgl.HtmlMarker(map2gis, {
-      coordinates: coords,
+      coordinates: start,
       html,
       anchor: [0.5, 0.85],
       preventMapInteractions: true, // как у собственного маркера — клик не уходит в карту
     });
     friendMarkers.set(userId, {
       marker,
+      el: html,
       location: coords,
+      shown: start,
       avatarKey: cfgKey,
       isFriend,
       groupLabel,
@@ -8535,6 +8662,9 @@
       personName: person.name || '',
       personAvatar: person.avatar || '',
     });
+    const fresh = friendMarkers.get(userId);
+    if (start !== coords) moveFriendMarker(userId, fresh, coords);   // путь тот же — его ведёт дальше glideStep
+    paintWalk(userId);
     friendMarkerCoords.set(userId, { coords, person });
     scheduleWishDeclutter();
     return true;
@@ -8559,6 +8689,7 @@
       return;
     }
 
+    noteMovement(userId, userLocationsById.get(userId), [row.lon, row.lat]);
     userLocationsById.set(userId, [row.lon, row.lat]);
     if (row.avatar_config && typeof row.avatar_config === 'object') {
       userAvatarCfgById.set(userId, row.avatar_config);
@@ -8576,8 +8707,9 @@
   }
 
   /* Геопозиция с телефона при точном режиме приходит часто — в движении до раза в секунду. Каждую на сервер
-     не шлём: это запись в базу и рассылка всем, кто видит человека на карте. Уходит, когда сдвинулись заметно
-     (на 25 м) или прошло 15 секунд; свой маркер на карте при этом двигается сразу */
+     не шлём: это запись в базу и рассылка всем, кто видит человека на карте. Человек идёт (сдвинулся больше, чем
+     на погрешность GPS, и не меньше 10 м) — точка уходит не чаще раза в 4 секунды, чтобы друзья видели его в пути;
+     стоит на месте — раз в 15 секунд. Свой маркер на карте при этом двигается сразу */
   let locSent = null, locTimer = 0;   // что и когда последний раз ушло на сервер; отложенная отправка последней точки
 
   /* ── Несколько устройств на одном аккаунте ──
@@ -8597,6 +8729,7 @@
   let otherDeviceAt = 0;        // когда место последний раз писало другое моё устройство
   let otherDeviceSpot = null;   // и какое
   let deviceSpot = null;        // место по датчикам этого устройства
+  let deviceAccuracy = 0;       // и его погрешность, м
   let ownRowCheckedAt = 0;
   function deviceActive() { return !document.hidden && Date.now() - userInputAt < DEVICE_IDLE_MS; }
   function otherDeviceLeads() { return !IS_PHONE && Date.now() - otherDeviceAt < OTHER_DEVICE_MS; }
@@ -8648,10 +8781,14 @@
     clearTimeout(locTimer);
     const [lon, lat] = coords;
     if (locSent) {
-      const wait = 15000 - (Date.now() - locSent.at);
+      const since = Date.now() - locSent.at;
       const dy = (lat - locSent.lat) * 111320, dx = (lon - locSent.lon) * 111320 * Math.cos(lat * Math.PI / 180);
+      // стоя на месте, точка «гуляет» в пределах погрешности — это ещё не шаг
+      const step = Math.max(10, Math.min(deviceAccuracy || 0, 30));
+      const later = (ms) => { locTimer = setTimeout(() => { if (settings.geolocation) upsertMyLocation(coords); }, ms); };
       // остановились — новых точек телефон может больше не прислать, поэтому последняя всё равно уйдёт, чуть позже
-      if (wait > 0 && Math.hypot(dx, dy) < 25) { locTimer = setTimeout(() => { if (settings.geolocation) upsertMyLocation(coords); }, wait); return; }
+      if (Math.hypot(dx, dy) < step) { if (since < 15000) { later(15000 - since); return; } }
+      else if (since < 4000) { later(4000 - since); return; }
     }
     upsertMyLocation(coords);
   }
@@ -9970,6 +10107,7 @@
   function takeDevicePosition(pos, centerMap) {
     const coords = [pos.coords.longitude, pos.coords.latitude];
     deviceSpot = coords;
+    deviceAccuracy = pos.coords.accuracy || 0;
     const spot = otherDeviceLeads() && otherDeviceSpot ? otherDeviceSpot : coords;
     lastUserLocation = spot;
     if (centerMap && map2gis) { map2gis.setCenter(spot); map2gis.setZoom(16); }
@@ -12465,6 +12603,7 @@
     if (m.kind === 'circle') {
       return `<div class="chat-circle-wrap" data-circle>
         <video class="chat-circle" ${src} playsinline muted loop autoplay preload="metadata"></video>
+        <svg class="chat-circle-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48.4"/><circle class="ccr-on" cx="50" cy="50" r="48.4" pathLength="100"/></svg>
         ${m.duration ? `<span class="chat-circle-dur">${fmtDuration(m.duration)}</span>` : ''}
         <span class="chat-circle-sound" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.75v4.5h3.4l4.6 3.9V5.85l-4.6 3.9H4z"/><path d="m16.25 9.75 4.5 4.5M20.75 9.75l-4.5 4.5"/></svg></span>
       </div>`;
@@ -13892,16 +14031,36 @@
     const video = wrap.querySelector('video');
     if (!video || !video.src) return;
     if (video.muted) {
+      // играет одно сообщение: другой кружок со звуком возвращается к беззвучному повтору, голосовое — на паузу
+      if (nowPlaying && nowPlaying !== video) { if (nowPlaying.tagName === 'VIDEO') stopChatPlayer(); else nowPlaying.pause(); }
       video.muted = false; video.loop = false; video.currentTime = 0;
       video.play().catch(() => {});
+      const ring = wrap.querySelector('.ccr-on');
+      if (ring) ring.style.strokeDashoffset = '100';
       wrap.classList.add('is-playing');
       video.onended = () => {
         video.muted = true; video.loop = true; video.onended = null;
-        wrap.classList.remove('is-playing');
+        const w = video.closest('.chat-circle-wrap');   // лента могла перерисоваться — кружок тот же, обёртка новая
+        if (w) w.classList.remove('is-playing');
         video.play().catch(() => {});
       };
+      // уже крутился без звука — события «play» не будет, полоску «сейчас играет» включаем сами
+      nowPlaying = video;
+      syncChatPlayer();
     } else if (video.paused) video.play().catch(() => {});
     else video.pause();
+  }
+  // Шкала по контуру кружка: сколько прослушано. Плавно — по кадрам, пока кружок звучит
+  let circleRingRaf = 0;
+  function paintCircleRing() {
+    circleRingRaf = 0;
+    const v = nowPlaying;
+    if (!v || v.tagName !== 'VIDEO' || !v.isConnected || v.muted) return;
+    const wrap = v.closest('.chat-circle-wrap'), ring = wrap && wrap.querySelector('.ccr-on');
+    const msgEl = v.closest('.chat-msg[data-msg-id]'), m = msgEl ? chatMsgById(msgEl.dataset.msgId) : null;
+    const dur = (isFinite(v.duration) && v.duration > 0 ? v.duration : 0) || (m && Number(m.duration)) || 0;
+    if (ring) ring.style.strokeDashoffset = String(100 - (dur ? Math.min(100, v.currentTime / dur * 100) : 0));
+    if (!v.paused && !v.ended) circleRingRaf = requestAnimationFrame(paintCircleRing);
   }
 
   /* ── Голосовое: свой плеер ──
@@ -13941,6 +14100,7 @@
     if (!a || !a.getAttribute('src')) return;
     if (!a.paused) { a.pause(); return; }
     winBody.querySelectorAll('.chat-voice audio').forEach((o) => { if (o !== a) o.pause(); });   // играет одно голосовое
+    if (nowPlaying && nowPlaying.tagName === 'VIDEO') stopChatPlayer();                          // и не вместе с кружком
     a.play().catch(() => {});
   }
   function seekVoice(box, clientX) {
@@ -14111,11 +14271,33 @@
   const chatSqlHint = (error) => /function|schema cache|could not find|pinned/i.test(error.message || '')
     ? '\n\nВыполните supabase_chat_actions.sql в Supabase.' : '';
 
+  /* Лента перерисовалась (сервер подтвердил отправку, пришла отметка о прочтении, новое сообщение), а голосовое
+     или кружок в ней звучит — на место нового плеера ставим тот же, играющий: звук не обрывается, полоска
+     «сейчас играет» не пропадает. Своё только что отправленное сообщение после подтверждения получает другой
+     номер — тогда находим его по файлу */
+  function keepPlayingMedia(body, el, key) {
+    const sel = el.tagName === 'AUDIO' ? '.chat-voice audio' : 'video.chat-circle';
+    const all = [...body.querySelectorAll(sel)];
+    const fresh = (key.id && all.find((x) => (x.closest('.chat-msg[data-msg-id]') || { dataset: {} }).dataset.msgId === key.id))
+      || (key.path && all.find((x) => x.dataset.mediaPath === key.path))
+      || (key.src && all.find((x) => x.getAttribute('src') === key.src));
+    if (!fresh) { nowPlaying = null; el.pause(); syncChatPlayer(); return; }
+    if (!el.dataset.mediaPath && fresh.dataset.mediaPath) el.dataset.mediaPath = fresh.dataset.mediaPath;
+    fresh.replaceWith(el);   // в том же шаге — браузер не ставит его на паузу
+    if (el.tagName === 'AUDIO') paintVoice(el.closest('.chat-voice'));
+    else if (key.loud) el.closest('.chat-circle-wrap').classList.add('is-playing');
+    syncChatPlayer();
+    if (el.tagName === 'VIDEO') paintCircleRing();
+  }
   function rerenderChatBody() {
     const body = winBody.querySelector('#chat-view-body');
     if (!body || !chat) return;
     const stick = chatFollowing(chat);
+    const playing = nowPlaying && body.contains(nowPlaying) ? nowPlaying : null;
+    const playingKey = playing && { id: (playing.closest('.chat-msg[data-msg-id]') || { dataset: {} }).dataset.msgId,
+      path: playing.dataset.mediaPath || '', src: playing.getAttribute('src') || '', loud: !!playing.closest('.chat-circle-wrap.is-playing') };
     body.innerHTML = chat.messages.length ? chat.messages.map(chatBubbleHtml).join('') : chatEmptyHtml();
+    if (playing) keepPlayingMedia(body, playing, playingKey);
     syncChatDates(body);
     syncChatRuns(body, false);
     fitChatBubbles(body.children);
@@ -16842,7 +17024,7 @@
     if (e.target.tagName === 'IMG' && e.target.closest('.ph-slide')) syncPhotoHeroHeight(e.target.closest('.photo-hero'));
   }, true);
   // голосовые: события плеера не всплывают — ловим на погружении и перерисовываем кнопку, волну и время
-  ['play', 'pause', 'timeupdate', 'ended', 'loadedmetadata'].forEach((type) => winBody.addEventListener(type, (e) => {
+  ['play', 'pause', 'timeupdate', 'ended', 'loadedmetadata', 'volumechange'].forEach((type) => winBody.addEventListener(type, (e) => {
     const t = e.target;
     const box = t.tagName === 'AUDIO' && t.closest('.chat-voice');
     const circle = t.tagName === 'VIDEO' && t.closest('.chat-circle-wrap');
@@ -16855,7 +17037,20 @@
     if (type === 'play' && (box || !t.muted)) nowPlaying = t;
     if (nowPlaying === t && (type === 'ended' || (circle && t.muted))) nowPlaying = null;
     if (nowPlaying === t || type === 'ended' || type === 'play') syncChatPlayer();
+    if (circle && nowPlaying === t && !circleRingRaf) paintCircleRing();
+    if (box && type === 'ended') playNextVoice(t);
   }, true));
+  /* Голосовое дослушали до конца — сразу играет следующее голосовое ниже в переписке (своё или чужое), и так
+     далее, как в Telegram. Только после конца сам по себе: пауза или крестик очередь не продолжают */
+  function playNextVoice(a) {
+    const list = [...winBody.querySelectorAll('#chat-view-body .chat-voice audio')];
+    const next = list[list.indexOf(a) + 1];
+    if (!next || !a.isConnected) return;
+    const box = next.closest('.chat-voice');
+    if (next.getAttribute('src')) { toggleVoice(box); return; }
+    // ссылка на файл ещё подставляется — подождём её немного
+    setTimeout(() => { if (next.isConnected && next.paused && !nowPlaying) toggleVoice(box); }, 800);
+  }
   winBody.addEventListener('click', (e) => {
     const hero = e.target.closest('.photo-hero[data-photo-hero]');
     if (hero) onPhotoHeroTap(hero, e.clientX);
