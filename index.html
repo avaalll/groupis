@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-14 20:33">
+  <meta name="app-build" content="2026-10-15 09:10">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -1397,6 +1397,115 @@
     .gx-wait-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--you); animation: match-btn-ping 2.4s cubic-bezier(.2, .7, .3, 1) infinite; }
     .gx-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
     .gx-actions .gx-wide { grid-column: 1 / -1; }
+    .gx-share { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .gx-share svg { width: 18px; height: 18px; flex: none; }
+
+    /* ── Создание и настройки группы (showCreateGroupScreen): поверх стилей .pe ── */
+    .gf-hero { display: flex; align-items: center; gap: 16px; padding: 8px 4px 0; }
+    .gf-photo { position: relative; flex: none; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 37px; transition: transform .4s var(--spring); }
+    .gf-photo:active { transform: scale(.95); transition-duration: .08s; }
+    .gf-photo .gx-ava-ring { display: block; margin: 0; }
+    .gf-photo .gx-ava-ring, .gf-photo .gx-ava-ring::after { border-radius: 33px; }
+    .gf-photo .gx-ava { width: 92px; height: 92px; border-radius: 28px; font-size: 36px; }
+    .gf-cam {
+      position: absolute; right: -2px; bottom: -2px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--act); color: var(--act-ink); box-shadow: 0 0 0 3px var(--win), var(--prism-glow);
+    }
+    .gf-cam svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+    .gf-photo-acts { display: grid; gap: 6px; justify-items: start; min-width: 0; }
+    .gf-hint { font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+    .gf-remove { padding: 0; border: 0; background: none; color: var(--hot); font: 600 13px var(--font-ui); cursor: pointer; }
+    .gf-people { list-style: none; margin: 0; padding: 0; }
+    .gf-people .person-card { padding: 11px 16px; border-radius: 0; cursor: pointer; }
+    .gf-people .person-card + .person-card { box-shadow: inset 0 1px 0 var(--win-line); }
+    .gf-people .person-card[aria-checked="true"] { background: var(--row-hover); }
+    .gf-people .person-check { border-radius: 50%; }
+    .gf-empty { padding: 16px; font-size: 13px; color: var(--ink-soft); text-align: center; }
+
+    /* ── Плашка группы, которой поделились в чате (chatShareHtml) ── */
+    .chat-msg.is-share { padding: 6px; width: min(300px, 100%); max-width: 300px; }
+    .chat-share {
+      display: grid; gap: 8px; padding: 12px; border-radius: 16px; cursor: pointer; text-align: left;
+      background: color-mix(in srgb, var(--win) 88%, transparent); color: var(--ink);
+      box-shadow: inset 0 0 0 1px var(--win-line); transition: transform .3s var(--spring);
+    }
+    .chat-share:active { transform: scale(.98); }
+    .cs-cap { font: 600 11px/1 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+    .cs-cap::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 0; border-radius: 2px; background: var(--prism); vertical-align: middle; }
+    .cs-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .cs-ava {
+      flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: #fff; font: 700 18px var(--font-ui);
+      background: linear-gradient(145deg, var(--c1), var(--c3)) center / cover no-repeat;
+    }
+    .cs-main { min-width: 0; }
+    .cs-name { font: 600 15px/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cs-sub { font-size: 12px; line-height: 1.35; color: var(--ink-soft); }
+    .cs-wish { font-size: 13px; line-height: 1.35; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .cs-rate { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .cs-rate-btn {
+      padding: 8px 6px; border: 0; border-radius: 999px; cursor: pointer; background: var(--field); color: var(--ink);
+      font: 600 13px var(--font-ui); transition: background .2s, transform .3s var(--spring);
+    }
+    .cs-rate-btn:active { transform: scale(.94); }
+    .cs-rate-btn.is-on { background: var(--act); color: var(--act-ink); }
+    .chat-msg.is-share > .chat-msg-time { margin: 6px 4px 0 10px; }
+
+    /* ── Колода запросов на match над картой (openMatchDeck) ── */
+    .mdeck {
+      position: fixed; z-index: 28; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+      display: grid; gap: 8px; padding: 0 max(12px, env(safe-area-inset-left, 0px)); pointer-events: none;
+      animation: mdeck-in .45s var(--spring) both;
+    }
+    .mdeck.is-out { opacity: 0; transform: translateY(20px); transition: opacity .22s ease, transform .22s ease; }
+    @keyframes mdeck-in { from { opacity: 0; transform: translateY(30px); } }
+    body.app-window .mdeck { display: none; }
+    .mdeck-head {
+      justify-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 999px; pointer-events: auto;
+      background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: 0 12px 28px -12px var(--glass-shadow);
+      -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+    }
+    .mdeck-title { font: 600 13px var(--font-ui); }
+    .mdeck-x { width: 30px; height: 30px; border: 0; border-radius: 50%; background: var(--field); color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer; }
+    .mdeck-row {
+      display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px 10px; pointer-events: auto;
+      scrollbar-width: none; overscroll-behavior-x: contain; justify-content: safe center;
+    }
+    .mdeck-row::-webkit-scrollbar { display: none; }
+    .mdeck-card {
+      position: relative; flex: 0 0 232px; scroll-snap-align: center; display: grid; gap: 8px; align-content: start; padding: 14px; border-radius: 22px;
+      background: var(--win); color: var(--ink); cursor: pointer; box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .55), inset 0 0 0 1px var(--win-line);
+      transition: transform .35s var(--spring), box-shadow .25s;
+    }
+    .mdeck-card.is-active { transform: translateY(-4px); }
+    .mdeck-card.is-active::before {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
+      background: conic-gradient(from var(--gx-turn), var(--c1), var(--c2), var(--c3), var(--c4), var(--c1));
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+      animation: gx-turn 5s linear infinite;
+    }
+    .mdeck-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .mdeck-ava {
+      flex: none; width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; color: #fff; font: 700 19px var(--font-ui);
+      background: linear-gradient(145deg, var(--c1), var(--c3)) center / cover no-repeat;
+    }
+    .mdeck-main { min-width: 0; }
+    .mdeck-name { font: 600 15px/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mdeck-sub, .mdeck-to { font-size: 12px; line-height: 1.35; color: var(--ink-soft); }
+    .mdeck-wish { font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .mdeck-open {
+      height: 38px; border: 0; border-radius: 999px; cursor: pointer; background: var(--prism); color: var(--prism-ink); font: 600 13px var(--font-ui);
+      transition: transform .3s var(--spring);
+    }
+    .mdeck-open:active { transform: scale(.95); }
+    @media (max-width: 640px) {
+      .mdeck { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+      .mdeck-card { flex-basis: 220px; }
+    }
+    @media (max-height: 480px) and (orientation: landscape) {
+      .mdeck { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+      .mdeck-wish { display: none; }
+    }
     .gx-wish { padding: 4px 8px 2px; }   /* превью облака шире текста на 8px с каждой стороны (.wish-preview) */
     @media (prefers-reduced-motion: reduce) {
       .gx-ava-ring::after, .gx-cta::before, .gx-disc, .gx-lens path, .gx-ring, .gx-wait-dot { animation: none !important; }
@@ -6651,6 +6760,9 @@
     }));
     cleanupMyExpiredGroupWishes(gr || []);
     scheduleStateSave();
+    // приглашения и запросы на match могли загрузиться раньше групп — тогда их ещё не к чему было привязать
+    syncRequestBadges();
+    syncMatchButton();
   }
 
   /* ═══════ MATCH МЕЖДУ ГРУППАМИ ═══════
@@ -6663,11 +6775,7 @@
     const { data, error } = await supabaseClient.from('group_matches').select('*');
     if (error) { console.warn('[group_matches] load:', error.message); return; }
     const accepted = new Set(groupMatches.filter((m) => m.status === 'accepted').map((m) => m.id));
-    groupMatches = (data || []).map((r) => ({
-      id: String(r.id), fromGroup: String(r.from_group), toGroup: String(r.to_group),
-      fromOwner: r.from_owner, toOwner: r.to_owner, status: r.status, createdAt: r.created_at,
-      voteState: r.vote_state || 'none', voteStartedBy: r.vote_started_by || null,
-    }));
+    groupMatches = (data || []).map(mapMatchRow);
     scheduleStateSave();
     const fresh = groupMatches.filter((m) => m.status === 'accepted' && !accepted.has(m.id));
     if (fresh.length) onNewMatchChats(fresh);
@@ -6685,19 +6793,49 @@
     refreshChatSummariesSoon();
   }
 
+  function mapMatchRow(r) {
+    return {
+      id: String(r.id), fromGroup: String(r.from_group), toGroup: String(r.to_group),
+      fromOwner: r.from_owner, toOwner: r.to_owner, status: r.status, createdAt: r.created_at,
+      voteState: r.vote_state || 'none', voteStartedBy: r.vote_started_by || null,
+    };
+  }
+  /* Запрос на match приняли или отклонили — изменение приходит по realtime со всей строкой. Применяем его сразу:
+     анимация match (или отказа) начинается без ожидания полной перезагрузки групп, которая идёт следом */
+  function applyMatchRealtime(payload) {
+    const r = payload && payload.new;
+    if (!currentUser || !r || r.id == null || !r.status) return;
+    const m = mapMatchRow(r);
+    const i = groupMatches.findIndex((x) => x.id === m.id);
+    const was = i >= 0 ? groupMatches[i] : null;
+    if (i >= 0) groupMatches[i] = m; else groupMatches.push(m);
+    if (m.status === 'accepted' && (!was || was.status !== 'accepted')) onNewMatchChats([m]);
+    noteAcceptedMatches();
+    noteDeclinedMatches();
+    syncMatchButton();
+  }
+
   /* ── Кнопка «Match» ──
      Пока запрос на match ждёт ответа, у лидеров обеих групп справа сверху пульсирует кнопка «Match»: у того, кому
      прислали запрос, — открыть группу, которая его прислала, и ответить; у того, кто отправил, — посмотреть, кому
      он отправлен (там пульс спокойнее). Капсула с уведомлениями и фильтрами отъезжает влево и уступает ей место. */
   const matchBtn = document.getElementById('match-btn');
   let matchBtnGroup = null;   // чью карточку открыть по нажатию
+  let matchBtnItems = [];     // все запросы, которые показывает кнопка: [{ m, other, mine, incoming }]
+  /* Кнопка видна всем участникам групп, а не только лидерам: участник тоже может посмотреть, кто предлагает match
+     его группе (ответить — принять или отклонить — может только лидер) */
   function syncMatchButton() {
     const myId = currentUser && currentUser.id;
     const newest = (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
     const pending = myId ? groupMatches.filter((m) => m.status === 'pending') : [];
-    const incoming = pending.filter((m) => m.toOwner === myId).sort(newest);
-    const outgoing = pending.filter((m) => m.fromOwner === myId).sort(newest);
-    matchBtnGroup = incoming.length ? incoming[0].fromGroup : outgoing.length ? outgoing[0].toGroup : null;
+    const inMine = (gid) => isGroupParticipant(groupById(gid), myId);
+    const incoming = pending.filter((m) => m.toOwner === myId || inMine(m.toGroup)).sort(newest);
+    const outgoing = pending.filter((m) => m.fromOwner === myId || inMine(m.fromGroup)).sort(newest);
+    matchBtnItems = incoming.length
+      ? incoming.map((m) => ({ m, other: m.fromGroup, mine: m.toGroup, incoming: true }))
+      : outgoing.map((m) => ({ m, other: m.toGroup, mine: m.fromGroup, incoming: false }));
+    matchBtnGroup = matchBtnItems.length ? matchBtnItems[0].other : null;
+    if (matchDeck) { if (matchBtnItems.length > 1) renderMatchDeck(); else closeMatchDeck(); }
     const on = !!matchBtnGroup;
     matchBtn.hidden = !on;
     matchBtn.classList.toggle('is-waiting', !incoming.length);
@@ -6730,9 +6868,92 @@
   }
   matchBtn.addEventListener('click', () => {
     if (!matchBtnGroup) return;
+    // несколько запросов — все группы сразу, карточками над картой
+    if (matchBtnItems.length > 1) { if (matchDeck) closeMatchDeck(); else openMatchDeck(); return; }
     showApp('groups', matchBtn);
     showGroupDetailsScreen(matchBtnGroup, () => closeApp());
   });
+
+  /* ── Колода запросов на match ──
+     Над картой — карточки всех групп, которые предлагают match (или которым его предложили вы). Нажатие на карточку
+     приближает карту к этой группе и выделяет карточку; «Посмотреть» открывает её карточку целиком. Закрыть —
+     крестик, повторное нажатие на кнопку Match или переход в любой раздел */
+  let matchDeck = null, matchDeckActive = null;
+  function openMatchDeck() {
+    showMapApp();
+    if (!matchDeck) {
+      matchDeck = document.createElement('section');
+      matchDeck.className = 'mdeck';
+      matchDeck.setAttribute('aria-label', 'Запросы на match');
+      document.body.appendChild(matchDeck);
+      matchDeck.addEventListener('click', onMatchDeckClick);
+    }
+    matchDeckActive = null;
+    renderMatchDeck();
+  }
+  function closeMatchDeck() {
+    if (!matchDeck) return;
+    const el = matchDeck;
+    matchDeck = null;
+    el.classList.add('is-out');
+    setTimeout(() => el.remove(), 240);
+  }
+  function renderMatchDeck() {
+    if (!matchDeck) return;
+    const incoming = matchBtnItems.length && matchBtnItems[0].incoming;
+    const cards = matchBtnItems.map(({ m, other, mine }) => {
+      const g = groupById(other), my = groupById(mine);
+      if (!g) return '';
+      const url = safeUrl(g.photo), st = groupStatsText(g);
+      return `<article class="mdeck-card${String(other) === matchDeckActive ? ' is-active' : ''}" data-mdeck-group="${escapeHtml(other)}" role="button" tabindex="0">
+        <div class="mdeck-top">
+          <span class="mdeck-ava"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : escapeHtml(firstChar((g.name || '?').trim()).toUpperCase() || '?')}</span>
+          <div class="mdeck-main">
+            <div class="mdeck-name">${escapeHtml(g.name || 'Группа')}</div>
+            <div class="mdeck-sub">${escapeHtml(membersLabel(groupPeople(g).length))}${st ? ' · ' + escapeHtml(st) : ''}</div>
+          </div>
+        </div>
+        ${g.wish ? `<div class="mdeck-wish">☁ ${escapeHtml(g.wish)}</div>` : ''}
+        <div class="mdeck-to">${incoming ? 'Хотят match с' : 'Запрос от'} «${escapeHtml(ellipsize((my && my.name) || 'Группа', 22))}»</div>
+        <button type="button" class="mdeck-open" data-mdeck-open="${escapeHtml(other)}" data-mdeck-match="${escapeHtml(m.id)}">Посмотреть группу</button>
+      </article>`;
+    }).join('');
+    matchDeck.innerHTML = `
+      <div class="mdeck-head">
+        <span class="mdeck-title">${incoming ? 'Хотят match' : 'Ждут ответа'}</span>
+        <span class="unread-pill">${matchBtnItems.length}</span>
+        <span class="sub-toolbar-spacer"></span>
+        <button type="button" class="mdeck-x" data-mdeck-close aria-label="Закрыть" title="Закрыть">×</button>
+      </div>
+      <div class="mdeck-row">${cards}</div>`;
+  }
+  // Карта — к лидеру группы: там стоит её компания и висит её иконка
+  function flyToGroup(gid) {
+    const g = groupById(gid), spot = g && personSpot(g.ownerId);
+    if (!spot || !map2gis) return false;
+    try { map2gis.setCenter(spot, { duration: 700 }); map2gis.setZoom(15.5, { duration: 700 }); }
+    catch { try { map2gis.setCenter(spot); map2gis.setZoom(15.5); } catch {} }
+    return true;
+  }
+  function onMatchDeckClick(e) {
+    if (e.target.closest('[data-mdeck-close]')) { closeMatchDeck(); return; }
+    const open = e.target.closest('[data-mdeck-open]');
+    if (open) {
+      const gid = open.dataset.mdeckOpen;
+      closeMatchDeck();
+      showApp('groups', matchBtn);
+      showGroupDetailsScreen(gid, () => { closeApp(); if (matchBtnItems.length > 1) openMatchDeck(); });
+      return;
+    }
+    const card = e.target.closest('[data-mdeck-group]');
+    if (!card) return;
+    const gid = card.dataset.mdeckGroup;
+    matchDeckActive = gid;
+    matchDeck.querySelectorAll('.mdeck-card').forEach((c) => c.classList.toggle('is-active', c === card));
+    card.scrollIntoView({ inline: 'center', block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    // группы нет на карте (скрыта фильтрами или место лидера неизвестно) — сразу её карточка
+    if (!flyToGroup(gid)) card.querySelector('[data-mdeck-open]').click();
+  }
   // другой размер экрана, появилась или пропала кнопка «Установить», догрузился шрифт — подгоняем заново
   addEventListener('resize', fitMatchButton);
   ['beforeinstallprompt', 'appinstalled'].forEach((type) => addEventListener(type, () => setTimeout(fitMatchButton, 0)));
@@ -6790,7 +7011,7 @@
         if (!currentUser) { matchFxQueue = []; break; }
         // при запуске группы грузятся вместе с match — даём им пару секунд, чтобы показать названия и фото
         const [m, k] = matchFxQueue[0];
-        for (let i = 0; i < 10 && !(groupById(m.fromGroup) && groupById(m.toGroup)); i++) await new Promise((r) => setTimeout(r, 500));
+        for (let i = 0; i < 30 && !(groupById(m.fromGroup) && groupById(m.toGroup)); i++) await new Promise((r) => setTimeout(r, 150));
         matchFxQueue.shift();
         // об отказе узнаёт только группа, которая предлагала match
         if (k === 'no' && !isGroupParticipant(groupById(m.fromGroup), currentUser.id)) continue;
@@ -7307,7 +7528,7 @@
     const chGroupsWorld = chan('rt:groups_world')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, scheduleGroupsWorldRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, scheduleGroupsWorldRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_matches' }, scheduleGroupsWorldRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_matches' }, (payload) => { applyMatchRealtime(payload); scheduleGroupsWorldRefresh(); })
       .subscribe();
     rtChannels.push(chGroupsWorld);
 
@@ -10390,31 +10611,53 @@
                 <div class="person-handle">${escapeHtml(p.handle || '')}${invitedIds.has(p.id) ? ' · приглашение отправлено' : friendIdSet.has(p.id) ? '' : ' · участник, не в друзьях'}</div>
               </div>
             </li>`).join('')
-        : `<div class="empty-msg">Сначала добавьте друзей.</div>`;
+        : `<li class="gf-empty">Сначала добавьте друзей — их можно будет пригласить.</li>`;
 
+      // Форма — как «Редактировать профиль»: фото группы в спектральной рамке, поля и состав — карточками,
+      // кнопки прилипают к низу окна
       winBody.innerHTML = `
-        <form class="group-form" id="group-form" novalidate>
-          <div class="group-photo-row">
-            <div id="group-photo" class="group-photo" ${groupPhoto ? `style="background-image:url('${safeUrl(groupPhoto)}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? firstChar(editing.name).toUpperCase() : 'Г'))}</div>
-            <div class="avatar-edit-side">
-              <button type="button" class="btn" id="group-photo-pick">Выбрать фото</button>
-              <button type="button" class="btn-ghost" id="group-photo-remove" ${groupPhoto ? '' : 'hidden'}>Удалить фото</button>
-              <input type="file" id="group-photo-input" accept="image/*" hidden>
+        <form class="pe gf" id="group-form" novalidate>
+          <section class="gf-hero">
+            <button type="button" class="gf-photo" id="group-photo-pick" aria-label="Выбрать фото группы">
+              <span class="gx-ava-ring"><span id="group-photo" class="gx-ava" ${groupPhoto ? `style="background-image:url('${safeUrl(groupPhoto)}')"` : ''}>${groupPhoto ? '' : escapeHtml((editing && editing.name ? firstChar(editing.name).toUpperCase() : 'Г'))}</span></span>
+              <span class="gf-cam" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8h5.4L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.3"/></svg></span>
+            </button>
+            <div class="gf-photo-acts">
+              <span class="gf-hint">${groupPhoto ? 'Нажмите, чтобы сменить фото' : 'Добавьте фото — его увидят на карте'}</span>
+              <button type="button" class="gf-remove" id="group-photo-remove" ${groupPhoto ? '' : 'hidden'}>Удалить фото</button>
             </div>
-          </div>
-          <label class="edit-field"><span class="edit-label">Название группы</span><input class="edit-input" type="text" id="group-name" maxlength="60" value="${editing ? escapeHtml(editing.name) : ''}" placeholder="Например, «Прогулки по выходным»"></label>
-          <div class="edit-field"><span class="edit-label">Участники</span><ul class="people-picker" id="group-people">${peopleHtml}</ul></div>
-          <p class="edit-hint group-map-hint">Отмеченным людям придёт приглашение — в группу они вступят, когда примут его. На карте группа появится, когда в ней будет хотя бы двое: над вашим аватаром вместо имени появится её иконка. Геопозиции участников откроются другой группе после match.</p>
-          <div class="edit-actions">
-            <button type="button" class="btn" id="group-cancel">Отмена</button>
-            ${editing ? `<button type="button" class="btn btn-danger" id="group-delete">Удалить группу</button>` : ''}
-            <button type="submit" class="btn btn-primary">${editing ? 'Сохранить' : 'Создать'}</button>
+            <input type="file" id="group-photo-input" accept="image/*" hidden>
+          </section>
+          <section class="pe-sec">
+            <div class="pe-cap"><span>Название</span><span class="pe-count" id="gf-name-count"></span></div>
+            <div class="pe-group">
+              <label class="pe-field"><span class="pe-label">Как назовёте группу</span><input class="pe-input" type="text" id="group-name" maxlength="60" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}" placeholder="Например, «Прогулки по выходным»"></label>
+            </div>
+          </section>
+          <section class="pe-sec">
+            <div class="pe-cap"><span>Участники</span><span class="pe-count" id="gf-sel-count"></span></div>
+            <ul class="pe-group gf-people" id="group-people">${peopleHtml}</ul>
+            <p class="pe-note">Отмеченным придёт приглашение — в группу они вступят, когда примут его. На карте группа появится, когда в ней будет хотя бы двое: над вашим аватаром — её иконка. Геопозиции участников откроются другой группе после match.</p>
+          </section>
+          <div class="pe-foot">
+            <button type="button" class="btn btn-ghost" id="group-cancel">Отмена</button>
+            ${editing ? `<button type="button" class="btn btn-danger" id="group-delete">Удалить</button>` : ''}
+            <button type="submit" class="btn btn-primary">${editing ? 'Сохранить' : 'Создать группу'}</button>
           </div>
         </form>`;
 
       const photoEl = winBody.querySelector('#group-photo');
       const photoInput = winBody.querySelector('#group-photo-input');
       const photoRemove = winBody.querySelector('#group-photo-remove');
+      const nameIn = winBody.querySelector('#group-name');
+      const paintCounts = () => {
+        winBody.querySelector('#gf-name-count').textContent = `${nameIn.value.length} / 60`;
+        winBody.querySelector('#gf-sel-count').textContent = known.length ? `выбрано ${selectedIds.size}` : '';
+        // без фото в рамке — первая буква названия
+        if (!groupPhoto) photoEl.textContent = (firstChar(nameIn.value.trim()) || 'Г').toUpperCase();
+      };
+      paintCounts();
+      nameIn.addEventListener('input', paintCounts);
       const peopleEl = winBody.querySelector('#group-people');
 
       winBody.querySelector('#group-photo-pick').addEventListener('click', () => photoInput.click());
@@ -10426,7 +10669,7 @@
           photoEl.style.backgroundImage = `url('${groupPhoto}')`; photoEl.textContent = ''; photoRemove.hidden = false;
         } catch (e) { console.warn(e); }
       });
-      photoRemove.addEventListener('click', () => { groupPhoto = ''; photoEl.style.backgroundImage = ''; photoEl.textContent = 'Г'; photoRemove.hidden = true; });
+      photoRemove.addEventListener('click', () => { groupPhoto = ''; photoEl.style.backgroundImage = ''; photoRemove.hidden = true; paintCounts(); });
 
       peopleEl.addEventListener('click', (e) => {
         const card = e.target.closest('[data-person-id]'); if (!card) return;
@@ -10434,6 +10677,7 @@
         const isOn = card.getAttribute('aria-checked') === 'true';
         if (isOn) { selectedIds.delete(id); card.setAttribute('aria-checked', 'false'); }
         else { selectedIds.add(id); card.setAttribute('aria-checked', 'true'); }
+        paintCounts();
       });
 
       winBody.querySelector('#group-cancel').addEventListener('click', goBack);
@@ -10587,6 +10831,72 @@
       ${actions ? `<div class="gx-actions">${actions}</div>` : ''}
     </div>`;
   }
+  const ICON_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>`;
+
+  /* ── Поделиться группой в чате своей группы ──
+     В чат уходит сообщение-плашка этой группы: фото, название, состав, желание. По нажатию открывается её карточка,
+     а кнопки «Нравится» / «Мимо» на плашке — реакции на сообщение, так группа оценивает находку.
+     Плашка — обычное текстовое сообщение («Группа «…»»), а данные группы лежат в колонке reply с пометкой share:
+     база не меняется, а у старой версии приложения сообщение просто видно текстом */
+  async function shareGroupToChat(g, chatGroupId) {
+    const spec = { type: 'group', groupId: String(chatGroupId) };
+    const share = { share: 'group', gid: String(g.id), name: cutChars(g.name || 'Группа', 80), count: groupPeople(g).length, wish: cutChars(g.wish || '', 140) };
+    const { data, error } = await insertChatRow(spec, { kind: 'text', content: `Группа «${share.name}»`, reply: share });
+    if (error) throw error;
+    if (!data) return;
+    noteChatMessage(data, true);
+    const list = chatHistoryCache.get(chatKey(spec));
+    if (list && !list.some((x) => String(x.id) === String(data.id))) list.push(data);
+  }
+  function pickShareTargets(list) {
+    if (list.length === 1) return Promise.resolve(list);
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'modal-backdrop';
+      back.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+          <h3 class="modal-title">Поделиться в чате группы</h3>
+          <ul class="fwd-list">${list.map((g, i) => `
+            <li class="person-card" data-share-pick="${i}" role="checkbox" aria-checked="false" tabindex="0">
+              <span class="person-check"></span>
+              <span class="group-avatar" style="width:36px;height:36px;font-size:15px;${safeUrl(g.photo) ? `background-image:url('${safeUrl(g.photo)}')` : ''}">${safeUrl(g.photo) ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</span>
+              <div class="person-main"><div class="person-name">${escapeHtml(g.name)}</div><div class="person-handle">${escapeHtml(membersLabel(groupPeople(g).length))}</div></div>
+            </li>`).join('')}</ul>
+          <div class="modal-actions">
+            <button type="button" class="btn" data-cancel>Отмена</button>
+            <button type="button" class="btn btn-primary" data-send disabled>Отправить</button>
+          </div>
+        </div>`;
+      win.appendChild(back);
+      const send = back.querySelector('[data-send]');
+      const chosen = () => [...back.querySelectorAll('[data-share-pick][aria-checked="true"]')].map((el) => list[Number(el.dataset.sharePick)]);
+      back.addEventListener('click', (e) => {
+        if (e.target === back || e.target.closest('[data-cancel]')) { back.remove(); resolve([]); return; }
+        const row = e.target.closest('[data-share-pick]');
+        if (row) { row.setAttribute('aria-checked', String(row.getAttribute('aria-checked') !== 'true')); send.disabled = !chosen().length; return; }
+        if (e.target.closest('[data-send]')) { const c = chosen(); back.remove(); resolve(c); }
+      });
+    });
+  }
+  async function shareGroupFlow(gid, btn) {
+    const g = groupById(gid);
+    const targets = myGroups().filter((x) => String(x.id) !== String(gid));
+    if (!g || !targets.length) return;
+    const picked = await pickShareTargets(targets);
+    if (!picked.length) return;
+    const label = btn.innerHTML;
+    btn.disabled = true;
+    try {
+      for (const t of picked) await shareGroupToChat(g, t.id);
+      btn.innerHTML = picked.length === 1 ? `Отправлено в «${escapeHtml(ellipsize(picked[0].name || 'Группа', 18))}»` : 'Отправлено ✓';
+    } catch (err) {
+      console.warn('[share group]', err);
+      alert('Не удалось поделиться: ' + ((err && err.message) || err));
+      btn.innerHTML = label;
+    }
+    setTimeout(() => { if (btn.isConnected) { btn.innerHTML = label; btn.disabled = false; } }, 2500);
+  }
+
   const gxWaitIco = '<span class="gx-ico"><span class="gx-wait-dot"></span></span>';
   const gxOpenChat = (m) => `<button class="btn btn-primary" type="button" data-open-match-chat="${escapeHtml(m.id)}">Чат</button>`;
   const gxAnswer = (m) => `<button class="btn btn-primary" type="button" data-gm-accept="${escapeHtml(m.id)}">Принять match</button>
@@ -10606,8 +10916,21 @@
     }
     const led = groupsOwnedBy(myId);
     if (!led.length) {
-      // в группе, но не лидер — предлагает лидер; без группы — сначала создать свою
-      if (myGroups().length) {
+      // в группе, но не лидер: запросы и match своей группы видны, а отвечает и предлагает лидер
+      const mineAll = myGroups();
+      if (mineAll.length) {
+        const states = [];
+        for (const mine of mineAll) {
+          const m = matchBetween(mine.id, g.id);
+          if (m && m.status === 'accepted') {
+            states.push(gxStateHtml({ cls: 'is-ok', ico: featAvatarHtml(m, 40), title: `Match с «${mine.name}»`, sub: 'Общий чат и геопозиции открыты', action: gxOpenChat(m) }));
+          } else if (m && m.status === 'pending' && m.toGroup === String(mine.id)) {
+            states.push(gxStateHtml({ cls: 'is-in', ico: featAvatarHtml(m, 40), title: 'Хотят match с вашей группой', sub: `«${g.name}» → «${mine.name}» · ответит лидер` }));
+          } else if (m && m.status === 'pending') {
+            states.push(gxStateHtml({ cls: 'is-wait', ico: gxWaitIco, title: 'Запрос отправлен', sub: `От «${mine.name}» · ждём ответа лидера` }));
+          }
+        }
+        if (states.length) return states.join('');
         return gxStateHtml({ cls: 'is-muted', ico: `<span class="gx-ico">${ICON_MATCH}</span>`, title: 'Match предлагает лидер',
           sub: 'Попросите лидера вашей группы предложить match' });
       }
@@ -10619,8 +10942,19 @@
       </div>`;
     }
     const blocks = [], free = [];
-    for (const mine of led) {
+    // все мои группы: в своих отвечаю и предлагаю я, в чужих (я участник) — только вижу состояние
+    for (const mine of myGroups()) {
       const m = matchBetween(mine.id, g.id);
+      if (mine.ownerId !== myId) {
+        if (m && m.status === 'pending' && m.toGroup === String(mine.id)) {
+          blocks.push(gxStateHtml({ cls: 'is-in', ico: featAvatarHtml(m, 40), title: 'Хотят match с вашей группой', sub: `«${g.name}» → «${mine.name}» · ответит лидер` }));
+        } else if (m && m.status === 'pending') {
+          blocks.push(gxStateHtml({ cls: 'is-wait', ico: gxWaitIco, title: 'Запрос отправлен', sub: `От «${mine.name}» · ждём ответа лидера` }));
+        } else if (m && m.status === 'accepted') {
+          blocks.push(gxStateHtml({ cls: 'is-ok', ico: featAvatarHtml(m, 40), title: `Match с «${mine.name}»`, sub: 'Общий чат и геопозиции открыты', action: gxOpenChat(m) }));
+        }
+        continue;
+      }
       if (m && m.status === 'accepted') {
         blocks.push(gxStateHtml({ cls: 'is-ok', ico: featAvatarHtml(m, 40), title: `Match с «${mine.name}»`,
           sub: m.voteState === 'approved' ? 'Союз закреплён' : m.voteState === 'open' ? 'Идёт голосование о союзе' : 'Общий чат и геопозиции открыты', action: gxOpenChat(m) }));
@@ -10757,7 +11091,7 @@
             <div class="gx-ava-ring"><div class="gx-ava"${photo ? ` style="background-image:url('${photo}')"` : ''}>${photo ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</div></div>
             <div class="gx-name">${escapeHtml(g.name)}</div>
             <div class="gx-chips">${chips.map((c) => `<span class="gx-chip">${escapeHtml(c)}</span>`).join('')}</div>
-            ${isMember ? chatBtn : ''}
+            ${isMember ? chatBtn : myGroups().length ? `<button type="button" class="btn gx-chat gx-share" data-share-group="${escapeHtml(g.id)}">${ICON_SHARE}Поделиться</button>` : ''}
           </header>
           <section class="gx-match">${matchHtml.includes('gx-cta') ? '' : '<div class="user-profile-section-title">Match</div>'}${matchHtml}</section>
           <section><div class="user-profile-section-title">Желание</div>${wishHtml}</section>
@@ -11888,24 +12222,63 @@
   function normDmRow(r) {
     return { id: r.id, fromId: r.from_id, toId: r.to_id, groupId: null, matchId: null, authorName: null,
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply),
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply), share: normShare(r.reply),
       reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
   function normGroupRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: r.group_id, matchId: null, authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply),
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply), share: normShare(r.reply),
       reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
   // Совместный чат двух групп после match
   function normMatchRow(r) {
     return { id: r.id, fromId: r.user_id, toId: null, groupId: null, matchId: String(r.match_id), authorName: r.author_name || '',
       content: r.content || '', kind: r.kind || 'text', mediaPath: r.media_path || null,
-      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply),
+      duration: r.duration || null, fileName: r.file_name || null, fileSize: r.file_size || null, createdAt: r.created_at, pinned: !!r.pinned, reply: normReply(r.reply), forward: normForward(r.reply), share: normShare(r.reply),
       reactions: normReactions(r.reactions), editedAt: r.edited_at || null };
   }
 
+  // Плашка группы, которой поделились (см. shareGroupToChat)
+  function normShare(v) {
+    if (!v || typeof v !== 'object' || v.share !== 'group' || v.gid == null) return null;
+    return { gid: String(v.gid), name: String(v.name || 'Группа'), count: Number(v.count) || 0, wish: String(v.wish || '') };
+  }
+  function chatShareHtml(m) {
+    const s = m.share, g = groupById(s.gid);
+    const name = g ? g.name : s.name, url = g ? safeUrl(g.photo) : '';
+    const count = g ? groupPeople(g).length : s.count;
+    const st = g ? groupStatsText(g) : '';
+    const wish = g ? g.wish : s.wish;
+    const mine = myReaction(m);
+    const rate = (emoji, label) => `<button type="button" class="cs-rate-btn${mine === emoji ? ' is-on' : ''}" data-share-rate="${emoji}">${emoji} ${label}</button>`;
+    return `<div class="chat-share" data-share-open="${escapeHtml(s.gid)}" role="button" tabindex="0">
+      <span class="cs-cap">Группа на карте</span>
+      <div class="cs-row">
+        <span class="cs-ava"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : escapeHtml(firstChar((name || '?').trim()).toUpperCase() || '?')}</span>
+        <div class="cs-main">
+          <div class="cs-name">${escapeHtml(name || 'Группа')}</div>
+          <div class="cs-sub">${[count ? membersLabel(count) : '', st].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+        </div>
+      </div>
+      ${wish ? `<div class="cs-wish">☁ ${escapeHtml(wish)}</div>` : ''}
+      <div class="cs-rate">${rate('👍', 'Нравится')}${rate('👎', 'Мимо')}</div>
+    </div>`;
+  }
+  // Нажали на плашку — карточка группы; «назад» возвращает в чат
+  function openSharedGroup(gid) {
+    const c = chat;
+    if (!c) return;
+    if (!groupById(gid)) { alert('Эта группа сейчас не видна — возможно, её удалили или она в союзе.'); return; }
+    const spec = { type: c.type, peerId: c.peerId, groupId: c.groupId, matchId: c.matchId };
+    const back = c.backFn, reopen = () => openChat(spec, back);
+    leaveChat();
+    winBody.style.display = ''; winBody.style.flexDirection = ''; winBody.style.padding = '';
+    showGroupDetailsScreen(gid, reopen);
+  }
+
   function chatPreviewText(m) {
+    if (m.share) return '👥 Группа «' + m.share.name + '»';
     const labels = { image: '📷 Фото', video: '🎬 Видео', voice: '🎤 Голосовое сообщение', circle: '⭕ Видеосообщение' };
     if (m.kind === 'file') return '📎 ' + (m.fileName || 'Файл');
     if (m.kind && m.kind !== 'text') return labels[m.kind] || 'Вложение';
@@ -12039,14 +12412,15 @@
       ava = `<button type="button" class="chat-msg-ava" data-msg-ava="${escapeHtml(m.fromId)}" tabindex="-1" aria-label="Профиль: ${escapeHtml(name)}">${avatarCircleHtml({ name, avatar: person.avatar }, 32)}</button>`;
     }
     const cls = ['chat-msg', mine ? 'me' : 'them', isMedia ? 'has-media' : '',
-      m.kind === 'circle' ? 'is-circle' : '', m.pending ? 'is-pending' : '',
+      m.kind === 'circle' ? 'is-circle' : '', m.pending ? 'is-pending' : '', m.share ? 'is-share' : '',
       chat && chat.selected && chat.selected.has(String(m.id)) ? 'is-selected' : ''].join(' ');
     // у своих сообщений рядом со временем — отметка: часы, пока отправляется; потом галочки (их расставляет syncChatReadMarks)
     const ticks = mine ? `<span class="chat-ticks" aria-hidden="true">${m.pending ? ICON_TICK_CLOCK : ICON_TICKS}</span>` : '';
     const time = `<span class="chat-msg-time">${(m.pinned ? '📌 ' : '') + (m.editedAt ? '<span class="chat-edited">изм.</span> ' : '') + fmtTime(m.createdAt) + ticks}</span>`;
     // время идёт сразу за текстом (у фото и видео — за подписью): так оно встаёт в его последнюю строку
     // ссылки в тексте и подписи — кликабельные (linkifyHtml)
-    const body = isMedia
+    const body = m.share ? chatShareHtml(m) + time
+      : isMedia
       ? chatMediaHtml(m) + (m.content ? `<div class="chat-caption">${linkifyHtml(m.content)}${time}</div>` : time)
       : `<span class="chat-text">${linkifyHtml(m.content)}</span>${time}`;
     // цитата сообщения, на которое ответили: нажатие перематывает ленту к нему
@@ -12183,6 +12557,8 @@
   function paintChatReacts(m, pop = '') {
     const el = chatBubbleEl(m.id);
     if (!el) return;
+    const mineReact = myReaction(m);
+    el.querySelectorAll('[data-share-rate]').forEach((b) => b.classList.toggle('is-on', b.dataset.shareRate === mineReact));
     const old = el.querySelector(':scope > .chat-reacts');
     if (old) old.remove();
     const html = chatReactsHtml(m, pop);
@@ -12223,7 +12599,7 @@
 
   /* ── Редактирование своего сообщения: текст или подпись к фото, видео, файлу ── */
   // пересланное не правят: это чужие слова (или свои, но сказанные в другом чате)
-  const canEditMsg = (m) => isMyMsg(m) && !m.pending && !m.forward && ['text', 'image', 'video', 'file'].includes(m.kind || 'text');
+  const canEditMsg = (m) => isMyMsg(m) && !m.pending && !m.forward && !m.share &&['text', 'image', 'video', 'file'].includes(m.kind || 'text');
   function setChatEdit(id) {
     const c = chat;
     if (!c) return;
@@ -12899,7 +13275,7 @@
     if (res.error && fields.reply && /reply/i.test(res.error.message || '')) {
       chatReplyMissing = true;
       res = await insertChatRowRaw(c, { ...fields, reply: null });
-      alert(`Сообщение отправлено без ${fields.reply.fwd ? 'подписи «Переслано»' : 'цитаты'}: чтобы работали ответы и пересылка с автором, выполните supabase_chat_reply.sql в Supabase.`);
+      alert(`Сообщение отправлено без ${fields.reply.fwd ? 'подписи «Переслано»' : fields.reply.share ? 'карточки группы' : 'цитаты'}: чтобы работали ответы и пересылка с автором, выполните supabase_chat_reply.sql в Supabase.`);
     }
     return res;
   }
@@ -14950,6 +15326,7 @@
 
   function showApp(id, fromBtn) {
     if (id === 'map') { showMapApp(); return; }
+    if (matchDeck) closeMatchDeck();
     if (id === 'messenger') { showMessengerScreen(); return; }
     const app = APPS[id]; if (!app) return;
     leaveChat();
@@ -16012,6 +16389,8 @@
         if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
         const cfg = userAvatarCfgById.get(userId) || null;
         const use3D = isThreeAvailable() && cfg && typeof cfg === 'object';
+        // в личку пишут друзьям и участникам своей группы; остальным (например, из группы с match) — сначала запрос в друзья
+        const canWrite = friends.some((f) => String(f.id) === String(userId)) || sharesGroupWithMe(userId);
         const name = p.name || 'Пользователь';
         const handle = '@' + (p.username || 'user');
         const initial = (firstChar(name) || '?').toUpperCase();
@@ -16051,7 +16430,9 @@
           <div class="${avatarBelow ? 'friend-fit' : ''}" data-fp-root="${escapeHtml(userId)}" data-pm="${token}">
           ${headHtml}
             <div class="friend-actions">
-              <button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>
+              ${canWrite
+                ? '<button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>'
+                : `<button type="button" class="btn btn-primary" id="friend-add" data-add-friend="${escapeHtml(userId)}">Добавить в друзья</button>`}
             </div>
             ${avatarBelow}
           </div>
@@ -16082,6 +16463,13 @@
 
         const chatBtn = winBody.querySelector('#friend-open-chat');
         if (chatBtn) chatBtn.addEventListener('click', () => showDmScreen(userId));
+        // не друг: кнопка показывает, отправлен ли уже запрос (или принять встречный)
+        const addBtn = winBody.querySelector('#friend-add');
+        if (addBtn && currentUser) friendRelationWith(userId).then((rel) => {
+          if (!addBtn.isConnected) return;
+          if (rel === 'outgoing') { addBtn.textContent = 'Запрос отправлен'; addBtn.disabled = true; }
+          else if (rel === 'incoming') addBtn.textContent = 'Принять запрос';
+        });
         tabs.mount();   // профиль перерисовали — вкладки с тем, что есть в переписке, возвращаются на место
       };
       const sign = (p, photos) => JSON.stringify([p.name, p.username, p.bio, p.avatar, (photos || []).map((x) => x.id || x.url),
@@ -16372,6 +16760,16 @@
       if (bubble) toggleChatReaction(bubble.dataset.msgId, reactChip.dataset.reactChip);
       return;
     }
+    const shareRate = e.target.closest('[data-share-rate]');
+    if (shareRate) {
+      const bubble = shareRate.closest('.chat-msg[data-msg-id]');
+      if (bubble) toggleChatReaction(bubble.dataset.msgId, shareRate.dataset.shareRate);
+      return;
+    }
+    const shareOpen = e.target.closest('[data-share-open]');
+    if (shareOpen) { openSharedGroup(shareOpen.dataset.shareOpen); return; }
+    const shareGroupBtn = e.target.closest('[data-share-group]');
+    if (shareGroupBtn) { shareGroupFlow(shareGroupBtn.dataset.shareGroup, shareGroupBtn); return; }
     const replyTo = e.target.closest('[data-reply-to]');
     if (replyTo) { jumpToChatMessage(replyTo.dataset.replyTo); return; }
     const msgAva = e.target.closest('[data-msg-ava]');
@@ -16688,6 +17086,8 @@
         await loadIncomingFriendRequests();
         loadUserLocations();
         addFriendBtn.textContent = 'Уже друг';
+        // в профиле — теперь можно написать
+        if (addFriendBtn.id === 'friend-add') addFriendBtn.outerHTML = `<button type="button" class="btn btn-primary" id="friend-open-chat" data-open-dm="${escapeHtml(fid)}">Написать</button>`;
       } else {
         addFriendBtn.textContent = 'Запрос отправлен';
       }
@@ -16986,7 +17386,7 @@
   winBody.addEventListener('click', (e) => {
     const el = chatMsgAt(e.target);
     if (!el || !chat || chat.selecting
-      || e.target.closest('img, video, audio, a, button, [data-voice], [data-circle], .chat-reply, .chat-reacts')) { lastMsgTap = null; return; }
+      || e.target.closest('img, video, audio, a, button, [data-voice], [data-circle], .chat-reply, .chat-reacts, .chat-share')) { lastMsgTap = null; return; }
     const now = Date.now(), id = el.dataset.msgId, t = lastMsgTap;
     if (t && t.id === id && now - t.at < 350 && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 30) {
       lastMsgTap = null;
