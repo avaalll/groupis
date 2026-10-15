@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-15 13:40">
+  <meta name="app-build" content="2026-10-15 15:00">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -7587,6 +7587,8 @@
     const { data: profs, error: pErr } = await supabaseClient.from('profiles').select('id,name,username,avatar').in('id', ids);
     if (pErr) { console.warn('[friends profiles]:', pErr.message); return; }
     friends = (profs || []).map((p) => ({ id: p.id, name: p.name, handle: '@' + p.username, avatar: p.avatar || '' }));
+    // имя и фото запоминаем и отдельно: если человек перестанет быть другом, чат с ним в списке останется подписанным
+    for (const f of friends) peopleCache.set(String(f.id), { id: String(f.id), name: f.name || 'Пользователь', handle: f.handle, avatar: f.avatar, gender: (peopleCache.get(String(f.id)) || {}).gender || '' });
     scheduleStateSave();
   }
 
@@ -12043,7 +12045,7 @@
     const has = (key) => (chatUnread.get(key) > 0 && !isChatMuted(key) ? (keys.push(key), 1) : 0);
     let dm = 0, group = 0;
     if (currentUser) {
-      for (const f of friends) dm += has('dm:' + f.id);
+      for (const id of dmChatPeers()) dm += has('dm:' + id);
       for (const g of myGroups()) group += has('group:' + g.id);
       for (const m of myAcceptedMatches()) group += has('match:' + m.id);
     }
@@ -12183,6 +12185,19 @@
       ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\s*г\.$/, '');
   }
 
+  /* Личные чаты — по переписке, а не по списку друзей: добавили в друзья — чат появится, когда кто-то напишет;
+     удалили из друзей — переписка остаётся */
+  function dmChatPeers() {
+    return [...chatLast.keys()].filter((key) => key.startsWith('dm:')).map((key) => key.slice(3));
+  }
+  // Собеседник личного чата: друг, знакомый по группе или человек из profiles (unknown — ещё не загружен)
+  function dmPeer(id) {
+    const f = friends.find((x) => String(x.id) === String(id));
+    if (f) return { name: f.name || f.handle || 'Пользователь', handle: f.handle || '', avatar: f.avatar || '' };
+    const p = chatPersonById(id), unknown = p.name === 'Участник' && !peopleCache.has(String(id));
+    return { name: p.name === 'Участник' ? 'Пользователь' : p.name, handle: p.handle, avatar: p.avatar, unknown };
+  }
+
   function chatsListHtml() {
     const gs = myGroups(), ms = myAcceptedMatches();
     const myId = currentUser && currentUser.id;
@@ -12240,19 +12255,23 @@
           }),
         });
       }
-      for (const f of friends) {
-        const key = 'dm:' + f.id;
-        const name = f.name || f.handle || 'Пользователь';
+      // личный чат в списке — только если в нём есть переписка: с другом, с бывшим другом, с кем угодно
+      const unknown = [];
+      for (const id of dmChatPeers()) {
+        const key = 'dm:' + id, p = dmPeer(id);
+        if (p.unknown) unknown.push(id);
         dms.push({
           ts: msgTs(chatLast.get(key)),
-          html: rowHtml({ key, attr: `data-open-dm="${escapeHtml(f.id)}"`, avatar: avatarCircleHtml({ name, avatar: f.avatar }, 44), name, fallback: 'Начните диалог', withAuthor: false }),
+          html: rowHtml({ key, attr: `data-open-dm="${escapeHtml(id)}"`, avatar: avatarCircleHtml({ name: p.name, avatar: p.avatar }, 44), name: p.name, fallback: 'Начните диалог', withAuthor: false }),
         });
       }
+      // собеседника нет среди друзей и знакомых — имя и фото догружаются, и список перерисовывается
+      if (unknown.length) ensurePeople(unknown).then((got) => { if (got) paintChatsList(); });
     }
     // свежие диалоги сверху
     const pane = (id, all, empty, items = all.filter((x) => x.html)) => `<div class="chats-pane" data-pane="${id}">${
       items.length ? items.sort((a, b) => b.ts - a.ts).map((x) => x.html).join('') : `<div class="empty-msg">${empty}</div>`}</div>`;
-    return pane('dm', dms, 'Пока нет личных чатов.<br>Добавьте друзей — и переписка появится здесь.')
+    return pane('dm', dms, 'Пока нет личных чатов.<br>Напишите другу — и переписка появится здесь.')
       + pane('group', grs, 'Пока нет групповых чатов.<br>Создайте группу или вступите в неё.');
   }
 
@@ -14034,16 +14053,22 @@
       // играет одно сообщение: другой кружок со звуком возвращается к беззвучному повтору, голосовое — на паузу
       if (nowPlaying && nowPlaying !== video) { if (nowPlaying.tagName === 'VIDEO') stopChatPlayer(); else nowPlaying.pause(); }
       video.muted = false; video.loop = false; video.currentTime = 0;
-      video.play().catch(() => {});
-      const ring = wrap.querySelector('.ccr-on');
-      if (ring) ring.style.strokeDashoffset = '100';
-      wrap.classList.add('is-playing');
-      video.onended = () => {
+      const backToLoop = () => {
         video.muted = true; video.loop = true; video.onended = null;
         const w = video.closest('.chat-circle-wrap');   // лента могла перерисоваться — кружок тот же, обёртка новая
         if (w) w.classList.remove('is-playing');
         video.play().catch(() => {});
       };
+      // телефон не дал включить звук без нажатия — кружок возвращается к беззвучному повтору, а не замирает
+      video.play().catch((err) => {
+        if (!err || err.name !== 'NotAllowedError' || video.muted) return;
+        backToLoop();
+        if (nowPlaying === video) { nowPlaying = null; syncChatPlayer(); }
+      });
+      const ring = wrap.querySelector('.ccr-on');
+      if (ring) ring.style.strokeDashoffset = '100';
+      wrap.classList.add('is-playing');
+      video.onended = () => { backToLoop(); playNextInQueue(video); };
       // уже крутился без звука — события «play» не будет, полоску «сейчас играет» включаем сами
       nowPlaying = video;
       syncChatPlayer();
@@ -14587,6 +14612,13 @@
     for (const f of friends) {
       out.push({ spec: { type: 'dm', peerId: f.id }, name: f.name || f.handle || 'Пользователь', sub: f.handle || '', ava: avatarCircleHtml(f, 36) });
     }
+    // и те, с кем есть переписка, хотя они уже не в друзьях
+    const friendIds = new Set(friends.map((f) => String(f.id)));
+    for (const id of dmChatPeers()) {
+      if (friendIds.has(String(id))) continue;
+      const p = dmPeer(id);
+      out.push({ spec: { type: 'dm', peerId: id }, name: p.name, sub: p.handle || '', ava: avatarCircleHtml(p, 36) });
+    }
     return out;
   }
   async function forwardMessage(m, target) {
@@ -14951,8 +14983,14 @@
     const c = { ...spec, messages: [], selected: new Set(), selecting: false, pinIdx: null, backFn };
     // в шапке окна — имя собеседника, название группы или «Группа feat Группа»
     if (c.type === 'dm') {
-      const peer = friends.find((f) => f.id === c.peerId) || groupMemberProfiles.get(c.peerId);
-      c.winTitle = peer ? (peer.name || peer.handle || 'Пользователь') : 'Личный чат';
+      // собеседник может быть уже не в друзьях — имя тогда из profiles (peopleCache)
+      const peer = friends.find((f) => f.id === c.peerId) || groupMemberProfiles.get(c.peerId), p = dmPeer(c.peerId);
+      c.winTitle = peer ? (peer.name || peer.handle || 'Пользователь') : p.unknown ? 'Личный чат' : p.name;
+      if (!peer && p.unknown) ensurePeople([c.peerId]).then((got) => {
+        if (!got || chat !== c || dmPeer(c.peerId).unknown) return;
+        c.winTitle = dmPeer(c.peerId).name;
+        paintChatHeader(c);
+      });
     } else if (c.type === 'match') {
       const m = groupMatches.find((x) => x.id === String(c.matchId));
       c.winTitle = m ? matchTitle(m) : 'Совместный чат';
@@ -17026,6 +17064,7 @@
   // голосовые: события плеера не всплывают — ловим на погружении и перерисовываем кнопку, волну и время
   ['play', 'pause', 'timeupdate', 'ended', 'loadedmetadata', 'volumechange'].forEach((type) => winBody.addEventListener(type, (e) => {
     const t = e.target;
+    if (t.dataset && t.dataset.priming) return;   // голосовое «будят» для очереди (primeChatQueue) — это не воспроизведение
     const box = t.tagName === 'AUDIO' && t.closest('.chat-voice');
     const circle = t.tagName === 'VIDEO' && t.closest('.chat-circle-wrap');
     if (box) {
@@ -17038,18 +17077,47 @@
     if (nowPlaying === t && (type === 'ended' || (circle && t.muted))) nowPlaying = null;
     if (nowPlaying === t || type === 'ended' || type === 'play') syncChatPlayer();
     if (circle && nowPlaying === t && !circleRingRaf) paintCircleRing();
-    if (box && type === 'ended') playNextVoice(t);
+    if (box && type === 'ended') playNextInQueue(t);
   }, true));
-  /* Голосовое дослушали до конца — сразу играет следующее голосовое ниже в переписке (своё или чужое), и так
-     далее, как в Telegram. Только после конца сам по себе: пауза или крестик очередь не продолжают */
-  function playNextVoice(a) {
-    const list = [...winBody.querySelectorAll('#chat-view-body .chat-voice audio')];
-    const next = list[list.indexOf(a) + 1];
-    if (!next || !a.isConnected) return;
-    const box = next.closest('.chat-voice');
-    if (next.getAttribute('src')) { toggleVoice(box); return; }
+  /* ── Очередь: голосовые и кружки подряд ──
+     Голосовое или кружок дослушали до конца — сразу играет следующее голосовое или кружок ниже в переписке,
+     чьё бы оно ни было, и так далее, как в Telegram. Только после конца сам по себе: пауза или крестик очередь
+     не продолжают */
+  function chatQueueMedia() {
+    return [...winBody.querySelectorAll('#chat-view-body .chat-voice audio, #chat-view-body video.chat-circle')];
+  }
+  function startQueueItem(el) {
+    if (el.tagName === 'VIDEO') toggleCircle(el.closest('.chat-circle-wrap')); else toggleVoice(el.closest('.chat-voice'));
+  }
+  function playNextInQueue(el) {
+    if (!el.isConnected) return;
+    const list = chatQueueMedia();
+    const next = list[list.indexOf(el) + 1];
+    if (!next) return;
+    if (next.getAttribute('src')) { startQueueItem(next); return; }
     // ссылка на файл ещё подставляется — подождём её немного
-    setTimeout(() => { if (next.isConnected && next.paused && !nowPlaying) toggleVoice(box); }, 800);
+    setTimeout(() => { if (next.isConnected && !nowPlaying && next.getAttribute('src')) startQueueItem(next); }, 800);
+  }
+  /* iPhone и iPad дают звуку играть без нажатия только тем проигрывателям, которые хоть раз запустили нажатием.
+     Поэтому в момент нажатия «будим» и следующие голосовые и кружки ленты: голосовое на миг запускается без звука
+     и сразу останавливается, кружок (он и так крутится без звука) — просто запускается. Дальше очередь играет сама */
+  function primeChatQueue(from) {
+    if (!IS_IOS || !from) return;
+    const list = chatQueueMedia(), i = list.indexOf(from);
+    for (const el of list.slice(i + 1, i + 13)) {
+      if (el.primed || !el.getAttribute('src')) continue;
+      el.primed = true;
+      if (el.tagName === 'VIDEO') { el.play().catch(() => {}); continue; }
+      el.dataset.priming = '1';
+      el.muted = true;
+      el.play().then(() => el.pause(), () => {}).finally(() => {
+        try { el.currentTime = 0; } catch {}
+        el.muted = false;
+        delete el.dataset.priming;
+        const box = el.closest('.chat-voice');
+        if (box) paintVoice(box);
+      });
+    }
   }
   winBody.addEventListener('click', (e) => {
     const hero = e.target.closest('.photo-hero[data-photo-hero]');
@@ -17169,11 +17237,11 @@
     const photoEl = e.target.closest('[data-open-photo]');
     if (photoEl && photoEl.src) { openPhotoViewer(photoEl.src); return; }
     const circleEl = e.target.closest('[data-circle]');
-    if (circleEl) { toggleCircle(circleEl); return; }
+    if (circleEl) { toggleCircle(circleEl); primeChatQueue(circleEl.querySelector('video')); return; }
     const voicePlay = e.target.closest('[data-voice-play]');
-    if (voicePlay) { toggleVoice(voicePlay.closest('[data-voice]')); return; }
+    if (voicePlay) { const box = voicePlay.closest('[data-voice]'); toggleVoice(box); primeChatQueue(box.querySelector('audio')); return; }
     // полоска «сейчас играет»
-    if (e.target.closest('[data-player-toggle]')) { toggleChatPlayer(); return; }
+    if (e.target.closest('[data-player-toggle]')) { toggleChatPlayer(); primeChatQueue(nowPlaying); return; }
     if (e.target.closest('[data-player-close]')) { stopChatPlayer(); return; }
     if (e.target.closest('[data-player-jump]')) {
       const msgEl = nowPlaying && nowPlaying.closest('.chat-msg[data-msg-id]');
@@ -17468,6 +17536,13 @@
     const rmFriendBtn = e.target.closest('[data-remove-friend]');
     if (rmFriendBtn) {
       const fid = rmFriendBtn.dataset.removeFriend;
+      const who = friends.find((f) => String(f.id) === String(fid));
+      const ok = await confirmModal({
+        title: `Удалить ${who ? '«' + ellipsize(who.name || who.handle || 'друга', 30) + '»' : 'друга'} из друзей?`,
+        text: 'Переписка с ним останется в «Чатах».',
+        confirmLabel: 'Да, удалить', cancelLabel: 'Нет',
+      });
+      if (!ok) return;
       const { error: rmErr } = await supabaseClient.rpc('remove_friend', { friend_uuid: fid });
       if (rmErr) {
         console.error('[rpc remove_friend]', rmErr);
