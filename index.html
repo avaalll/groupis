@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-16 18:30">
+  <meta name="app-build" content="2026-10-16 21:00">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -4389,6 +4389,8 @@
     }
     .ux-hero.is-celebrate { animation: ux-pop .7s var(--spring) both; }
     @keyframes ux-pop { 0% { transform: scale(.94); } 45% { transform: scale(1.03); } }
+    /* салют при оформлении подписки (рисует prismConfetti) */
+    .confetti { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 10000; pointer-events: none; }
     .ux-badge {
       padding: 4px 12px; border-radius: 999px; background: var(--prism); color: var(--prism-ink);
       font: 700 11px/1.2 var(--font-ui); letter-spacing: .18em; text-indent: .18em;
@@ -12011,13 +12013,84 @@
     renderAvatarControls();
     refreshProfileRows();
     if (winTitle.textContent === 'Groupies Ultra') {
+      const btn = winBody.querySelector('[data-ultra-buy]'), from = btn && btn.getBoundingClientRect();
       quietly(() => { winBody.innerHTML = ultraHtml(); });
       if (celebrate && !reduceMotion) {
-        const hero = winBody.querySelector('.ux-hero');
+        const hero = winBody.querySelector('.ux-hero'), badge = winBody.querySelector('.ux-badge');
         if (hero) hero.classList.add('is-celebrate');
+        prismConfetti(from, badge && badge.getBoundingClientRect());
         if (navigator.vibrate) { try { navigator.vibrate([10, 40, 10]); } catch {} }
       }
     }
+  }
+  /* Салют спектром — подписка оформлена: из кнопки два залпа конфетти вверх и в стороны (ленточки «порхают»,
+     переворачиваясь в воздухе, кружки падают быстрее), от значка ULTRA разлетаются искры. Цвета — спектр темы
+     (в тёмной ещё и белый). Холст поверх всего, касания проходят насквозь; когда всё упало — он удаляется */
+  function prismConfetti(from, spark) {
+    const W = innerWidth, H = innerHeight;
+    const css = getComputedStyle(document.documentElement), dark = /dark/.test(css.colorScheme || '');
+    // белый — только в тёмной теме: на светлом фоне белые ленточки не видны
+    const colors = ['--c1', '--c2', '--c3', '--c4'].map((v) => css.getPropertyValue(v).trim()).filter(Boolean).concat(dark ? ['#FFFFFF'] : []);
+    const cv = document.createElement('canvas'), dpr = Math.min(2, devicePixelRatio || 1);
+    cv.className = 'confetti';
+    cv.setAttribute('aria-hidden', 'true');
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    document.body.appendChild(cv);
+    const g = cv.getContext('2d');
+    g.scale(dpr, dpr);
+    // как у настоящего конфетти: резкий выстрел, быстрое торможение о воздух и медленное падение с покачиванием
+    const PHYS = [{ drag: 3, grav: 900 }, { drag: 2.2, grav: 1100 }, { drag: 2.6, grav: 380 }];   // ленточка, кружок, искра
+    const parts = [], speed = Math.max(H, 600) * 2.8;
+    const shoot = (x, y, n, angle, spread, v0, kinds) => {
+      for (let i = 0; i < n; i++) {
+        const a = angle + (Math.random() - 0.5) * spread, v = v0 * (0.62 + Math.random() * 0.46);
+        const kind = kinds[(Math.random() * kinds.length) | 0];   // 0 — ленточка, 1 — кружок, 2 — искра
+        parts.push({
+          x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, kind, size: kind === 2 ? 7 + Math.random() * 5 : 7 + Math.random() * 6,
+          color: kind === 2 && dark && Math.random() < 0.5 ? '#FFFFFF' : colors[(Math.random() * colors.length) | 0],
+          rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 12, flip: Math.random() * 6.28, vflip: 6 + Math.random() * 9,
+          sway: Math.random() * 6.28, life: -(Math.random() * 0.08), ttl: kind === 2 ? 1.3 + Math.random() * 0.7 : 3 + Math.random() * 1.2,
+        });
+      }
+    };
+    const bx = from ? from.left + from.width / 2 : W / 2, by = from ? from.top + from.height / 2 : H * 0.7;
+    shoot(bx - (from ? from.width * 0.22 : 0), by, 85, -Math.PI / 2 - 0.42, 0.9, speed, [0, 0, 0, 1]);   // влево-вверх
+    shoot(bx + (from ? from.width * 0.22 : 0), by, 85, -Math.PI / 2 + 0.42, 0.9, speed, [0, 0, 0, 1]);   // вправо-вверх
+    const sx = spark ? spark.left + spark.width / 2 : W / 2, sy = spark ? spark.top + spark.height / 2 : H * 0.2;
+    setTimeout(() => shoot(sx, sy, 30, 0, Math.PI * 2, speed * 0.24, [2]), 140);
+    const star = (r) => {
+      g.beginPath();
+      for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * 0.28 : r, a = k * Math.PI / 4; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      g.closePath(); g.fill();
+    };
+    let last = performance.now();
+    const frame = (now) => {
+      const dt = Math.min(0.034, (now - last) / 1000); last = now;
+      g.clearRect(0, 0, W, H);
+      let alive = 0;
+      for (const p of parts) {
+        p.life += dt;
+        if (p.life < 0 || p.life > p.ttl || p.y > H + 40) continue;
+        alive++;
+        const ph = PHYS[p.kind], drag = Math.exp(-ph.drag * dt);
+        p.vx *= drag; p.vy = p.vy * drag + ph.grav * dt;
+        p.x += (p.vx + (p.kind === 0 ? Math.sin(p.life * 5 + p.sway) * 55 : 0)) * dt;
+        p.y += p.vy * dt;
+        p.rot += p.vr * dt; p.flip += p.vflip * dt;
+        g.save();
+        g.globalAlpha = Math.min(1, (p.ttl - p.life) / 0.45);
+        g.translate(p.x, p.y); g.rotate(p.rot);
+        g.fillStyle = p.color;
+        if (p.kind === 0) { g.scale(1, Math.cos(p.flip)); g.fillRect(-p.size / 2, -p.size * 0.21, p.size, p.size * 0.42); }
+        else if (p.kind === 1) { g.beginPath(); g.arc(0, 0, p.size * 0.34, 0, 6.28); g.fill(); }
+        else { g.scale(1 - 0.35 * Math.abs(Math.sin(p.flip * 0.5)), 1); star(p.size * 0.55); }
+        g.restore();
+      }
+      if (alive || parts.some((p) => p.life < 0)) requestAnimationFrame(frame);
+      else cv.remove();
+    };
+    requestAnimationFrame(frame);
+    setTimeout(() => cv.remove(), 6000);   // на случай, если вкладку свернули посреди салюта
   }
   function equipItem(id, on) {
     const it = SHOP_ITEMS[id];
@@ -12073,16 +12146,7 @@
           </button>`).join('')}
         </div>
         <button type="button" class="ux-btn" data-ultra-buy>${on ? 'Продлить' : 'Оформить'} на ${ultraPlan === 'year' ? 'год' : 'месяц'} · ${plan.price}</button>
-        <p class="pe-note">Оплата подключится позже — сейчас подписка включается сразу.</p>
       </section>
-      ${on ? `<section class="ux-sec">
-        <div class="user-profile-section-title">Что настроить</div>
-        <ul class="rows ux-links">
-          <li class="row" data-wardrobe="icon" role="button" tabindex="0"><div class="row-main"><div class="row-name">Стиль иконки</div><div class="row-sub">Мой аватар → Иконка</div></div><span class="chev">›</span></li>
-          <li class="row" data-wardrobe="wear" role="button" tabindex="0"><div class="row-main"><div class="row-name">Спортивный образ</div><div class="row-sub">Мой аватар → Одежда</div></div><span class="chev">›</span></li>
-        </ul>
-        <p class="pe-note">Стиль иконки группы выбирают в её настройках: Группы → группа → Настройки.</p>
-      </section>` : ''}
     </div>`;
   }
   async function activateUltra(planId) {
@@ -18363,13 +18427,11 @@
     if (e.target.closest('[data-action="open-subscription"]')) { showSubscriptionScreen(); return; }
     if (e.target.closest('[data-action="open-shop"]')) { showShopScreen(); return; }
     if (e.target.closest('[data-action="open-tour"]')) { openTour(); return; }
-    // ── Groupies Ultra: срок подписки и что настроить ──
+    // ── Groupies Ultra: срок подписки и оформление ──
     const planBtn = e.target.closest('[data-ultra-plan]');
     if (planBtn) { ultraPlan = planBtn.dataset.ultraPlan; quietly(() => { winBody.innerHTML = ultraHtml(); }); return; }
     const ultraBuy = e.target.closest('[data-ultra-buy]');
     if (ultraBuy) { ultraBuy.disabled = true; await activateUltra(ultraPlan); ultraBuy.disabled = false; return; }
-    const wardrobeLink = e.target.closest('[data-wardrobe]');
-    if (wardrobeLink) { showAvatarEditor(wardrobeLink.dataset.wardrobe, () => showSubscriptionScreen()); return; }
     // ── магазин ──
     if (e.target.closest('[data-coins-topup]')) { openTopUp(); return; }
     const shopItem = e.target.closest('[data-shop-item]');
