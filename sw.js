@@ -6,9 +6,9 @@
      качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v1.1.52';
+const VERSION = 'v1.1.53';
 const CACHE = `groupis-${VERSION}`;
-const STATIC_VERSION = 's2';
+const STATIC_VERSION = 's3';
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
 
 const APP_SHELL = [
