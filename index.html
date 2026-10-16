@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-15 15:00">
+  <meta name="app-build" content="2026-10-16 12:00">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -2683,13 +2683,13 @@
     .pm-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pm-sub { font-size: 13px; color: var(--you); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pm-meta { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* Свой профиль: фото + 6 пунктов меню помещаются в окно целиком */
-    .me-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(150px, calc(min(680px, 100dvh - 116px) - 396px), 380px); }
-    .me-fit.has-bio .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 440px), 380px); }
+    /* Свой профиль: фото + 7 пунктов меню с пояснениями помещаются в окно целиком */
+    .me-fit .photo-hero { aspect-ratio: auto; max-height: none; height: clamp(150px, calc(min(680px, 100dvh - 116px) - 492px), 380px); }
+    .me-fit.has-bio .photo-hero { height: clamp(150px, calc(min(680px, 100dvh - 116px) - 536px), 380px); }
     .me-fit .ph-bio-own { padding: 10px 18px 0; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     @media (max-width: 640px) {
-      .me-fit .photo-hero { height: clamp(150px, calc(100dvh - 462px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
-      .me-fit.has-bio .photo-hero { height: clamp(150px, calc(100dvh - 506px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
+      .me-fit .photo-hero { height: clamp(150px, calc(100dvh - 558px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
+      .me-fit.has-bio .photo-hero { height: clamp(150px, calc(100dvh - 602px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 380px); }
     }
     .profile-bio.ph-bio { text-align: left; margin: 0; }
     .profile-bio.ph-bio-own { padding: 14px 18px 4px; }
@@ -4442,6 +4442,158 @@
     .ux-swatch { --deco-base: #131318; width: 46px; height: 22px; border-radius: 999px; }
     .ux-swatch.is-plain { background: var(--field); box-shadow: inset 0 0 0 1px var(--win-line); }
 
+    /* ═══════ Стили иконок из магазина (DECO_SHOP) — в том же духе, что и стили Ultra выше ═══════ */
+    .deco.deco-aurora {
+      border: 1px solid rgba(170, 255, 225, .55);
+      background: linear-gradient(120deg, #0B3D3A, #1B6B5A, #4B3A8C, #0B3D3A) 0 0 / 300% 100%;
+      box-shadow: 0 8px 22px -10px #3EE6C1, 0 0 14px -6px #8A6CFF;
+      animation: deco-flow 7s linear infinite;
+    }
+    .deco.deco-sunset { border: 1px solid rgba(255, 214, 176, .7); background: linear-gradient(135deg, #FF9A5A, #FF5E7E 55%, #9B5CFF); box-shadow: 0 8px 22px -10px #FF5E7E; }
+    .deco.deco-mint { border: 1px solid rgba(255, 255, 255, .95); background: linear-gradient(160deg, #EDFFF7, #A8EFD6); box-shadow: 0 8px 22px -10px #2FBF91, inset 0 1px 0 #fff; }
+    .deco.deco-sakura {
+      border: 1px solid rgba(255, 255, 255, .95);
+      background: radial-gradient(circle at 16% 30%, rgba(255, 255, 255, .85) 0 1.6px, transparent 2.4px), radial-gradient(circle at 72% 68%, rgba(255, 255, 255, .75) 0 1.3px, transparent 2.1px),
+                  radial-gradient(circle at 46% 22%, rgba(255, 255, 255, .6) 0 1px, transparent 1.8px), linear-gradient(140deg, #FFE3EE, #FFB1CC);
+      box-shadow: 0 8px 22px -10px #FF7FAE;
+    }
+    .deco.deco-carbon { border: 1px solid #3A3D44; background: repeating-linear-gradient(45deg, #1B1D21 0 3px, #25282D 3px 6px); box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .08); }
+    .deco.deco-cosmos {
+      border: 1px solid rgba(160, 140, 255, .6);
+      background: radial-gradient(circle at 18% 34%, #fff 0 .9px, transparent 1.5px), radial-gradient(circle at 63% 24%, #fff 0 .7px, transparent 1.3px),
+                  radial-gradient(circle at 84% 70%, #fff 0 .9px, transparent 1.5px), radial-gradient(circle at 40% 78%, rgba(255, 255, 255, .8) 0 .7px, transparent 1.3px),
+                  radial-gradient(120% 140% at 30% 0%, #3B2A8C, #120C2E 70%);
+      box-shadow: 0 8px 22px -10px #6B4DFF, 0 0 14px -6px #4FE3EE;
+      animation: deco-twinkle 3s ease-in-out infinite;
+    }
+    @keyframes deco-twinkle { 50% { box-shadow: 0 8px 22px -10px #6B4DFF, 0 0 22px -4px #4FE3EE; } }
+    .deco:is(.deco-aurora, .deco-sunset, .deco-carbon, .deco-cosmos) :is(.user-badge-name, .map-group-name) { color: #fff; }
+    .deco.deco-sunset :is(.user-badge-name, .map-group-name) { text-shadow: 0 1px 2px rgba(90, 20, 40, .4); }
+    .deco.deco-mint :is(.user-badge-name, .map-group-name) { color: #0B3B2E; }
+    .deco.deco-sakura :is(.user-badge-name, .map-group-name) { color: #5A1030; }
+    .deco:is(.deco-aurora, .deco-sunset, .deco-carbon, .deco-cosmos) .map-group-count { color: #fff; background: rgba(255, 255, 255, .14); }
+    .deco.deco-mint .map-group-count { color: #0B3B2E; background: rgba(11, 59, 46, .1); }
+    .deco.deco-sakura .map-group-count { color: #5A1030; background: rgba(90, 16, 48, .1); }
+    .user-badge:has(> .user-badge-inner.deco-aurora)::after, .user-badge.is-leader:has(> .map-group-chip.deco-aurora)::after { background: #1B6B5A; border-color: rgba(170, 255, 225, .55); }
+    .user-badge:has(> .user-badge-inner.deco-sunset)::after, .user-badge.is-leader:has(> .map-group-chip.deco-sunset)::after { background: #FF6F72; border-color: rgba(255, 214, 176, .7); }
+    .user-badge:has(> .user-badge-inner.deco-mint)::after, .user-badge.is-leader:has(> .map-group-chip.deco-mint)::after { background: #BDF3E0; border-color: #fff; }
+    .user-badge:has(> .user-badge-inner.deco-sakura)::after, .user-badge.is-leader:has(> .map-group-chip.deco-sakura)::after { background: #FFC4D8; border-color: #fff; }
+    .user-badge:has(> .user-badge-inner.deco-carbon)::after, .user-badge.is-leader:has(> .map-group-chip.deco-carbon)::after { background: #1F2125; border-color: #3A3D44; }
+    .user-badge:has(> .user-badge-inner.deco-cosmos)::after, .user-badge.is-leader:has(> .map-group-chip.deco-cosmos)::after { background: #1A1240; border-color: rgba(160, 140, 255, .6); }
+
+    /* ── Монета GroupIS ── */
+    .coin {
+      display: inline-block; flex: none; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.14em; border-radius: 50%;
+      background: radial-gradient(circle at 34% 30%, #FFF6C8 0 12%, transparent 13%), linear-gradient(145deg, #FFD95A, #F2A219 60%, #C97A0A);
+      box-shadow: inset 0 0 0 .09em rgba(120, 70, 0, .35), 0 .05em .15em rgba(0, 0, 0, .25);
+    }
+    .coin.is-big { width: 40px; height: 40px; margin: 0; vertical-align: middle; }
+
+    /* ── Groupies Ultra: преимущества с пояснением и срок подписки ── */
+    .ux-perk-main { display: grid; gap: 1px; min-width: 0; }
+    .ux-perk-main b { font-weight: 600; font-size: 14px; }
+    .ux-perk-main span { font-size: 12px; line-height: 1.35; color: var(--ink-soft); }
+    .ux-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 8px; }
+    .ux-plan {
+      position: relative; display: grid; gap: 3px; justify-items: start; padding: 14px 14px 12px; border: 0; border-radius: 18px;
+      cursor: pointer; text-align: left; background: var(--field); color: var(--ink); font: inherit;
+      box-shadow: inset 0 0 0 1px var(--win-line); transition: box-shadow .2s, background .2s, transform .3s var(--spring);
+    }
+    .ux-plan:active { transform: scale(.97); transition-duration: .08s; }
+    .ux-plan[aria-pressed="true"] { background: var(--win); box-shadow: inset 0 0 0 2px var(--ink); }
+    .ux-plan b { font: 600 15px/1.2 var(--font-ui); }
+    .ux-plan span { font-size: 13px; color: var(--ink-soft); }
+    .ux-plan i {
+      position: absolute; top: -8px; right: 10px; padding: 1px 8px; border-radius: 999px;
+      background: var(--prism); color: var(--prism-ink); font: 700 10px/1.6 var(--font-ui); font-style: normal;
+    }
+    .ux-sec > .pe-note { padding: 0 4px; }
+    .ux-links { padding: 0; margin: 0 -4px; }
+
+    /* ── Магазин ── */
+    .shop-wallet { display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 16px; border-radius: 22px; background: var(--field); }
+    .shop-balance { flex: 1; min-width: 0; display: grid; }
+    .shop-balance b { font: 700 24px/1.1 var(--font-ui); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .shop-balance span { font-size: 12px; color: var(--ink-soft); }
+    .shop-gift-note { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; background: color-mix(in srgb, var(--c3) 12%, var(--field)); font-size: 13px; line-height: 1.35; }
+    .shop-gift-note svg { flex: none; width: 20px; height: 20px; stroke: url(#prismIcon); }
+    .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+    .shop-card {
+      display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0; padding: 10px 8px 10px; border: 0; border-radius: 20px;
+      cursor: pointer; background: var(--field); color: var(--ink); font: inherit; text-align: center;
+      box-shadow: inset 0 0 0 1px var(--win-line); transition: transform .3s var(--spring), box-shadow .2s;
+    }
+    .shop-card:active { transform: scale(.96); transition-duration: .08s; }
+    .shop-card.is-owned { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c2) 60%, transparent); }
+    .shop-prev, .shop-sheet-prev { position: relative; display: grid; place-items: center; width: 100%; border-radius: 14px; background: var(--land); overflow: hidden; color: var(--ink-soft); }
+    .shop-prev { height: 96px; }
+    .shop-sheet-prev { height: 180px; margin-bottom: 8px; border-radius: 18px; }
+    .shop-prev svg, .shop-sheet-prev svg { width: 34px; height: 34px; opacity: .45; }
+    /* снимок аватара — во всю плашку (у ячейки сетки высота по содержимому, поэтому height: 100% там не работает) */
+    .shop-prev img, .shop-sheet-prev img, .wd-prev img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+    .shop-prev.is-style, .shop-sheet-prev.is-style { padding: 0 6px; }
+    .shop-prev .user-badge-inner, .shop-sheet-prev .user-badge-inner { min-width: 0; max-width: 100%; pointer-events: none; }
+    .shop-sheet-prev .user-badge-inner { transform: scale(1.25); }
+    .shop-name { font: 600 13px/1.25 var(--font-ui); }
+    .shop-price { display: inline-flex; align-items: center; font: 600 12px var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .shop-card.is-owned .shop-price { color: var(--ink); }
+    .shop-sheet-card { display: grid; gap: 2px; }
+    .shop-sheet-card .modal-actions { flex-wrap: wrap; }
+    .btn .coin { width: .95em; height: .95em; margin: 0 .25em 0 .3em; }
+    .coin-packs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 10px; }
+    .coin-pack {
+      position: relative; display: grid; justify-items: center; gap: 4px; padding: 16px 6px 12px; border: 0; border-radius: 18px;
+      cursor: pointer; background: var(--field); color: var(--ink); font: inherit; box-shadow: inset 0 0 0 1px var(--win-line);
+      transition: transform .3s var(--spring);
+    }
+    .coin-pack:active { transform: scale(.95); transition-duration: .08s; }
+    .coin-pack .coin { width: 26px; height: 26px; margin: 0; }
+    .coin-pack b { font: 700 17px var(--font-ui); font-variant-numeric: tabular-nums; }
+    .coin-pack span { font-size: 12px; color: var(--ink-soft); }
+    .coin-pack i { position: absolute; top: -8px; padding: 1px 7px; border-radius: 999px; background: var(--prism); color: var(--prism-ink); font: 700 10px/1.6 var(--font-ui); font-style: normal; }
+
+    /* ── Гардероб: вкладки и плитки с замком ── */
+    .av-tabs { flex: none; }
+    .wd-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+    .wd-prev { position: relative; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 14px; background: var(--land); overflow: hidden; color: var(--ink-soft); }
+    .wd-prev svg { width: 26px; height: 26px; opacity: .45; }
+    .ux-opt.is-locked { color: var(--ink-soft); }
+    .ux-opt.is-locked :is(.ux-swatch, .wd-prev) { opacity: .55; }
+    .wd-lock {
+      display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; background: var(--win);
+      color: var(--ink); font: 700 10px/1.6 var(--font-ui); font-style: normal; letter-spacing: .03em; box-shadow: inset 0 0 0 1px var(--win-line);
+    }
+    .wd-lock .coin { width: .95em; height: .95em; margin-right: .25em; }
+
+    /* ── Карточка своей группы: «Чат группы» и «Настройки» рядом; профиль друга: «Написать» и «Подарить» ── */
+    .gx-hero-acts { display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 380px; margin-top: 6px; }
+    .gx-hero-acts .gx-chat { flex: 1 1 0; min-width: 0; margin-top: 0; }
+    .friend-actions { gap: 8px; flex-wrap: wrap; }
+    .friend-actions .btn.friend-gift { min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+    .friend-actions .btn.friend-gift svg { width: 18px; height: 18px; flex: none; }
+    [data-nc-group] .avatar svg { width: 18px; height: 18px; }
+    /* пункты профиля с пояснением — чуть плотнее, чтобы список помещался под фото */
+    .profile-rows .row { padding-top: 10px; padding-bottom: 10px; }
+
+    /* ── Знакомство с приложением (openTour) ── */
+    .tour { position: fixed; inset: 0; z-index: 600; display: grid; place-items: center; padding: 20px; background: rgba(8, 8, 12, .5); animation: fade-in .25s ease both; }
+    .tour-card {
+      width: min(360px, 100%); display: grid; justify-items: center; gap: 10px; padding: 26px 22px 18px; border-radius: 28px;
+      background: var(--win); color: var(--ink); text-align: center;
+      box-shadow: 0 40px 90px -20px rgba(0, 0, 0, .5), inset 0 1px 0 var(--rim); animation: modal-in .5s var(--spring) both;
+    }
+    .tour-body { display: grid; justify-items: center; gap: 8px; animation: scr-in .35s var(--ease) both; }
+    .tour-ico { width: 64px; height: 64px; margin-bottom: 4px; border-radius: 50%; display: grid; place-items: center; background: var(--field); }
+    .tour-ico svg { width: 32px; height: 32px; stroke: url(#prismIcon); }
+    .tour-ico .ic-fill { fill: url(#prismIcon); stroke: none; }
+    .tour-title { font: 600 17px/1.3 var(--font-ui); letter-spacing: -0.015em; }
+    .tour-text { font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+    .tour-dots { display: flex; gap: 6px; margin: 6px 0 4px; }
+    .tour-dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--field); box-shadow: inset 0 0 0 1px var(--win-line); transition: width .3s var(--ease), background .3s; }
+    .tour-dots i.is-on { width: 18px; background: var(--prism); box-shadow: none; }
+    .tour-acts { display: flex; gap: 8px; width: 100%; }
+    .tour-acts .btn { flex: 1; }
+
     /* ═══════ Типографика ═══════
        Один шрифт (--font-ui) и одна шкала на всё приложение — как в системных мессенджерах:
          заголовки   24 / 20 / 17 — имя на фото профиля и экран входа, имя в профиле, заголовок окна
@@ -5708,6 +5860,7 @@
     groupMatches = []; groupMatchOutcome.clear(); groupInvites = []; groupInviteOutcome.clear(); groupDetailsId = null; groupDetailsBack = null;
     unionDetails = null; syncMatchButton(); syncRequestBadges();
     groupStats = new Map();
+    shopState = { loaded: false, missing: false, balance: 0, owned: new Set(), prices: {} };
     avatarConfig = defaultAvatarFor('male'); avatarConfigReady = false;
     removeOwnMarker();
     syncPostMarkers(); syncWishMarkers(); updateBadge();
@@ -5868,6 +6021,72 @@
       syncSettingsUi();
     });
     document.body.appendChild(card);
+  }
+
+  /* ── Знакомство с приложением ──
+     При первом входе на этом устройстве — пять коротких карточек: где что находится и как всё связано
+     (карта, группы, match, желание, аватар). Пропустить можно сразу; открыть заново — «Настройки → Как пользоваться» */
+  const TOUR_KEY = 'tour.v1:';
+  const TOUR_STEPS = [
+    { ico: '<circle cx="12" cy="12" r="8.75"/><path d="M12 12 18.2 5.8"/><circle class="ic-fill" cx="12" cy="12" r="2.1"/><circle class="ic-fill" cx="15.7" cy="15.4" r="1.3"/>',
+      title: 'Карта — главный экран', text: 'Здесь вы, ваши друзья и группы рядом. Нажмите на человека — откроется его профиль, на иконку группы — её карточка.' },
+    { ico: '<circle cx="6.9" cy="15.9" r="3.4"/><circle cx="17.1" cy="15.9" r="3.4"/><circle class="ic-fill" cx="12" cy="7.4" r="3.4"/>',
+      title: 'Группы', text: 'Соберите компанию во вкладке «Группы» и пригласите друзей. Группа появится на карте, когда в ней будет хотя бы двое.' },
+    { ico: '<circle cx="9" cy="12" r="5.6"/><circle cx="15" cy="12" r="5.6"/><path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/>',
+      title: 'Match', text: 'Понравилась другая группа? Откройте её карточку и предложите match — у ваших групп появится общий чат.' },
+    { ico: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 7 9.5a4.5 4.5 0 0 0 0 9z"/>',
+      title: 'Желание', text: 'В профиле загадайте желание — оно повиснет облаком над вашей иконкой на 12 часов. Так друзья увидят, чем вы хотите заняться.' },
+    { ico: '<circle class="ic-fill" cx="12" cy="8.6" r="3.5"/><path d="M5.25 19.5c1.15-3.3 3.8-5 6.75-5s5.6 1.7 6.75 5"/>',
+      title: 'Ваш аватар', text: 'Профиль → «Мой аватар»: внешность, одежда и стиль иконки на карте. Новые вещи — в «Магазине», а друзьям их можно подарить.' },
+  ];
+  function openTour() {
+    return new Promise((resolve) => {
+      document.querySelectorAll('.tour').forEach((el) => el.remove());
+      let step = 0;
+      const el = document.createElement('div');
+      el.className = 'tour';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-modal', 'true');
+      el.setAttribute('aria-label', 'Как пользоваться GroupIS');
+      const paint = () => {
+        const s = TOUR_STEPS[step], last = step === TOUR_STEPS.length - 1;
+        el.innerHTML = `
+          <div class="tour-card">
+            <div class="tour-body">
+              <span class="tour-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${s.ico}</svg></span>
+              <div class="tour-title">${s.title}</div>
+              <div class="tour-text">${s.text}</div>
+            </div>
+            <div class="tour-dots" aria-hidden="true">${TOUR_STEPS.map((_, i) => `<i class="${i === step ? 'is-on' : ''}"></i>`).join('')}</div>
+            <div class="tour-acts">
+              <button type="button" class="btn" data-tour-skip>${last ? 'Назад' : 'Пропустить'}</button>
+              <button type="button" class="btn btn-primary" data-tour-next>${last ? 'Начать' : 'Далее'}</button>
+            </div>
+          </div>`;
+      };
+      const close = () => { document.removeEventListener('keydown', onKey, true); el.remove(); resolve(true); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+        else if (e.key === 'ArrowRight' && step < TOUR_STEPS.length - 1) { step++; paint(); }
+        else if (e.key === 'ArrowLeft' && step > 0) { step--; paint(); }
+      };
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-tour-next]')) { if (step < TOUR_STEPS.length - 1) { step++; paint(); } else close(); return; }
+        if (e.target.closest('[data-tour-skip]')) { if (step === TOUR_STEPS.length - 1) { step--; paint(); } else close(); return; }
+        if (e.target === el) close();
+      });
+      document.addEventListener('keydown', onKey, true);
+      paint();
+      document.body.appendChild(el);
+    });
+  }
+  // Первый вход на этом устройстве — показать знакомство (ответ: показали ли)
+  async function maybeShowTour() {
+    if (!currentUser || !authScreen.hidden) return false;
+    const key = TOUR_KEY + currentUser.id;
+    try { if (localStorage.getItem(key)) return false; localStorage.setItem(key, '1'); } catch { return false; }
+    await openTour();
+    return true;
   }
 
   /* Какой чат сейчас открыт на экране: сервер (send-push) не шлёт push о сообщениях в него на это устройство.
@@ -6548,7 +6767,9 @@
     });
     if (!returning) openAppFromShortcut();
     setTimeout(prefetchChats, 8000);   // когда интерфейс уже на месте и первые данные загрузились
-    setTimeout(maybeAskPush, 4000);
+    // при первом входе — знакомство с приложением, а уже после него — вопрос про уведомления
+    setTimeout(async () => { const shown = await maybeShowTour(); setTimeout(maybeAskPush, shown ? 800 : 2200); }, 1800);
+    loadShopState();   // кошелёк и вещи — для строк профиля и замков в гардеробе
   }
 
   /* Ярлыки из manifest.webmanifest: ./?open=messenger|profile|settings;
@@ -7644,6 +7865,7 @@
           // приглашение в группу (во вкладке «Группы») или ответ на него — нужны свежие приглашения
           loadGroupInvitesFromDB().then(() => { if (openApp === 'notifications') refreshNotifications(); refreshGroupsList(); });
         }
+        if (n.type === 'gift') loadShopState();   // подарили вещь — она уже наша, в гардеробе снимается замок
         if (n.type === 'friend_accept') {
           // Наш запрос приняли — обновляем список друзей и их маркеры на карте
           loadFriendsFromDB().then(() => {
@@ -8232,7 +8454,7 @@
       ? `<div class="user-badge is-leader" data-clickable="true">${wishAnchorsHtml(clouds)}${mapGroupBadgesHtml(ownedGroups, deco)}</div>`
       : `<div class="user-badge" data-clickable="true">
           ${wishAnchorsHtml(clouds)}
-          <div class="user-badge-inner ${tone} ${decoClass(deco && deco.me)}">
+          <div class="user-badge-inner ${tone} ${decoClass(meStyle(deco))}">
             ${avatarInner}
             <span class="user-badge-name">${escapeHtml(label)}</span>
             ${groupLabel ? `<span class="user-badge-name user-badge-group">· ${escapeHtml(groupLabel)}</span>` : ''}
@@ -8611,7 +8833,7 @@
     const groupLabel = !center && (sharesGroupWithMe(userId) || !isFriend) ? sharedGroupsLabel(userId) : '';
     const deco = decoOf(avatarCfg);
     const groupsKey = mapGroupsKey(ownedGroups, deco);
-    const decoKey = deco ? deco.me || '' : '';
+    const decoKey = meStyle(deco);
     // Облака: над иконкой группы — её желание; над человеком — его желание и желание его группы;
     // над союзом — желания обеих групп; над компанией, если остаётся место, — желания тех, кто в ней
     const asGroupIcon = ownedGroups.length > 0;
@@ -9020,6 +9242,18 @@
     female: { none: 'bob', buzz: 'bob', short: 'bob', quiff: 'bob' },
   };
   const AVATAR_OUTFIT_SWAP = { male: { dress: 'tee' }, female: { jacket: 'tee' } };
+  /* Гардероб моделей из Blender. Обычный наряд — в male.glb / female.glb; остальные — отдельными моделями
+     (avatars3d/<фигура>_<наряд>.glb), вещи — отдельными файлами с одной вещью (avatars3d/<фигура>_<файл>.glb),
+     см. _blender/build_avatars.py. Грузятся, только когда их кто-то надел или открыли гардероб.
+     ultra — бесплатно с Groupies Ultra; item — покупается в магазине за монеты (SHOP_ITEMS) */
+  const AVATAR_WEARS = {
+    base: { label: 'Повседневный' },
+    sport: { label: 'Спортивный', ultra: true, matching: true },   // matching — верх и низ одного цвета, как костюм
+    suit: { label: 'Деловой', item: 'wear_suit' },
+    summer: { label: 'Летний', item: 'wear_summer' },
+  };
+  const AVATAR_HATS = { fedora: { label: 'Шляпа', file: 'hat', item: 'hat_fedora' } };
+  const AVATAR_SHOES = { boots: { label: 'Ботинки', file: 'boots', item: 'shoes_boots' } };
   // Старый формат: hair = none | short | long | blond | ginger — стиль и цвет вместе
   const AVATAR_LEGACY_HAIR = {
     none: ['none', 'espresso'], short: ['short', 'espresso'], long: ['long', 'chestnut'],
@@ -9046,31 +9280,61 @@
     if (AVATAR_HAIR_COLORS[color]) cfg.hairColor = color;
     const outfit = AVATAR_OUTFITS[gender][src.outfit] ? src.outfit : AVATAR_OUTFIT_SWAP[gender][src.outfit];
     if (outfit) cfg.outfit = outfit;
+    // наряд, шляпа и обувь из гардероба — одни и те же для обеих фигур
+    if (AVATAR_WEARS[src.wear] && src.wear !== 'base') cfg.wear = src.wear;
+    if (AVATAR_HATS[src.hat]) cfg.hat = src.hat;
+    if (AVATAR_SHOES[src.shoes]) cfg.shoes = src.shoes;
     const deco = normDeco(src.deco);
     if (deco) cfg.deco = deco;
     return cfg;
+  }
+  // Что на человеке видно: спортивный образ — только пока у него действует Groupies Ultra
+  function shownWear(cfg) {
+    const w = cfg && cfg.wear;
+    if (!w || !AVATAR_WEARS[w]) return 'base';
+    return AVATAR_WEARS[w].ultra && !ultraActive(cfg.deco) ? 'base' : w;
+  }
+  // Другая фигура в редакторе: внешность — по умолчанию для неё, а кожа, цвет волос и всё из гардероба остаются
+  function switchAvatarGender(cfg, gender) {
+    const keep = { skin: cfg.skin, hairColor: cfg.hairColor };
+    for (const k of ['wear', 'hat', 'shoes', 'deco']) if (cfg[k]) keep[k] = cfg[k];
+    return { ...defaultAvatarFor(gender), ...keep };
   }
 
   /* ── Groupies Ultra: оформление иконок на карте ──
      Лежит в том же avatar_config, что и внешность аватара (поле deco): его получают все, кто видит человека на карте,
      поэтому отдельная таблица не нужна. { ultra: true, me: стиль плашки с именем, groups: { id группы: стиль её иконки } }.
      Подписка пока включается кнопкой, без оплаты */
-  const DECO_STYLES = { prism: 'Призма', neon: 'Неон', gold: 'Золото', holo: 'Голограмма', lava: 'Лава', ice: 'Лёд' };
+  /* Стили: ULTRA — входят в Groupies Ultra и видны, пока подписка действует (until — до какого момента; у тех, кто
+     включил её раньше, срока нет); SHOP — покупаются в магазине за монеты и остаются навсегда */
+  const DECO_ULTRA = { prism: 'Призма', neon: 'Неон', gold: 'Золото', holo: 'Голограмма', lava: 'Лава', ice: 'Лёд' };
+  const DECO_SHOP = { aurora: 'Аврора', sunset: 'Закат', cosmos: 'Космос', carbon: 'Карбон', sakura: 'Сакура', mint: 'Мята' };
+  const DECO_STYLES = { ...DECO_ULTRA, ...DECO_SHOP };
   function normDeco(d) {
-    if (!d || typeof d !== 'object' || !d.ultra) return null;
-    const out = { ultra: true };
+    if (!d || typeof d !== 'object') return null;
+    const out = {};
+    if (d.ultra) out.ultra = true;
+    const until = Number(d.until);
+    if (out.ultra && until > 0) out.until = until;
     if (DECO_STYLES[d.me]) out.me = d.me;
     if (d.groups && typeof d.groups === 'object') {
       const g = {};
       for (const [id, st] of Object.entries(d.groups)) if (DECO_STYLES[st] && /^[\w-]{1,64}$/.test(id)) g[id] = st;
       if (Object.keys(g).length) out.groups = g;
     }
-    return out;
+    return Object.keys(out).length ? out : null;
   }
   function decoOf(cfg) { return cfg && typeof cfg === 'object' ? normDeco(cfg.deco) : null; }
   function decoKeyOf(cfg) { const d = decoOf(cfg); return d ? JSON.stringify(d) : ''; }
+  function ultraActive(deco) { return !!deco && !!deco.ultra && (!deco.until || deco.until > Date.now()); }
+  // Стиль, который видно: стиль Ultra — только пока подписка действует
+  function styleShown(deco, style) {
+    if (!style || !DECO_STYLES[style]) return '';
+    return DECO_ULTRA[style] && !ultraActive(deco) ? '' : style;
+  }
+  function meStyle(deco) { return styleShown(deco, deco && deco.me); }
   function decoClass(style) { return style && DECO_STYLES[style] ? 'deco deco-' + style : ''; }
-  function groupDecoStyle(deco, gid) { return (deco && deco.groups && deco.groups[String(gid)]) || ''; }
+  function groupDecoStyle(deco, gid) { return styleShown(deco, deco && deco.groups && deco.groups[String(gid)]); }
 
   // Аватар хранится по аккаунту: у разных людей на одном устройстве — свои
   function avatarStoreKey(uid) { return AVATAR_KEY + ':' + (uid || 'guest'); }
@@ -9322,31 +9586,81 @@
     return { parts, height, headY: height - 0.125 };
   }
 
+  // Модели загрузились — всё, что уже нарисовано (упрощённой фигурой или в прежнем наряде), перерисовываем
+  function onAvatarModelsChanged() {
+    avatarModelsVersion++;
+    try {
+      if (typeof refreshMyMarker === 'function') refreshMyMarker();
+      if (typeof scheduleSyncPeople === 'function') scheduleSyncPeople();
+      const stage = document.getElementById('avatar-stage-canvas');
+      if (stage && stage.__avatarRefresh) { stage.__avatarRefresh(); if (typeof renderAvatarControls === 'function') renderAvatarControls(); }
+      if (typeof repaintShop === 'function') repaintShop();
+    } catch (err) { console.warn('[аватар]', err); }
+  }
   const avatarModelsReady = (async () => {
     if (!isThreeAvailable()) return;
     await Promise.all(Object.entries(AVATAR_MODEL_URLS).map(async ([gender, url]) => {
       try { avatarModels[gender] = await loadAvatarModel(window.THREE, url); } catch (err) { console.warn('[аватар] модель не загружена:', err); }
     }));
     if (!Object.keys(avatarModels).length) return;
-    avatarModelsVersion++;
-    // всё, что уже нарисовано упрощённой фигурой, перерисовываем моделью
-    try {
-      if (typeof refreshMyMarker === 'function') refreshMyMarker();
-      if (typeof loadUserLocations === 'function') loadUserLocations();
-      const stage = document.getElementById('avatar-stage-canvas');
-      if (stage && stage.__avatarRefresh) { stage.__avatarRefresh(); if (typeof renderAvatarControls === 'function') renderAvatarControls(); }
-    } catch (err) { console.warn('[аватар]', err); }
+    onAvatarModelsChanged();
   })();
+  /* Наряды и вещи гардероба (avatars3d/<имя>.glb) — по требованию: undefined — ещё грузится (пока рисуем без неё),
+     null — не загрузилась. Загрузились сразу несколько — перерисовываем один раз */
+  const avatarAssets = new Map(), avatarAssetLoads = new Map();
+  let avatarAssetsTimer = 0;
+  function avatarAsset(name) {
+    if (avatarAssets.has(name)) return avatarAssets.get(name);
+    if (!avatarAssetLoads.has(name) && isThreeAvailable()) {
+      avatarAssetLoads.set(name, loadAvatarModel(window.THREE, `./avatars3d/${name}.glb`)
+        .then((m) => m, (err) => { console.warn('[аватар] не загрузилось:', name, err); return null; })
+        .then((m) => {
+          avatarAssets.set(name, m);
+          clearTimeout(avatarAssetsTimer);
+          avatarAssetsTimer = setTimeout(onAvatarModelsChanged, 60);
+          return m;
+        }));
+    }
+    return undefined;
+  }
+  // Заранее загрузить всё, что нужно, чтобы показать этот образ (для превью в гардеробе и магазине)
+  function avatarAssetsFor(cfg) {
+    const c = normalizeAvatar(cfg), names = [];
+    const wear = shownWear(c);
+    if (wear !== 'base') names.push(c.gender + '_' + wear);
+    if (c.hat) names.push(c.gender + '_' + AVATAR_HATS[c.hat].file);
+    if (c.shoes) names.push(c.gender + '_' + AVATAR_SHOES[c.shoes].file);
+    names.forEach(avatarAsset);
+    return Promise.all(names.map((n) => avatarAssetLoads.get(n) || Promise.resolve(avatarAssets.get(n))));
+  }
+  function avatarAssetsReady(cfg) {
+    const c = normalizeAvatar(cfg), wear = shownWear(c);
+    return (wear === 'base' || avatarAssets.has(c.gender + '_' + wear))
+      && (!c.hat || avatarAssets.has(c.gender + '_' + AVATAR_HATS[c.hat].file))
+      && (!c.shoes || avatarAssets.has(c.gender + '_' + AVATAR_SHOES[c.shoes].file));
+  }
 
-  // Экземпляр модели: геометрия и текстуры — свои копии, их освобождает disposeObject вместе со сценой
-  function buildAvatarFromModel(THREE, model, cfg) {
+  /* Экземпляр модели: геометрия и текстуры — свои копии, их освобождает disposeObject вместе со сценой.
+     opts.shoes — другая обувь (заменяет обычную), opts.hat — шляпа: волосы выше её полей не рисуются,
+     иначе пышная причёска проступает сквозь тулью; opts.matching — верх и низ одного цвета (спортивный костюм) */
+  function buildAvatarFromModel(THREE, model, cfg, opts = {}) {
     const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
     const hairHex = AVATAR_HAIR_COLORS[cfg.hairColor].hex, cloth = AVATAR_CLOTHES[cfg.clothes];
     // брови темнее волос — иначе на светлой коже их не видно
     const tint = {
-      skin: lin(AVATAR_SKINS[cfg.skin].base), hair: lin(hairHex), top: lin(cloth.body), pants: lin(cloth.legs),
+      skin: lin(AVATAR_SKINS[cfg.skin].base), hair: lin(hairHex), top: lin(cloth.body), pants: lin(opts.matching ? cloth.body : cloth.legs),
       brow: lin(new THREE.Color(hairHex).lerp(new THREE.Color(0x1A120E), 0.45).getHex()),
     };
+    let hairClip = null;
+    if (opts.hat) {
+      let lo = Infinity, hi = -Infinity;
+      for (const p of opts.hat.parts) { const b = p.geometry.boundingBox; lo = Math.min(lo, b.min.y); hi = Math.max(hi, b.max.y); }
+      for (const p of opts.hat.parts) {
+        const b = p.geometry.boundingBox, dy = (p.node.translation && p.node.translation[1]) || 0;
+        lo = Math.min(lo, b.min.y + dy); hi = Math.max(hi, b.max.y + dy);
+      }
+      if (isFinite(lo)) hairClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), lo + (hi - lo) * 0.3);
+    }
     const group = new THREE.Group(), made = new Map();
     const materialFor = (d) => {
       if (made.has(d)) return made.get(d);
@@ -9362,11 +9676,14 @@
         else params.alphaTest = 0.35;
       }
       const m = d.name === 'skin' ? avatarSkinMaterial(THREE, params) : new THREE.MeshStandardMaterial(params);
+      if (hairClip && d.name === 'hair') m.clippingPlanes = [hairClip];
       m.name = d.name;
       made.set(d, m);
       return m;
     };
-    for (const part of model.parts) {
+    const parts = model.parts.filter((p) => !(opts.shoes && p.node.name === 'shoes'))
+      .concat(opts.shoes ? opts.shoes.parts : [], opts.hat ? opts.hat.parts : []);
+    for (const part of parts) {
       const mesh = new THREE.Mesh(part.geometry.clone(), materialFor(part.material));
       const n = part.node;
       if (n.translation) mesh.position.fromArray(n.translation);
@@ -9381,7 +9698,16 @@
 
   function buildAvatarGroup(THREE, rawCfg) {
     const cfg = normalizeAvatar(rawCfg);
-    if (avatarModels[cfg.gender]) return buildAvatarFromModel(THREE, avatarModels[cfg.gender], cfg);
+    if (avatarModels[cfg.gender]) {
+      // наряд и вещи, которые ещё грузятся, появятся сами (onAvatarModelsChanged) — пока человек в обычном
+      const wear = shownWear(cfg), g = cfg.gender;
+      const body = (wear !== 'base' && avatarAsset(g + '_' + wear)) || avatarModels[g];
+      const hat = cfg.hat ? avatarAsset(g + '_' + AVATAR_HATS[cfg.hat].file) : null;
+      const shoes = cfg.shoes ? avatarAsset(g + '_' + AVATAR_SHOES[cfg.shoes].file) : null;
+      return buildAvatarFromModel(THREE, body, cfg, {
+        hat: hat || null, shoes: shoes || null, matching: body !== avatarModels[g] && !!AVATAR_WEARS[wear].matching,
+      });
+    }
     const fem = cfg.gender === 'female';
     const P = avatarProportions(cfg.gender);
     const R = P.headR, HS = P.headScale;
@@ -9826,6 +10152,7 @@
     r.outputEncoding = THREE.sRGBEncoding;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.15;
+    r.localClippingEnabled = true;   // волосы под шляпой (buildAvatarFromModel)
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     return r;
   }
@@ -9912,7 +10239,7 @@
   function avatarCfgKey(cfg) {
     if (!cfg || typeof cfg !== 'object') return '';
     const c = normalizeAvatar(cfg);
-    return [c.gender, c.skin, c.clothes, c.hair, c.hairColor, c.outfit, avatarModelsVersion].join('|');
+    return [c.gender, c.skin, c.clothes, c.hair, c.hairColor, c.outfit, shownWear(c), c.hat || '', c.shoes || '', avatarModelsVersion].join('|');
   }
 
   /* Снимки делает один общий рендерер: контекст WebGL и шейдеры создаются один раз, а не на каждый аватар.
@@ -10045,7 +10372,7 @@
     const deco = decoOf(avatarConfig);
     const src = !formation && isThreeAvailable() ? getAvatarSnapshotDataURL(avatarConfig) : null;
     const key = ['me', profile.name, profile.avatar, avatarCfgKey(avatarConfig), wishCloudsKey(clouds),
-      formation ? formationKey(formation) : '', mapGroupsKey(ownedGroups, deco), deco ? deco.me || '' : '', src ? 1 : 0].join('§');
+      formation ? formationKey(formation) : '', mapGroupsKey(ownedGroups, deco), meStyle(deco), src ? 1 : 0].join('§');
     // Ничего не поменялось — только двигаем маркер
     if (userLocationMarker && key === userMarkerKey) {
       try { userLocationMarker.setCoordinates(coords); scheduleWishDeclutter(); return; } catch {}
@@ -10069,7 +10396,7 @@
     badge.className = 'user-badge' + (ownedGroups.length ? ' is-leader' : ''); badge.dataset.clickable = 'true';
     badge.innerHTML = ownedGroups.length ? `${wishAnchorsHtml(clouds)}${mapGroupBadgesHtml(ownedGroups, deco)}` : `
       ${wishAnchorsHtml(clouds)}
-      <div class="user-badge-inner ${decoClass(deco && deco.me)}">
+      <div class="user-badge-inner ${decoClass(meStyle(deco))}">
         ${avatarInner}
         <span class="user-badge-name">${escapeHtml(label)}</span>
         <span class="user-badge-status" aria-hidden="true"></span>
@@ -10853,12 +11180,19 @@
     });
   }
 
-  function showCreateGroupScreen(editingId = null) {
+  // backFn — куда вернуться (по умолчанию — к списку групп; из карточки группы — в карточку)
+  function showCreateGroupScreen(editingId = null, backFn = null) {
     setScreen(() => {
+      stopScreen3D();
       const editing = editingId ? groups.find((g) => g.id === editingId) : null;
       winTitle.textContent = editing ? 'Настройки группы' : 'Новая группа';
       winBody.scrollTop = 0;
       let groupPhoto = editing && editing.photo ? editing.photo : '';
+      // Стиль иконки группы на карте — выбирает лидер; хранится в его оформлении (deco.groups)
+      const canStyle = !!editing && editing.ownerId === (currentUser && currentUser.id);
+      const decoNow = decoOf(avatarConfig);
+      const styleWas = canStyle ? ((decoNow && decoNow.groups && decoNow.groups[String(editingId)]) || '') : '';
+      let groupStyle = styleWas;
       // В списке — друзья плюс текущие участники группы, которые не в друзьях:
       // иначе при сохранении они бы пропадали из группы
       const existingMembers = editing && editing.members ? editing.members : [];
@@ -10903,6 +11237,11 @@
               <label class="pe-field"><span class="pe-label">Как назовёте группу</span><input class="pe-input" type="text" id="group-name" maxlength="60" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}" placeholder="Например, «Прогулки по выходным»"></label>
             </div>
           </section>
+          ${canStyle ? `<section class="pe-sec">
+            <div class="pe-cap"><span>Иконка на карте</span></div>
+            <div class="ux-item gf-style"><div class="ux-stage" id="gf-style-prev">${mapGroupChipHtml(editing, decoClass(styleShown(decoNow, groupStyle)))}</div><div id="gf-style-tiles">${styleTilesHtml(groupStyle, (st) => `data-gf-style="${st}"`)}</div></div>
+            <p class="pe-note">Так иконку группы видят все на карте. Стили — из Groupies Ultra и «Магазина» в профиле.</p>
+          </section>` : ''}
           <section class="pe-sec">
             <div class="pe-cap"><span>Участники</span><span class="pe-count" id="gf-sel-count"></span></div>
             <ul class="pe-group gf-people" id="group-people">${peopleHtml}</ul>
@@ -10951,6 +11290,24 @@
 
       winBody.querySelector('#group-cancel').addEventListener('click', goBack);
 
+      const styleBox = winBody.querySelector('.gf-style');
+      const paintStyleTiles = () => {
+        winBody.querySelector('#gf-style-tiles').innerHTML = styleTilesHtml(groupStyle, (st) => `data-gf-style="${st}"`);
+        winBody.querySelector('#gf-style-prev').innerHTML = mapGroupChipHtml(editing, decoClass(styleShown(decoOf(avatarConfig), groupStyle)));
+      };
+      if (styleBox) styleBox.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-gf-style]');
+        if (!b) return;
+        e.stopPropagation();
+        const st = b.dataset.gfStyle;
+        if (b.dataset.lock) {
+          openLocked(b.dataset.lock, styleShopItem(st), `Стиль «${DECO_STYLES[st]}»`, () => showCreateGroupScreen(editingId, backFn), () => { if (styleBox.isConnected) paintStyleTiles(); });
+          return;
+        }
+        groupStyle = st;
+        paintStyleTiles();
+      });
+
       const delBtn = winBody.querySelector('#group-delete');
       if (delBtn) {
         delBtn.addEventListener('click', async () => {
@@ -10993,7 +11350,11 @@
           ...groupInvites.filter((i) => !(i.groupId === String(gid) && cancelledIds.includes(i.toId))),
           ...added.map((m) => ({ id: 'tmp-' + gid + '-' + m.id, groupId: String(gid), fromId: currentUser.id, toId: m.id, status: 'pending' })),
         ];
-        showGroupsScreen();
+        // стиль иконки группы — в оформление лидера (видно всем сразу, вместе с аватаром)
+        if (canStyle && groupStyle !== styleWas) {
+          setMyDeco((d) => { const gd = { ...(d.groups || {}) }; if (groupStyle) gd[gid] = groupStyle; else delete gd[gid]; return { ...d, groups: gd }; });
+        }
+        if (editing && backFn) { navDir = 'back'; try { backFn(); } finally { navDir = 'fwd'; } } else showGroupsScreen();
         refreshMyMarker();
         const failed = async (what, error) => {
           console.warn('[groups] ' + what + ':', error.message);
@@ -11037,7 +11398,7 @@
             + '\n\nЕсли приглашения ещё не настроены, выполните supabase_group_invites.sql в Supabase.');
         }
       });
-    }, () => showGroupsScreen());
+    }, backFn || (() => showGroupsScreen()));
   }
 
   function membersLabel(n) {
@@ -11360,7 +11721,8 @@
             <div class="gx-ava-ring"><div class="gx-ava"${photo ? ` style="background-image:url('${photo}')"` : ''}>${photo ? '' : escapeHtml(firstChar(g.name || '?').toUpperCase())}</div></div>
             <div class="gx-name">${escapeHtml(g.name)}</div>
             <div class="gx-chips">${chips.map((c) => `<span class="gx-chip">${escapeHtml(c)}</span>`).join('')}</div>
-            ${isMember ? chatBtn : myGroups().length ? `<button type="button" class="btn gx-chat gx-share" data-share-group="${escapeHtml(g.id)}">${ICON_SHARE}Поделиться</button>` : ''}
+            ${isMember ? `<div class="gx-hero-acts">${chatBtn}${g.ownerId === myId ? `<button type="button" class="btn gx-chat" data-group-edit="${escapeHtml(g.id)}">Настройки</button>` : ''}</div>`
+              : myGroups().length ? `<button type="button" class="btn gx-chat gx-share" data-share-group="${escapeHtml(g.id)}">${ICON_SHARE}Поделиться</button>` : ''}
           </header>
           <section class="gx-match">${matchHtml.includes('gx-cta') ? '' : '<div class="user-profile-section-title">Match</div>'}${matchHtml}</section>
           <section><div class="user-profile-section-title">Желание</div>${wishHtml}</section>
@@ -11483,75 +11845,132 @@
     }, () => showProfileScreen());
   }
 
-  /* ═══════ ПОДПИСКА GROUPIES ULTRA ═══════
-     Даёт выбрать оформление своей иконки (плашки с именем) и иконок групп, которые человек ведёт. Пока включается
-     кнопкой «Активировать», без оплаты — оплату подключат позже. Выбор хранится в avatar_config (deco, см. normDeco),
-     поэтому его сразу видят все, кто видит человека или его группу на карте */
-  const DECO_ORDER = ['prism', 'neon', 'gold', 'holo', 'lava', 'ice'];
-  function showSubscriptionScreen() {
-    setScreen(() => {
-      winTitle.textContent = 'Подписка';
-      winBody.scrollTop = 0;
-      winBody.innerHTML = subscriptionHtml();
-    }, () => showSettingsScreen());
+  /* ═══════ GROUPIES ULTRA, МОНЕТЫ И МАГАЗИН ═══════
+     Groupies Ultra — подписка на месяц или на год: стили иконок DECO_ULTRA и спортивный образ в гардеробе. Срок
+     хранится в avatar_config (deco.until — по нему все видят, действует ли подписка) и на сервере (ultra_subs).
+     Монеты GroupIS, покупки и подарки — только на сервере (supabase_shop.sql): остаток и цену проверяет сам сервер.
+     Купленное и подаренное надевают в гардеробе («Мой аватар»), стиль иконки группы — в настройках группы.
+     Оплата деньгами пока не подключена: подписка и пополнение монет включаются сразу. Цены для витрины —
+     в ULTRA_PLANS и COIN_PACKS */
+  const ULTRA_PLANS = {
+    month: { label: '1 месяц', price: '199 ₽', months: 1 },
+    year: { label: '1 год', price: '1 490 ₽', months: 12, note: 'выгоднее на 38%' },
+  };
+  const COIN_PACKS = [
+    { id: 'p100', coins: 100, price: '99 ₽' },
+    { id: 'p550', coins: 550, price: '449 ₽', note: '+10%' },
+    { id: 'p1200', coins: 1200, price: '899 ₽', note: '+20%' },
+  ];
+  // Что продаётся. Цена здесь — для витрины, пока сервер не ответил; списывает сервер по своей (shop_items)
+  const SHOP_ITEMS = {
+    style_aurora: { kind: 'style', style: 'aurora', price: 150 },
+    style_sunset: { kind: 'style', style: 'sunset', price: 150 },
+    style_mint: { kind: 'style', style: 'mint', price: 150 },
+    style_sakura: { kind: 'style', style: 'sakura', price: 200 },
+    style_carbon: { kind: 'style', style: 'carbon', price: 200 },
+    style_cosmos: { kind: 'style', style: 'cosmos', price: 250 },
+    wear_summer: { kind: 'wear', wear: 'summer', price: 300 },
+    wear_suit: { kind: 'wear', wear: 'suit', price: 450 },
+    hat_fedora: { kind: 'hat', hat: 'fedora', price: 250 },
+    shoes_boots: { kind: 'shoes', shoes: 'boots', price: 200 },
+  };
+  const ICON_HANGER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7.5a2 2 0 1 1 2-2"/><path d="M12 7.5v1.2L3.6 15a1.4 1.4 0 0 0 .8 2.5h15.2a1.4 1.4 0 0 0 .8-2.5L12 8.7"/></svg>`;
+  const ICON_GIFT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v7.5h14V12M12 8v11.5"/><path d="M12 8c-1.5-3.5-5.5-3.6-5.5-1.4C6.5 8 9.5 8 12 8zm0 0c1.5-3.5 5.5-3.6 5.5-1.4C17.5 8 14.5 8 12 8z"/></svg>`;
+  const coinIcon = (cls = '') => `<span class="coin ${cls}" aria-hidden="true"></span>`;
+  function fmtNum(n) { return Number(n || 0).toLocaleString('ru-RU'); }
+  function coinsWord(n) {
+    const m10 = n % 10, m100 = n % 100;
+    return m10 === 1 && m100 !== 11 ? 'монета' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'монеты' : 'монет';
   }
-  // Образец оформления: плашка с именем или иконка группы так, как их видно на карте
-  function decoBadgePreview(style) {
-    const name = (profile.name || 'Я').trim();
-    const ava = profile.avatar
-      ? `<span class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></span>`
-      : `<span class="user-badge-avatar">${escapeHtml(firstChar(name).toUpperCase() || '?')}</span>`;
-    return `<div class="user-badge-inner ${decoClass(style)}">${ava}<span class="user-badge-name">${escapeHtml(ellipsize(name, 18))}</span></div>`;
+  function fmtDay(ms) {
+    return new Date(ms).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/\s*г\.$/, '');
   }
-  function decoOptionsHtml(current, attrs) {
-    return `<div class="ux-styles" role="group">${['', ...DECO_ORDER].map((st) => `
-      <button type="button" class="ux-opt" ${attrs(st)} aria-pressed="${(current || '') === st}">
-        <span class="ux-swatch ${st ? 'deco deco-' + st : 'is-plain'}"></span><span>${st ? DECO_STYLES[st] : 'Обычная'}</span>
-      </button>`).join('')}</div>`;
+  function addMonths(ms, n) { const d = new Date(ms); d.setMonth(d.getMonth() + n); return d.getTime(); }
+  const isMissingRpc = (error) => !!error && (error.code === 'PGRST202' || error.code === '42883'
+    || /function|schema cache|could not find|does not exist/i.test(error.message || ''));
+
+  // Название вещи — и в магазине, и в гардеробе, и в уведомлении о подарке (на сервере — то же, shop_items.title)
+  function itemTitle(id) {
+    const it = SHOP_ITEMS[id];
+    if (!it) return 'Вещь';
+    if (it.kind === 'style') return `Стиль «${DECO_STYLES[it.style]}»`;
+    if (it.kind === 'wear') return `Образ «${AVATAR_WEARS[it.wear].label}»`;
+    if (it.kind === 'hat') return AVATAR_HATS[it.hat].label;
+    return AVATAR_SHOES[it.shoes].label;
   }
-  function subscriptionHtml() {
-    const deco = decoOf(avatarConfig);
-    const perks = `
-      <ul class="ux-perks">
-        <li><span class="ux-perk-ico">${ICON_EDIT}</span>Оформление вашей иконки на карте</li>
-        <li><span class="ux-perk-ico">${ICON_MATCH}</span>Оформление иконок групп, которые вы ведёте</li>
-        <li><span class="ux-perk-ico">${ICON_PIN}</span>Его видят все, кто видит вас и вашу группу на карте</li>
-      </ul>`;
-    const hero = `
-      <div class="ux-hero${deco ? ' is-on' : ''}">
-        <span class="ux-badge">ULTRA</span>
-        <div class="ux-title">Groupies Ultra</div>
-        <div class="ux-text">${deco ? 'Подписка активна — выберите, как вас и ваши группы видно на карте' : 'Выделитесь на карте: своё оформление иконки и иконок ваших групп'}</div>
-        ${deco ? '' : '<button type="button" class="ux-btn" data-ultra-on>Активировать</button>'}
-      </div>`;
-    if (!deco) return `<div class="ux">${hero}${perks}</div>`;
-    const led = currentUser ? groupsOwnedBy(currentUser.id) : [];
-    const groupsHtml = led.length ? led.map((g) => {
-      const style = groupDecoStyle(deco, g.id);
-      return `<div class="ux-item">
-        <div class="ux-stage">${mapGroupChipHtml(g, decoClass(style))}</div>
-        ${decoOptionsHtml(style, (st) => `data-deco-group="${escapeHtml(g.id)}" data-deco-style="${st}"`)}
-      </div>`;
-    }).join('') : `<div class="match-hint">Создайте группу — и выберите оформление её иконки на карте.</div>`;
-    return `<div class="ux">
-      ${hero}
-      <section class="ux-sec">
-        <div class="user-profile-section-title">Ваша иконка</div>
-        <div class="ux-item">
-          <div class="ux-stage">${decoBadgePreview(deco.me)}</div>
-          ${decoOptionsHtml(deco.me, (st) => `data-deco-me="${st}"`)}
-        </div>
-      </section>
-      <section class="ux-sec">
-        <div class="user-profile-section-title">Иконки ваших групп</div>
-        ${groupsHtml}
-      </section>
-    </div>`;
+  function itemAbout(id) {
+    const it = SHOP_ITEMS[id];
+    if (it.kind === 'style') return 'Оформление вашей иконки на карте — или иконки группы, которую вы ведёте. Его видят все.';
+    if (it.kind === 'wear') return it.wear === 'suit' ? 'Пиджак с рубашкой, а для девушки — блузка и юбка.' : 'Футболка и шорты — для тёплых дней.';
+    if (it.kind === 'hat') return 'Шляпа-федора к любому образу.';
+    return 'Ботинки вместо кроссовок — к любому образу.';
   }
-  // Изменить своё оформление: сохраняется здесь и сразу уходит на сервер (вместе с аватаром), карта перерисовывается
+
+  /* ── Кошелёк и вещи: с сервера, а пока он не ответил — с прошлого раза (на этом устройстве) ── */
+  let shopState = { loaded: false, missing: false, balance: 0, owned: new Set(), prices: {} };
+  const shopCacheKey = () => 'shop.v1:' + (currentUser ? currentUser.id : '');
+  function restoreShopState() {
+    if (shopState.loaded || !currentUser) return;
+    try {
+      const s = JSON.parse(localStorage.getItem(shopCacheKey()) || 'null');
+      if (s) shopState = { ...shopState, balance: s.balance | 0, owned: new Set(s.owned || []), prices: s.prices || {} };
+    } catch {}
+  }
+  function saveShopState() {
+    try { localStorage.setItem(shopCacheKey(), JSON.stringify({ balance: shopState.balance, owned: [...shopState.owned], prices: shopState.prices })); } catch {}
+  }
+  async function loadShopState() {
+    if (!currentUser) return false;
+    const uid = currentUser.id;
+    restoreShopState();
+    let res;
+    try { res = await supabaseClient.rpc('shop_state'); } catch (err) { console.warn('[shop] state:', err); return false; }
+    if (!currentUser || currentUser.id !== uid) return false;
+    const { data, error } = res;
+    if (error) {
+      if (isMissingRpc(error)) { shopState.missing = true; repaintShop(); }
+      else console.warn('[shop] state:', error.message);
+      return false;
+    }
+    const d = data || {};
+    shopState = {
+      loaded: true, missing: false, balance: Number(d.balance) || 0, owned: new Set(d.items || []),
+      prices: Object.fromEntries((d.catalog || []).map((r) => [r.id, Number(r.price)])),
+    };
+    saveShopState();
+    // Ultra продлили на другом устройстве — срок берём с сервера
+    const until = d.ultra_until ? Date.parse(d.ultra_until) : 0, deco = decoOf(avatarConfig);
+    if (until && avatarConfigReady && (!deco || !deco.ultra || (deco.until && deco.until < until))) setMyDeco((x) => ({ ...(x || {}), ultra: true, until }));
+    repaintShop();
+    return true;
+  }
+  const itemPrice = (id) => shopState.prices[id] || SHOP_ITEMS[id].price;
+  const ownsItem = (id) => shopState.owned.has(id);
+  // Надета ли вещь сейчас
+  function itemWorn(id) {
+    const it = SHOP_ITEMS[id], c = avatarConfig;
+    if (it.kind === 'style') return (decoOf(c) || {}).me === it.style;
+    if (it.kind === 'wear') return c.wear === it.wear;
+    if (it.kind === 'hat') return c.hat === it.hat;
+    return c.shoes === it.shoes;
+  }
+
+  /* ── Свой образ: изменения сохраняются здесь, сразу уходят на сервер (вместе с аватаром), карта и гардероб
+     перерисовываются ── */
+  function applyMyLook(next) {
+    avatarConfig = normalizeAvatar(next, profile.gender);
+    avatarConfigReady = true;
+    saveAvatarConfig(avatarConfig);
+    const canvas = winBody.querySelector('#avatar-stage-canvas');
+    if (canvas && canvas.__avatarRefresh) canvas.__avatarRefresh();
+    renderAvatarControls();
+    pushAvatarConfig();
+    if (lastUserLocation && settings.geolocation) { placeUserMarker(lastUserLocation); syncWishMarkers(); upsertMyLocation(lastUserLocation); }
+  }
+  // Изменить своё оформление (стиль иконки, иконок групп, срок Ultra)
   function setMyDeco(update, celebrate = false) {
     if (!currentUser) return;
-    const next = normDeco(update(decoOf(avatarConfig) || { ultra: true }));
+    const next = normDeco(update(decoOf(avatarConfig) || {}));
     avatarConfig = { ...avatarConfig };
     if (next) avatarConfig.deco = next; else delete avatarConfig.deco;
     avatarConfigReady = true;
@@ -11559,14 +11978,384 @@
     pushAvatarConfig();
     refreshMyMarker();
     scheduleSyncPeople();
-    if (winTitle.textContent === 'Подписка') {
-      quietly(() => { winBody.innerHTML = subscriptionHtml(); });
+    renderAvatarControls();
+    refreshProfileRows();
+    if (winTitle.textContent === 'Groupies Ultra') {
+      quietly(() => { winBody.innerHTML = ultraHtml(); });
       if (celebrate && !reduceMotion) {
         const hero = winBody.querySelector('.ux-hero');
         if (hero) hero.classList.add('is-celebrate');
         if (navigator.vibrate) { try { navigator.vibrate([10, 40, 10]); } catch {} }
       }
     }
+  }
+  function equipItem(id, on) {
+    const it = SHOP_ITEMS[id];
+    if (!it) return;
+    if (it.kind === 'style') { setMyDeco((d) => ({ ...d, me: on ? it.style : undefined })); return; }
+    const key = it.kind === 'wear' ? 'wear' : it.kind;
+    const next = { ...avatarConfig };
+    if (on) next[key] = it[key]; else delete next[key];
+    applyMyLook(next);
+  }
+
+  /* ── Groupies Ultra ── */
+  let ultraPlan = 'year';
+  // 3D-аватар прежнего экрана (гардероб, профиль друга) больше не виден — останавливаем его
+  function stopScreen3D() {
+    if (avatarStageCleanup) { avatarStageCleanup(); avatarStageCleanup = null; }
+    if (userProfileAvatarCleanup) { userProfileAvatarCleanup(); userProfileAvatarCleanup = null; }
+  }
+  function showSubscriptionScreen(back) {
+    setScreen(() => {
+      stopScreen3D();
+      winTitle.textContent = 'Groupies Ultra';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = ultraHtml();
+    }, back || (() => showProfileScreen()));
+    loadShopState();   // срок подписки мог измениться на другом устройстве
+  }
+  function ultraStatus() {
+    const deco = decoOf(avatarConfig), on = ultraActive(deco);
+    if (on) return deco.until ? `Активна до ${fmtDay(deco.until)}` : 'Активна';
+    return deco && deco.ultra ? 'Срок подписки закончился' : '';
+  }
+  function ultraHtml() {
+    const on = ultraActive(decoOf(avatarConfig));
+    const plan = ULTRA_PLANS[ultraPlan];
+    const perk = (ico, title, text) => `<li><span class="ux-perk-ico">${ico}</span><span class="ux-perk-main"><b>${title}</b><span>${text}</span></span></li>`;
+    return `<div class="ux">
+      <div class="ux-hero${on ? ' is-on' : ''}">
+        <span class="ux-badge">ULTRA</span>
+        <div class="ux-title">Groupies Ultra</div>
+        <div class="ux-text">${escapeHtml(ultraStatus() || 'Выделитесь на карте и в гардеробе')}</div>
+      </div>
+      <ul class="ux-perks">
+        ${perk(ICON_EDIT, '6 стилей иконки на карте', 'Для вашей иконки и иконок групп, которые вы ведёте')}
+        ${perk(ICON_HANGER, 'Спортивный образ', 'Спортивный костюм, а для девушки — топ и шорты')}
+        ${perk(ICON_PIN, 'Видно всем', 'Оформление видят все, кто видит вас на карте')}
+      </ul>
+      <section class="ux-sec">
+        <div class="user-profile-section-title">${on ? 'Продлить подписку' : 'Срок подписки'}</div>
+        <div class="ux-plans" role="radiogroup" aria-label="Срок подписки">${Object.entries(ULTRA_PLANS).map(([id, p]) => `
+          <button type="button" class="ux-plan" role="radio" data-ultra-plan="${id}" aria-checked="${id === ultraPlan}" aria-pressed="${id === ultraPlan}">
+            <b>${p.label}</b><span>${p.price}</span>${p.note ? `<i>${p.note}</i>` : ''}
+          </button>`).join('')}
+        </div>
+        <button type="button" class="ux-btn" data-ultra-buy>${on ? 'Продлить' : 'Оформить'} на ${ultraPlan === 'year' ? 'год' : 'месяц'} · ${plan.price}</button>
+        <p class="pe-note">Оплата подключится позже — сейчас подписка включается сразу.</p>
+      </section>
+      ${on ? `<section class="ux-sec">
+        <div class="user-profile-section-title">Что настроить</div>
+        <ul class="rows ux-links">
+          <li class="row" data-wardrobe="icon" role="button" tabindex="0"><div class="row-main"><div class="row-name">Стиль иконки</div><div class="row-sub">Мой аватар → Иконка</div></div><span class="chev">›</span></li>
+          <li class="row" data-wardrobe="wear" role="button" tabindex="0"><div class="row-main"><div class="row-name">Спортивный образ</div><div class="row-sub">Мой аватар → Одежда</div></div><span class="chev">›</span></li>
+        </ul>
+        <p class="pe-note">Стиль иконки группы выбирают в её настройках: Группы → группа → Настройки.</p>
+      </section>` : ''}
+    </div>`;
+  }
+  async function activateUltra(planId) {
+    const plan = ULTRA_PLANS[planId];
+    if (!plan || !currentUser) return;
+    let until = 0;
+    const { data, error } = await supabaseClient.rpc('ultra_activate', { plan: planId });
+    if (!error && data) until = Date.parse(data);
+    else if (error && !isMissingRpc(error)) { alert('Не удалось оформить подписку: ' + error.message); return; }
+    if (!until) {
+      // на сервере подписки ещё нет (не выполнен supabase_shop.sql) — срок считаем здесь, как и раньше включали
+      const d = decoOf(avatarConfig);
+      until = addMonths(Math.max(Date.now(), ultraActive(d) && d.until ? d.until : 0), plan.months);
+    }
+    setMyDeco((d) => ({ ...(d || {}), ultra: true, until }), true);
+  }
+
+  /* ── Магазин ──
+     Вверху кошелёк, ниже — стили иконок и одежда. Нажатие на вещь — карточка с «Купить», «Надеть» и «Подарить».
+     Открыли из профиля друга («Подарить») — каждая вещь дарится ему */
+  let shopGiftTo = null;
+  function showShopScreen(opts = {}, back) {
+    shopGiftTo = opts.giftTo || null;
+    setScreen(() => {
+      stopScreen3D();
+      winTitle.textContent = shopGiftTo ? 'Подарок' : 'Магазин';
+      winBody.scrollTop = 0;
+      winBody.innerHTML = shopHtml();
+      paintShopPreviews();
+    }, back || (() => showProfileScreen()));
+    loadShopState();
+  }
+  function shopOpen() { return !win.hidden && !!winBody.querySelector('[data-shop]'); }
+  function shopCardHtml(id) {
+    const it = SHOP_ITEMS[id], owned = ownsItem(id), worn = owned && itemWorn(id);
+    const prev = it.kind === 'style'
+      ? `<span class="shop-prev is-style">${decoBadgePreview(it.style)}</span>`
+      : `<span class="shop-prev" data-prev="${id}">${ICON_HANGER}</span>`;
+    const status = shopGiftTo || !owned ? `${coinIcon()}${fmtNum(itemPrice(id))}` : worn ? 'Надето' : 'Есть';
+    return `<button type="button" class="shop-card${owned && !shopGiftTo ? ' is-owned' : ''}" data-shop-item="${id}">
+      ${prev}<span class="shop-name">${escapeHtml(itemTitle(id))}</span><span class="shop-price">${status}</span>
+    </button>`;
+  }
+  function shopHtml() {
+    if (shopState.missing) {
+      return `<div class="ux" data-shop><div class="wish-empty-card">Магазин ещё не подключён на сервере.<br>Выполните supabase_shop.sql в Supabase — и здесь появятся монеты, стили и одежда.</div></div>`;
+    }
+    const ids = Object.keys(SHOP_ITEMS);
+    const friend = shopGiftTo ? chatPersonById(shopGiftTo) : null;
+    return `<div class="ux shop" data-shop>
+      <div class="shop-wallet">
+        ${coinIcon('is-big')}
+        <div class="shop-balance"><b data-shop-balance>${fmtNum(shopState.balance)}</b><span>${coinsWord(shopState.balance)} GroupIS</span></div>
+        <button type="button" class="btn btn-primary" data-coins-topup>Пополнить</button>
+      </div>
+      ${friend ? `<div class="shop-gift-note">${ICON_GIFT}<span>Выберите подарок для <b>${escapeHtml(friend.name)}</b> — он оплачивается вашими монетами</span></div>` : ''}
+      <section class="ux-sec">
+        <div class="user-profile-section-title">Иконки на карте</div>
+        <div class="shop-grid">${ids.filter((id) => SHOP_ITEMS[id].kind === 'style').map(shopCardHtml).join('')}</div>
+      </section>
+      <section class="ux-sec">
+        <div class="user-profile-section-title">Одежда</div>
+        <div class="shop-grid">${ids.filter((id) => SHOP_ITEMS[id].kind !== 'style').map(shopCardHtml).join('')}</div>
+      </section>
+      ${shopGiftTo ? '' : '<p class="pe-note">Купленное надевают в «Мой аватар», стиль иконки группы — в настройках группы.</p>'}
+    </div>`;
+  }
+  // Как вещь сидит на вас — снимок вашего аватара в ней (модель вещи догружается, снимок встаёт сам)
+  function lookWithItem(id, cfg = avatarConfig) {
+    const it = SHOP_ITEMS[id];
+    if (it.kind === 'wear') return normalizeAvatar({ ...cfg, wear: it.wear });
+    if (it.kind === 'hat') return normalizeAvatar({ ...cfg, hat: it.hat });
+    return normalizeAvatar({ ...cfg, shoes: it.shoes });
+  }
+  function paintPreviewEl(el, cfg, framing = 'full') {
+    if (!isThreeAvailable()) return;
+    if (!avatarAssetsReady(cfg)) { avatarAssetsFor(cfg); return; }
+    const src = getAvatarSnapshotDataURL(cfg, framing, 0.3);
+    if (src && el.dataset.src !== src) { el.dataset.src = src; el.innerHTML = `<img src="${src}" alt="" draggable="false">`; }
+  }
+  function paintShopPreviews() {
+    winBody.querySelectorAll('.shop-prev[data-prev], .shop-sheet-prev[data-prev]').forEach((el) => {
+      const id = el.dataset.prev;
+      paintPreviewEl(el, lookWithItem(id), SHOP_ITEMS[id].kind === 'hat' ? 'bust' : 'full');
+    });
+  }
+  // Магазин или карточка вещи открыты — обновить баланс, «Есть / Надето» и снимки
+  function repaintShop() {
+    refreshProfileRows();
+    if (!shopOpen()) return;
+    const sheet = win.querySelector('.shop-sheet');
+    quietly(() => { winBody.innerHTML = shopHtml(); });
+    if (sheet) win.appendChild(sheet);
+    paintShopPreviews();
+  }
+
+  // Карточка вещи поверх магазина или гардероба
+  function openShopItem(id, { onDone } = {}) {
+    const it = SHOP_ITEMS[id];
+    if (!it) return;
+    win.querySelectorAll('.shop-sheet').forEach((el) => el.remove());
+    const back = document.createElement('div');
+    back.className = 'modal-backdrop shop-sheet';
+    const paint = () => {
+      const owned = ownsItem(id), worn = owned && itemWorn(id), price = itemPrice(id);
+      const friend = shopGiftTo ? chatPersonById(shopGiftTo) : null;
+      const prev = it.kind === 'style'
+        ? `<span class="shop-sheet-prev is-style">${decoBadgePreview(it.style)}</span>`
+        : `<span class="shop-sheet-prev" data-prev="${id}">${ICON_HANGER}</span>`;
+      let actions;
+      if (friend) actions = `<button type="button" class="btn" data-sheet-close>Отмена</button>
+        <button type="button" class="btn btn-primary" data-sheet-gift>Подарить за ${coinIcon()}${fmtNum(price)}</button>`;
+      else if (owned) actions = `<button type="button" class="btn" data-sheet-gift>Подарить другу</button>
+        <button type="button" class="btn btn-primary" data-sheet-wear>${worn ? 'Снять' : 'Надеть'}</button>`;
+      else actions = `<button type="button" class="btn" data-sheet-gift>Подарить другу</button>
+        <button type="button" class="btn btn-primary" data-sheet-buy>Купить за ${coinIcon()}${fmtNum(price)}</button>`;
+      back.innerHTML = `
+        <div class="modal shop-sheet-card" role="dialog" aria-modal="true" aria-label="${escapeHtml(itemTitle(id))}">
+          ${prev}
+          <h3 class="modal-title">${escapeHtml(itemTitle(id))}</h3>
+          <p class="modal-text">${escapeHtml(itemAbout(id))}${owned && !friend ? ' Уже у вас.' : ''}</p>
+          <div class="modal-actions">${actions}</div>
+        </div>`;
+      back.querySelectorAll('[data-prev]').forEach((el) => paintPreviewEl(el, lookWithItem(id), it.kind === 'hat' ? 'bust' : 'full'));
+    };
+    paint();
+    back.repaint = paint;
+    win.appendChild(back);
+    const close = () => { back.remove(); if (onDone) onDone(); };
+    back.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (e.target === back || e.target.closest('[data-sheet-close]')) { close(); return; }
+      if (e.target.closest('[data-sheet-wear]')) { equipItem(id, !itemWorn(id)); close(); return; }
+      if (e.target.closest('[data-sheet-buy]')) {
+        const btn = e.target.closest('button'); btn.disabled = true;
+        const ok = await buyItem(id);
+        btn.disabled = false;
+        if (!ok) return;
+        close();
+        if (await confirmModal({ title: 'Куплено!', text: `«${itemTitle(id)}» теперь ваше. Надеть сейчас?`, confirmLabel: 'Надеть', cancelLabel: 'Позже', tone: 'primary' })) equipItem(id, true);
+        return;
+      }
+      if (e.target.closest('[data-sheet-gift]')) {
+        const to = shopGiftTo || await pickGiftFriend();
+        if (!to) return;
+        const btn = e.target.closest('button'); btn.disabled = true;
+        const ok = await giftItem(id, to);
+        btn.disabled = false;
+        if (ok) close();
+      }
+    });
+  }
+
+  async function buyItem(id) {
+    if (itemPrice(id) > shopState.balance && shopState.loaded) {
+      if (await confirmModal({ title: 'Не хватает монет', text: `Нужно ${fmtNum(itemPrice(id))}, у вас ${fmtNum(shopState.balance)}. Пополнить кошелёк?`, confirmLabel: 'Пополнить', cancelLabel: 'Отмена', tone: 'primary' })) openTopUp();
+      return false;
+    }
+    const { data, error } = await supabaseClient.rpc('shop_buy', { item: id });
+    if (error && /already/i.test(error.message || '')) {
+      // куплена раньше (например, на другом устройстве) — просто обновляем, что у нас есть
+      await loadShopState();
+      alert('Эта вещь у вас уже есть — её можно надеть в «Мой аватар».');
+      return false;
+    }
+    if (error) { alert(shopErrorText(error, 'Не удалось купить')); return false; }
+    shopState.balance = Number(data) || 0;
+    shopState.owned.add(id);
+    saveShopState();
+    repaintShop();
+    return true;
+  }
+  async function giftItem(id, toUser) {
+    const friend = chatPersonById(toUser);
+    const ok = await confirmModal({ title: 'Подарить?', text: `«${itemTitle(id)}» для ${friend.name} за ${fmtNum(itemPrice(id))} ${coinsWord(itemPrice(id))}.`, confirmLabel: 'Подарить', cancelLabel: 'Отмена', tone: 'primary' });
+    if (!ok) return false;
+    const { data, error } = await supabaseClient.rpc('shop_gift', { item: id, to_user: toUser });
+    if (error) {
+      if (/insufficient|not enough|мало/i.test(error.message || '')) {
+        if (await confirmModal({ title: 'Не хватает монет', text: 'Пополнить кошелёк?', confirmLabel: 'Пополнить', cancelLabel: 'Отмена', tone: 'primary' })) openTopUp();
+        return false;
+      }
+      alert(shopErrorText(error, 'Не удалось подарить'));
+      return false;
+    }
+    shopState.balance = Number(data) || 0;
+    saveShopState();
+    repaintShop();
+    alert(`Подарок отправлен — ${friend.name} получит уведомление.`);
+    return true;
+  }
+  function shopErrorText(error, what) {
+    const m = error.message || '';
+    if (isMissingRpc(error)) return what + ': магазин ещё не подключён — выполните supabase_shop.sql в Supabase.';
+    if (/insufficient|not enough/i.test(m)) return what + ': не хватает монет.';
+    if (/already/i.test(m)) return what + ': эта вещь у него уже есть.';
+    return what + ': ' + m;
+  }
+  // Кому подарить: друзья
+  function pickGiftFriend() {
+    if (!friends.length) { alert('Подарить можно другу — сначала добавьте друзей.'); return Promise.resolve(null); }
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'modal-backdrop';
+      back.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+          <h3 class="modal-title">Кому подарить?</h3>
+          <ul class="fwd-list">${friends.map((f) => `
+            <li class="person-card is-link" data-gift-to="${escapeHtml(f.id)}" role="button" tabindex="0">
+              ${avatarCircleHtml(f, 36)}
+              <div class="person-main"><div class="person-name">${escapeHtml(f.name || 'Друг')}</div><div class="person-handle">${escapeHtml(f.handle || '')}</div></div>
+            </li>`).join('')}</ul>
+          <div class="modal-actions"><button type="button" class="btn" data-cancel>Отмена</button></div>
+        </div>`;
+      win.appendChild(back);
+      back.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = e.target.closest('[data-gift-to]');
+        if (row || e.target === back || e.target.closest('[data-cancel]')) { back.remove(); resolve(row ? row.dataset.giftTo : null); }
+      });
+    });
+  }
+  // Пополнение кошелька: наборы монет
+  function openTopUp() {
+    const back = document.createElement('div');
+    back.className = 'modal-backdrop';
+    back.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3 class="modal-title">Пополнить монеты</h3>
+        <p class="modal-text">Монетами GroupIS покупают стили и одежду — себе или в подарок друзьям.</p>
+        <div class="coin-packs">${COIN_PACKS.map((p) => `
+          <button type="button" class="coin-pack" data-pack="${p.id}">
+            ${coinIcon()}<b>${fmtNum(p.coins)}</b>${p.note ? `<i>${p.note}</i>` : ''}<span>${p.price}</span>
+          </button>`).join('')}
+        </div>
+        <p class="pe-note">Оплата подключится позже — сейчас монеты начисляются сразу.</p>
+        <div class="modal-actions"><button type="button" class="btn" data-cancel>Закрыть</button></div>
+      </div>`;
+    win.appendChild(back);
+    back.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (e.target === back || e.target.closest('[data-cancel]')) { back.remove(); return; }
+      const pack = e.target.closest('[data-pack]');
+      if (!pack) return;
+      pack.disabled = true;
+      const { data, error } = await supabaseClient.rpc('coins_topup', { pack: pack.dataset.pack });
+      pack.disabled = false;
+      if (error) { alert(shopErrorText(error, 'Не удалось пополнить')); return; }
+      shopState.balance = Number(data) || 0;
+      saveShopState();
+      back.remove();
+      repaintShop();
+      const sheet = win.querySelector('.shop-sheet');
+      if (sheet && sheet.repaint) sheet.repaint();
+    });
+  }
+
+  // Образец оформления: плашка с именем так, как её видно на карте
+  function decoBadgePreview(style) {
+    const name = (profile.name || 'Я').trim();
+    const ava = profile.avatar
+      ? `<span class="user-badge-avatar" style="background-image:url('${safeUrl(profile.avatar)}')"></span>`
+      : `<span class="user-badge-avatar">${escapeHtml(firstChar(name).toUpperCase() || '?')}</span>`;
+    return `<div class="user-badge-inner ${decoClass(style)}">${ava}<span class="user-badge-name">${escapeHtml(ellipsize(name, 18))}</span></div>`;
+  }
+  /* Плитки стилей: обычная, стили Ultra и стили из магазина. Недоступный — с замком: «ULTRA» или цена.
+     attr(style) — атрибуты кнопки (что выбирают: свою иконку или иконку группы) */
+  const styleShopItem = (st) => Object.keys(SHOP_ITEMS).find((id) => SHOP_ITEMS[id].style === st);
+  function styleLock(st) {
+    if (!st) return '';
+    if (DECO_ULTRA[st]) return ultraActive(decoOf(avatarConfig)) ? '' : 'ultra';
+    return ownsItem(styleShopItem(st)) ? '' : 'item';
+  }
+  function styleTilesHtml(current, attr) {
+    const list = ['', ...Object.keys(DECO_ULTRA), ...Object.keys(DECO_SHOP)];
+    return `<div class="ux-styles" role="group">${list.map((st) => {
+      const lock = styleLock(st);
+      const tag = lock === 'ultra' ? '<em class="wd-lock">ULTRA</em>' : lock === 'item' ? `<em class="wd-lock">${coinIcon()}${fmtNum(itemPrice(styleShopItem(st)))}</em>` : '';
+      return `<button type="button" class="ux-opt${lock ? ' is-locked' : ''}" ${attr(st)} data-lock="${lock}" aria-pressed="${(current || '') === st}">
+        <span class="ux-swatch ${st ? 'deco deco-' + st : 'is-plain'}"></span><span>${st ? DECO_STYLES[st] : 'Обычная'}</span>${tag}
+      </button>`;
+    }).join('')}</div>`;
+  }
+  // Нажали на недоступное: стиль или образ Ultra — к подписке, вещь из магазина — её карточка
+  async function openLocked(lock, itemId, label, back, onDone = () => renderAvatarControls()) {
+    if (lock === 'ultra') {
+      const ok = await confirmModal({ title: label, text: 'Это входит в Groupies Ultra — подписку на месяц или на год.', confirmLabel: 'Подробнее', cancelLabel: 'Не сейчас', tone: 'primary' });
+      if (ok) showSubscriptionScreen(back);
+      return;
+    }
+    if (itemId) openShopItem(itemId, { onDone });
+  }
+
+  // Строки «Магазин» и «Groupies Ultra» в профиле — с балансом и сроком подписки
+  function profileShopSub() {
+    return shopState.missing ? 'Стили и одежда' : `${fmtNum(shopState.balance)} ${coinsWord(shopState.balance)} · стили и одежда`;
+  }
+  function profileUltraSub() { return ultraStatus() || 'Особые стили иконки и образы'; }
+  function refreshProfileRows() {
+    const shop = winBody.querySelector('[data-action="open-shop"] .row-sub');
+    if (shop) shop.textContent = profileShopSub();
+    const ultra = winBody.querySelector('[data-action="open-subscription"] .row-sub');
+    if (ultra) ultra.textContent = profileUltraSub();
   }
 
   /* ═══════ ПРАВИЛА ═══════ */
@@ -11661,6 +12450,7 @@
       <div class="sub-toolbar">
         <div class="chat-tabs" role="tablist" aria-label="Вид чатов">${tabBtn('dm', 'Личные')}${tabBtn('group', 'Групповые')}
         </div>
+        <button class="icon-btn" type="button" data-action="new-chat" aria-label="Новое сообщение" title="Новое сообщение"></button>
       </div>
       <div class="chats-list" id="chats-list" data-tab="${chatsTab}" ${chatsListShown ? 'data-filled="1"' : ''}>
         ${chatsListShown || '<div class="empty-msg">Загружаем чаты…</div>'}
@@ -11692,6 +12482,41 @@
       const el = winBody.querySelector('#chats-list');
       if (el) el.innerHTML = `<div class="empty-msg">Ошибка загрузки. Попробуйте ещё раз.</div>`;
     }
+  }
+
+  /* «+» в списке чатов, как «Новое сообщение» в Telegram: кому написать — друг, или создать группу */
+  function openNewChatPicker() {
+    const back = document.createElement('div');
+    back.className = 'modal-backdrop';
+    back.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3 class="modal-title">Новое сообщение</h3>
+        <ul class="fwd-list">
+          <li class="person-card is-link" data-nc-group role="button" tabindex="0">
+            <span class="avatar group-chat-avatar" style="width:36px;height:36px;background:var(--field);color:var(--ink)">${ICON_PLUS}</span>
+            <div class="person-main"><div class="person-name">Создать группу</div><div class="person-handle">Групповой чат и иконка на карте</div></div>
+          </li>
+          ${friends.map((f) => `
+          <li class="person-card is-link" data-nc-dm="${escapeHtml(f.id)}" role="button" tabindex="0">
+            ${avatarCircleHtml(f, 36)}
+            <div class="person-main"><div class="person-name">${escapeHtml(f.name || 'Друг')}</div><div class="person-handle">${escapeHtml(f.handle || '')}</div></div>
+          </li>`).join('')}
+        </ul>
+        ${friends.length ? '' : '<p class="modal-text">Написать можно другу — найдите его во вкладке «Друзья» по @username.</p>'}
+        <div class="modal-actions">
+          ${friends.length ? '' : '<button type="button" class="btn" data-nc-find>Найти друга</button>'}
+          <button type="button" class="btn" data-cancel>Отмена</button>
+        </div>
+      </div>`;
+    win.appendChild(back);
+    back.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.target === back || e.target.closest('[data-cancel]')) { back.remove(); return; }
+      const dm = e.target.closest('[data-nc-dm]');
+      if (dm) { back.remove(); showDmScreen(dm.dataset.ncDm); return; }
+      if (e.target.closest('[data-nc-group]')) { back.remove(); showApp('groups'); showCreateGroupScreen(); return; }
+      if (e.target.closest('[data-nc-find]')) { back.remove(); showApp('friends'); showAddFriendScreen(); }
+    });
   }
 
   /* ── Список чатов: две вкладки, последние сообщения и непрочитанное ──
@@ -15129,7 +15954,7 @@
                   <div class="person-handle">${escapeHtml(f.handle)}</div>
                 </div>
                 <button class="btn" type="button" data-open-dm="${escapeHtml(f.id)}">Чат</button>
-                <button class="btn btn-danger" type="button" data-remove-friend="${escapeHtml(f.id)}">×</button>
+                <button class="btn btn-danger" type="button" data-remove-friend="${escapeHtml(f.id)}" aria-label="Удалить из друзей" title="Удалить из друзей">×</button>
               </li>`).join('')}</ul>`
           : `<div class="empty-msg">Пока нет друзей.<br>Нажмите <b>+</b> в правом верхнем углу, чтобы найти человека по @username.</div>`;
         // входящие заявки — над списком, с кнопками ответа
@@ -15176,13 +16001,17 @@
             </div>`;
         return `
         ${head}
-        <ul class="rows">
-          <li class="row" data-action="open-avatar" role="button" tabindex="0"><div class="row-main row-name">Мой аватар</div><span class="chev">›</span></li>
-          <li class="row" data-action="open-places" role="button" tabindex="0"><div class="row-main row-name">Воспоминания</div><span class="chev">›</span></li>
-          <li class="row" data-action="open-wishes" role="button" tabindex="0"><div class="row-main row-name">Желания</div><span class="chev">›</span></li>
-          <li class="row" data-action="edit-profile" role="button" tabindex="0"><div class="row-main row-name">Редактировать профиль</div><span class="chev">›</span></li>
-          <li class="row" data-action="open-settings" role="button" tabindex="0"><div class="row-main row-name">Настройки</div><span class="chev">›</span></li>
-          <li class="row danger" data-action="logout" role="button" tabindex="0"><div class="row-main row-name">Выйти из аккаунта</div><span class="chev">›</span></li>
+        <ul class="rows profile-rows">
+          ${[
+            ['open-avatar', 'Мой аватар', 'Внешность, одежда и иконка на карте'],
+            ['open-wishes', 'Желания', 'Облако над вашей иконкой на карте'],
+            ['open-places', 'Воспоминания', 'Фото, привязанные к местам на карте'],
+            ['edit-profile', 'Редактировать профиль', 'Фото, имя и пара слов о себе'],
+            ['open-shop', 'Магазин', profileShopSub()],
+            ['open-subscription', 'Groupies Ultra', profileUltraSub()],
+            ['open-settings', 'Настройки', 'Тема, уведомления, помощь и выход'],
+          ].map(([act, name, sub]) => `
+          <li class="row" data-action="${act}" role="button" tabindex="0"><div class="row-main"><div class="row-name">${name}</div><div class="row-sub">${escapeHtml(sub)}</div></div><span class="chev">›</span></li>`).join('')}
         </ul>`;
       }
     },
@@ -15279,8 +16108,8 @@
             <div class="row-main"><div class="row-name">Геопозиция</div><div class="row-sub">Показывать меня на карте</div></div>
             <button class="switch" type="button" role="switch" data-setting="geolocation" aria-checked="${!!settings.geolocation}"></button>
           </li>
-          <li class="row" data-action="open-subscription" role="button" tabindex="0">
-            <div class="row-main"><div class="row-name">Подписка</div><div class="row-sub">${decoOf(avatarConfig) ? 'Groupies Ultra · активна' : 'Groupies Ultra'}</div></div>
+          <li class="row" data-action="open-tour" role="button" tabindex="0">
+            <div class="row-main"><div class="row-name">Как пользоваться</div><div class="row-sub">Коротко о карте, группах, match и желаниях</div></div>
             <span class="chev">›</span>
           </li>
           <li class="row" data-action="open-rules" role="button" tabindex="0">
@@ -15289,6 +16118,10 @@
           </li>
           <li class="row" data-action="open-support" role="button" tabindex="0">
             <div class="row-main"><div class="row-name">Техподдержка</div><div class="row-sub">Связаться с техподдержкой</div></div>
+            <span class="chev">›</span>
+          </li>
+          <li class="row danger" data-action="logout" role="button" tabindex="0">
+            <div class="row-main"><div class="row-name">Выйти из аккаунта</div></div>
             <span class="chev">›</span>
           </li>
         </ul>`;
@@ -15461,6 +16294,7 @@
     group_match_accept: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
     match_vote:        `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M5 3h14v12H5zM8 7h8v2H8zm0 3h5v2H8zM3 17h18v4H3z"/></svg>`,
     match_vote_result: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 21.35 10.55 20C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`,
+    gift:    `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M4 8h16a1 1 0 0 1 1 1v3H3V9a1 1 0 0 1 1-1zm1 5h6v8H6a1 1 0 0 1-1-1v-7zm8 0h6v7a1 1 0 0 1-1 1h-5v-8zM11 8h2v13h-2zM12 7.5C10.5 4 6.5 3.9 6.5 6.1 6.5 7.5 9.5 7.5 12 7.5zm0 0c1.5-3.5 5.5-3.6 5.5-1.4 0 1.4-3 1.4-5.5 1.4z"/></svg>`,
     group:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
   };
   // Значки уведомлений — оттенки одного спектра; match — весь спектр целиком
@@ -15475,6 +16309,7 @@
     group_match_accept: 'linear-gradient(145deg, var(--c3), var(--c4))',
     match_vote:         'linear-gradient(145deg, var(--c1), var(--c3))',
     match_vote_result:  'linear-gradient(145deg, var(--c2), var(--c4))',
+    gift:               'linear-gradient(145deg, #F2A219, var(--c4))',
   };
   function friendRequestActionsHtml(n) {
     if (n.type !== 'friend_request' || !n.requestId) return '';
@@ -15548,6 +16383,21 @@
     return !(n.type === 'group' && n.requestId);
   }
   function shownNotifications() { return notifications.filter(notifShown); }
+  // Куда ведёт уведомление: друг — во вкладку «Друзья», запрос на match — в карточку группы, match и голосование —
+  // в совместный чат, подарок — в магазин (там подаренное отмечено «Есть»)
+  function openNotificationTarget(n) {
+    const back = () => showApp('notifications');
+    const m = n.requestId ? groupMatches.find((x) => x.id === n.requestId) : null;
+    if (n.type === 'friend_accept' || n.type === 'friend_request') { showApp('friends'); return; }
+    if (n.type === 'gift') { showShopScreen({}, back); return; }
+    if (n.type === 'group' && n.requestId) {
+      const inv = groupInvites.find((i) => i.id === n.requestId);
+      if (inv && groupById(inv.groupId)) showGroupDetailsScreen(inv.groupId, back);
+      return;
+    }
+    if (n.type === 'group_match' && m && groupById(m.fromGroup)) { showGroupDetailsScreen(m.fromGroup, back); return; }
+    if (/^(group_match_accept|match_vote|match_vote_result)$/.test(n.type) && m && m.status === 'accepted') showMatchChatScreen(m.id, back);
+  }
   function unreadCount() { return shownNotifications().filter((n) => !n.read).length; }
   function updateBadge() {
     const badge = document.getElementById('notif-badge'); if (!badge) return;
@@ -15973,7 +16823,8 @@
     setTimeout(() => document.addEventListener('pointerdown', onDocClick, true), 0);
   }
 
-  function confirmModal({ title, text, confirmLabel = 'Удалить', cancelLabel = 'Отмена' }) {
+  // tone: 'danger' — красная кнопка (удалить, выйти), 'primary' — обычное действие (купить, надеть, подробнее)
+  function confirmModal({ title, text, confirmLabel = 'Удалить', cancelLabel = 'Отмена', tone = 'danger' }) {
     return new Promise((resolve) => {
       const back = document.createElement('div'); back.className = 'modal-backdrop';
       back.innerHTML = `
@@ -15982,7 +16833,7 @@
           <p class="modal-text">${escapeHtml(text)}</p>
           <div class="modal-actions">
             <button type="button" class="btn" data-cancel>${escapeHtml(cancelLabel)}</button>
-            <button type="button" class="btn btn-danger" data-confirm>${escapeHtml(confirmLabel)}</button>
+            <button type="button" class="btn ${tone === 'primary' ? 'btn-primary' : 'btn-danger'}" data-confirm>${escapeHtml(confirmLabel)}</button>
           </div>
         </div>`;
       // поверх всего окна, а не внутри прокрутки — иначе на длинном экране окно уезжает из виду
@@ -16222,11 +17073,18 @@
     });
   }
 
-  /* ═══════ РЕДАКТОР АВАТАРА ═══════ */
-  function showAvatarEditor() {
+  /* ═══════ РЕДАКТОР АВАТАРА (гардероб) ═══════
+     Три вкладки: «Внешность» (фигура, кожа, волосы), «Одежда» (образ, шляпа, обувь, цвет одежды) и «Иконка»
+     (как вы выглядите на карте). Недоступное — с замком: «ULTRA» (входит в подписку) или цена в монетах;
+     нажатие ведёт к подписке или к карточке вещи в магазине. back — куда вернуться */
+  let avatarTab = 'look', avatarEditorBack = null;
+  function showAvatarEditor(tab, back) {
+    if (tab) avatarTab = tab;
+    avatarEditorBack = back || (() => showProfileScreen());
     setScreen(() => {
       winTitle.textContent = 'Мой аватар';
       winBody.scrollTop = 0;
+      const tabBtn = (id, label) => `<button type="button" class="chat-tab" role="tab" data-av-tab="${id}" aria-selected="${avatarTab === id}">${label}</button>`;
       winBody.innerHTML = `
         <div class="avatar-editor">
           <div class="avatar-stage">
@@ -16236,13 +17094,18 @@
             </button>
             <span class="avatar-stage-hint">Покрутите пальцем</span>
           </div>
+          <div class="chat-tabs av-tabs" role="tablist" aria-label="Гардероб">${tabBtn('look', 'Внешность')}${tabBtn('wear', 'Одежда')}${tabBtn('icon', 'Иконка')}</div>
           <div class="avatar-controls" id="av-controls"></div>
           <div class="edit-actions"><button type="button" class="btn btn-primary" id="av-cancel">Готово</button></div>
         </div>`;
       setupAvatarStage(winBody.querySelector('#avatar-stage-canvas'));
       renderAvatarControls();
       winBody.querySelector('#av-cancel').addEventListener('click', goBack);
-    }, () => showProfileScreen());
+    }, avatarEditorBack);
+    loadShopState();   // что куплено и подарено — чтобы снять замки
+  }
+  function syncAvatarTabs() {
+    winBody.querySelectorAll('[data-av-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.avTab === avatarTab)));
   }
 
   /* Сцена редактора: аватар можно крутить пальцем или мышью, кнопка с лупой — крупный план лица */
@@ -16290,6 +17153,20 @@
     };
   }
 
+  // Замок на образе, шляпе или обуви: 'ultra', 'item' (купить в магазине) или '' — доступно
+  function wardrobeLock(kind, key) {
+    const def = kind === 'wear' ? AVATAR_WEARS[key] : kind === 'hat' ? AVATAR_HATS[key] : AVATAR_SHOES[key];
+    if (!def) return '';
+    if (def.ultra) return ultraActive(decoOf(avatarConfig)) ? '' : 'ultra';
+    return def.item && !ownsItem(def.item) ? 'item' : '';
+  }
+  // Как выглядит вариант: ваш аватар в нём (образ Ultra показываем, даже если подписки нет — чтобы было видно, что это)
+  function wardrobePreviewCfg(kind, key) {
+    const c = { ...avatarConfig };
+    if (kind === 'wear') { if (key === 'base') delete c.wear; else c.wear = key; if (AVATAR_WEARS[key] && AVATAR_WEARS[key].ultra) c.deco = { ...(c.deco || {}), ultra: true, until: 0 }; }
+    else if (key) c[kind] = key; else delete c[kind];
+    return normalizeAvatar(c);
+  }
   function renderAvatarControls() {
     const box = winBody.querySelector('#av-controls'); if (!box) return;
     const c = avatarConfig, g = c.gender, modeled = !!avatarModels[g];
@@ -16299,16 +17176,59 @@
     const swatch = (group, key, bg, label) =>
       `<button class="avatar-swatch" type="button" data-av-group="${group}" data-av-key="${key}" aria-pressed="${c[group] === key}" style="background:${bg}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>`;
     const block = (title, inner) => `<div><div class="avatar-group-title">${title}</div><div class="avatar-row">${inner}</div></div>`;
-    box.innerHTML = [
-      block('Фигура', pill('gender', 'male', 'Мужская') + pill('gender', 'female', 'Женская')),
-      block('Цвет кожи', Object.entries(AVATAR_SKINS).map(([k, s]) => swatch('skin', k, hex(s.base), s.label)).join('')),
-      modeled ? '' : block('Причёска', Object.entries(AVATAR_HAIR_STYLES[g]).map(([k, l]) => pill('hair', k, l)).join('')),
-      !modeled && c.hair === 'none' ? '' : block('Цвет волос', Object.entries(AVATAR_HAIR_COLORS).map(([k, h]) => swatch('hairColor', k, hex(h.hex), h.label)).join('')),
-      modeled ? '' : block('Одежда', Object.entries(AVATAR_OUTFITS[g]).map(([k, l]) => pill('outfit', k, l)).join('')),
+    // плитка гардероба: снимок вашего аватара в этом варианте, название и замок
+    const tile = (kind, key, label, on, framing = 'full') => {
+      const lock = wardrobeLock(kind, key);
+      const def = kind === 'wear' ? AVATAR_WEARS[key] : kind === 'hat' ? AVATAR_HATS[key] : AVATAR_SHOES[key];
+      const tag = lock === 'ultra' ? '<em class="wd-lock">ULTRA</em>' : lock === 'item' ? `<em class="wd-lock">${coinIcon()}${fmtNum(itemPrice(def.item))}</em>` : '';
+      return `<button type="button" class="ux-opt wd-opt${lock ? ' is-locked' : ''}" data-wd="${kind}" data-wd-key="${key}" data-lock="${lock}" aria-pressed="${on}">
+        <span class="wd-prev" data-wd-prev="${kind}:${key}" data-framing="${framing}">${ICON_HANGER}</span><span>${escapeHtml(label)}</span>${tag}</button>`;
+    };
+    let html;
+    if (avatarTab === 'wear') {
+      html = modeled ? [
+        `<div><div class="avatar-group-title">Образ</div><div class="ux-styles wd-grid">${Object.entries(AVATAR_WEARS).map(([k, w]) => tile('wear', k, w.label, (c.wear || 'base') === k)).join('')}</div></div>`,
+        `<div><div class="avatar-group-title">Шляпа</div><div class="ux-styles wd-grid">${tile('hat', '', 'Без шляпы', !c.hat, 'bust')}${Object.entries(AVATAR_HATS).map(([k, h]) => tile('hat', k, h.label, c.hat === k, 'bust')).join('')}</div></div>`,
+        `<div><div class="avatar-group-title">Обувь</div><div class="ux-styles wd-grid">${tile('shoes', '', 'Кроссовки', !c.shoes)}${Object.entries(AVATAR_SHOES).map(([k, s]) => tile('shoes', k, s.label, c.shoes === k)).join('')}</div></div>`,
+      ].join('') : block('Одежда', Object.entries(AVATAR_OUTFITS[g]).map(([k, l]) => pill('outfit', k, l)).join(''));
       // образец цвета одежды: верх и низ
-      block('Цвет одежды', Object.entries(AVATAR_CLOTHES).map(([k, cl]) =>
-        swatch('clothes', k, `linear-gradient(135deg, ${hex(cl.body)} 0 54%, ${hex(cl.legs)} 54% 100%)`, cl.label)).join('')),
-    ].join('');
+      html += block('Цвет одежды', Object.entries(AVATAR_CLOTHES).map(([k, cl]) =>
+        swatch('clothes', k, `linear-gradient(135deg, ${hex(cl.body)} 0 54%, ${hex(cl.legs)} 54% 100%)`, cl.label)).join(''));
+      html += '<p class="pe-note">Новые образы и вещи — в «Магазине» в профиле и в Groupies Ultra.</p>';
+    } else if (avatarTab === 'icon') {
+      const deco = decoOf(c), led = currentUser ? groupsOwnedBy(currentUser.id) : [];
+      html = `<div><div class="avatar-group-title">Ваша иконка на карте</div>
+          <div class="ux-item"><div class="ux-stage">${decoBadgePreview(meStyle(deco))}</div>${styleTilesHtml(deco && deco.me, (st) => `data-wd="style" data-wd-key="${st}"`)}</div></div>
+        ${led.length ? `<div><div class="avatar-group-title">Иконки ваших групп</div><ul class="rows ux-links">${led.map((gr) => `
+          <li class="row" data-group-edit="${escapeHtml(gr.id)}" role="button" tabindex="0"><div class="row-main"><div class="row-name">${escapeHtml(gr.name || 'Группа')}</div><div class="row-sub">Стиль — в настройках группы</div></div><span class="chev">›</span></li>`).join('')}</ul></div>` : ''}`;
+    } else {
+      html = [
+        block('Фигура', pill('gender', 'male', 'Мужская') + pill('gender', 'female', 'Женская')),
+        block('Цвет кожи', Object.entries(AVATAR_SKINS).map(([k, s]) => swatch('skin', k, hex(s.base), s.label)).join('')),
+        modeled ? '' : block('Причёска', Object.entries(AVATAR_HAIR_STYLES[g]).map(([k, l]) => pill('hair', k, l)).join('')),
+        !modeled && c.hair === 'none' ? '' : block('Цвет волос', Object.entries(AVATAR_HAIR_COLORS).map(([k, h]) => swatch('hairColor', k, hex(h.hex), h.label)).join('')),
+      ].join('');
+    }
+    box.innerHTML = html;
+    box.querySelectorAll('[data-wd-prev]').forEach((el) => {
+      const [kind, key] = el.dataset.wdPrev.split(':');
+      paintPreviewEl(el, wardrobePreviewCfg(kind, key), el.dataset.framing);
+    });
+  }
+  function onWardrobePick(btn) {
+    const kind = btn.dataset.wd, key = btn.dataset.wdKey || '', lock = btn.dataset.lock || '';
+    if (lock) {
+      const def = kind === 'wear' ? AVATAR_WEARS[key] : kind === 'hat' ? AVATAR_HATS[key] : kind === 'shoes' ? AVATAR_SHOES[key] : null;
+      const itemId = kind === 'style' ? styleShopItem(key) : def && def.item;
+      const label = kind === 'style' ? `Стиль «${DECO_STYLES[key]}»` : kind === 'wear' ? `Образ «${def.label}»` : def.label;
+      const tab = avatarTab, back = avatarEditorBack;
+      openLocked(lock, itemId, label, () => showAvatarEditor(tab, back));
+      return;
+    }
+    if (kind === 'style') { setMyDeco((d) => ({ ...d, me: key || undefined })); return; }
+    const next = { ...avatarConfig };
+    if (!key || (kind === 'wear' && key === 'base')) delete next[kind]; else next[kind] = key;
+    applyMyLook(next);
   }
 
   /* ═══════ ПРОФИЛЬ ═══════ */
@@ -16820,6 +17740,7 @@
               ${canWrite
                 ? '<button type="button" class="btn btn-primary" id="friend-open-chat">Написать</button>'
                 : `<button type="button" class="btn btn-primary" id="friend-add" data-add-friend="${escapeHtml(userId)}">Добавить в друзья</button>`}
+              ${friends.some((f) => String(f.id) === String(userId)) ? `<button type="button" class="btn friend-gift" id="friend-gift">${ICON_GIFT}Подарить</button>` : ''}
             </div>
             ${avatarBelow}
           </div>
@@ -16850,6 +17771,9 @@
 
         const chatBtn = winBody.querySelector('#friend-open-chat');
         if (chatBtn) chatBtn.addEventListener('click', () => showDmScreen(userId));
+        // подарок другу: магазин, где каждая вещь дарится ему; «назад» — снова его профиль
+        const giftBtn = winBody.querySelector('#friend-gift');
+        if (giftBtn) giftBtn.addEventListener('click', () => showShopScreen({ giftTo: userId }, () => showFriendProfile(userId, personHint, backFn)));
         // не друг: кнопка показывает, отправлен ли уже запрос (или принять встречный)
         const addBtn = winBody.querySelector('#friend-add');
         if (addBtn && currentUser) friendRelationWith(userId).then((rel) => {
@@ -17030,7 +17954,7 @@
         loadGroupStats(); // мой пол и возраст влияют на сводку моих групп
         // сменили пол — аватар меняет фигуру (кожа и цвет волос остаются)
         if (editGender && avatarConfigReady && editGender !== avatarConfig.gender) {
-          avatarConfig = { ...defaultAvatarFor(editGender), skin: avatarConfig.skin, hairColor: avatarConfig.hairColor, ...(avatarConfig.deco ? { deco: avatarConfig.deco } : {}) };
+          avatarConfig = switchAvatarGender(avatarConfig, editGender);
           saveAvatarConfig(avatarConfig);
           pushAvatarConfig();
         }
@@ -17369,7 +18293,7 @@
       else if (openApp === 'notifications') refreshNotifications();
       if (ok && accept) {
         await matchFxIdle();   // сначала доигрывает анимация match
-        const doIt = await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже' });
+        const doIt = await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже', tone: 'primary' });
         if (doIt) {
           if (openApp !== 'messenger' && openApp !== 'profile' && openApp !== 'groups') showApp('groups');
           await showMatchChatScreen(matchId, null);
@@ -17404,23 +18328,13 @@
     const avBtn = e.target.closest('[data-av-group]');
     if (avBtn) {
       const group = avBtn.dataset.avGroup, key = avBtn.dataset.avKey;
-      if (group === 'gender') {
-        // другая фигура — её причёска и одежда по умолчанию, кожа и цвет волос сохраняются
-        if (key !== avatarConfig.gender) avatarConfig = { ...defaultAvatarFor(key), skin: avatarConfig.skin, hairColor: avatarConfig.hairColor, ...(avatarConfig.deco ? { deco: avatarConfig.deco } : {}) };
-      } else avatarConfig = normalizeAvatar({ ...avatarConfig, [group]: key });
-      avatarConfigReady = true;
-      saveAvatarConfig(avatarConfig);
-      const canvas = winBody.querySelector('#avatar-stage-canvas');
-      if (canvas && canvas.__avatarRefresh) canvas.__avatarRefresh();
-      renderAvatarControls();
-      pushAvatarConfig();   // новый аватар — сразу на сервер, место не трогаем
-      if (lastUserLocation && settings.geolocation) {
-        placeUserMarker(lastUserLocation);
-        syncWishMarkers();
-        upsertMyLocation(lastUserLocation);
-      }
+      // другая фигура — её причёска и одежда по умолчанию, кожа, цвет волос и всё из гардероба остаются
+      if (group === 'gender') { if (key !== avatarConfig.gender) applyMyLook(switchAvatarGender(avatarConfig, key)); }
+      else applyMyLook({ ...avatarConfig, [group]: key });   // новый аватар — сразу на сервер, место не трогаем
       return;
     }
+    const avTab = e.target.closest('[data-av-tab]');
+    if (avTab) { avatarTab = avTab.dataset.avTab; syncAvatarTabs(); renderAvatarControls(); return; }
     if (e.target.closest('[data-action="open-avatar"]')) { showAvatarEditor(); return; }
     if (e.target.closest('[data-action="open-places"]')) { showPlacesScreen(); return; }
     if (e.target.closest('[data-action="open-wishes"]')) { showWishesScreen(); return; }
@@ -17434,18 +18348,27 @@
     if (e.target.closest('[data-action="back-to-groups"]')) { goBack(); return; }
     if (e.target.closest('[data-action="open-rules"]')) { showRulesScreen(); return; }
     if (e.target.closest('[data-action="open-subscription"]')) { showSubscriptionScreen(); return; }
-    // ── Groupies Ultra: включить подписку и выбрать оформление ──
-    if (e.target.closest('[data-ultra-on]')) { setMyDeco((d) => ({ ...(d || {}), ultra: true }), true); return; }
-    const decoMe = e.target.closest('[data-deco-me]');
-    if (decoMe) { setMyDeco((d) => ({ ...d, me: decoMe.dataset.decoMe || undefined })); return; }
-    const decoGroup = e.target.closest('[data-deco-group]');
-    if (decoGroup) {
-      const gid = decoGroup.dataset.decoGroup, style = decoGroup.dataset.decoStyle || '';
-      setMyDeco((d) => { const groupsDeco = { ...(d.groups || {}) }; if (style) groupsDeco[gid] = style; else delete groupsDeco[gid]; return { ...d, groups: groupsDeco }; });
+    if (e.target.closest('[data-action="open-shop"]')) { showShopScreen(); return; }
+    if (e.target.closest('[data-action="open-tour"]')) { openTour(); return; }
+    // ── Groupies Ultra: срок подписки и что настроить ──
+    const planBtn = e.target.closest('[data-ultra-plan]');
+    if (planBtn) { ultraPlan = planBtn.dataset.ultraPlan; quietly(() => { winBody.innerHTML = ultraHtml(); }); return; }
+    const ultraBuy = e.target.closest('[data-ultra-buy]');
+    if (ultraBuy) { ultraBuy.disabled = true; await activateUltra(ultraPlan); ultraBuy.disabled = false; return; }
+    const wardrobeLink = e.target.closest('[data-wardrobe]');
+    if (wardrobeLink) { showAvatarEditor(wardrobeLink.dataset.wardrobe, () => showSubscriptionScreen()); return; }
+    // ── магазин ──
+    if (e.target.closest('[data-coins-topup]')) { openTopUp(); return; }
+    const shopItem = e.target.closest('[data-shop-item]');
+    if (shopItem) { openShopItem(shopItem.dataset.shopItem); return; }
+    // ── гардероб: образ, шляпа, обувь, стиль иконки ──
+    const wd = e.target.closest('[data-wd]');
+    if (wd) { onWardrobePick(wd); return; }
+    if (e.target.closest('[data-action="open-support"]')) { showSupportChatScreen(); return; }
+    if (e.target.closest('[data-action="logout"]')) {
+      if (await confirmModal({ title: 'Выйти из аккаунта?', text: 'На этом устройстве нужно будет войти заново.', confirmLabel: 'Выйти' })) logout();
       return;
     }
-    if (e.target.closest('[data-action="open-support"]')) { showSupportChatScreen(); return; }
-    if (e.target.closest('[data-action="logout"]')) { logout(); return; }
 
     const wEdit = e.target.closest('[data-wish-edit]');
     if (wEdit) { showNewWishScreen(wEdit.dataset.wishEdit); return; }
@@ -17468,6 +18391,15 @@
 
     const leaveBtn = e.target.closest('[data-leave-group]');
     if (leaveBtn) { e.stopPropagation(); await leaveGroup(leaveBtn.dataset.leaveGroup); return; }
+    // настройки группы из её карточки или из гардероба («Иконки ваших групп») — «назад» возвращает туда же
+    const groupEdit = e.target.closest('[data-group-edit]');
+    if (groupEdit) {
+      const gid = groupEdit.dataset.groupEdit;
+      if (winBody.querySelector('[data-group-card]')) { const back = groupDetailsBack; showCreateGroupScreen(gid, () => showGroupDetailsScreen(gid, back)); }
+      else { const tab = avatarTab, back = avatarEditorBack; showCreateGroupScreen(gid, () => showAvatarEditor(tab, back)); }
+      return;
+    }
+    if (e.target.closest('[data-action="new-chat"]')) { openNewChatPicker(); return; }
     const gearBtn = e.target.closest('[data-group-settings]');
     if (gearBtn) { e.stopPropagation(); showCreateGroupScreen(gearBtn.dataset.groupSettings); return; }
     const delBtn = e.target.closest('[data-group-delete]');
@@ -17603,6 +18535,9 @@
     const row = e.target.closest('[data-notif-id]');
     if (row) {
       const id = row.dataset.notifId;
+      const n = notifications.find((x) => x.id === id);
+      // нажатие мимо кнопок открывает то, о чём уведомление; «назад» возвращает к уведомлениям
+      if (n && !e.target.closest('button, a, [data-view-group]')) openNotificationTarget(n);
       await supabaseClient.from('notifications').update({ read: true }).eq('id', id);
       notifications = notifications.map((n) => n.id === id ? { ...n, read: true } : n);
       updateBadge();
