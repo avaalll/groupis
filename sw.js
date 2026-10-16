@@ -6,7 +6,7 @@
      качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v1.1.51';
+const VERSION = 'v1.1.52';
 const CACHE = `groupis-${VERSION}`;
 const STATIC_VERSION = 's2';
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
@@ -191,8 +191,10 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate' && isShellPage(url)) { shellPage(event, request); return; }
   if (request.headers.has('range')) return;
 
-  // Модели, three.js, текстуры и иконки — только из кеша: перекачивать их при каждом запуске незачем
-  if (STATIC_PATHS.has(url.pathname)) { cacheFirst(event, request, STATIC_CACHE); return; }
+  // Модели, three.js, текстуры и иконки — только из кеша: перекачивать их при каждом запуске незачем.
+  // Наряды и вещи гардероба (avatars3d/<…>.glb) заранее не качаются — только когда их кто-то надел, и дальше тоже
+  // берутся из кеша. Пересобрали такую модель — увеличьте STATIC_VERSION
+  if (STATIC_PATHS.has(url.pathname) || url.pathname.startsWith(SCOPE_PATH + 'avatars3d/')) { cacheFirst(event, request, STATIC_CACHE); return; }
 
   staleWhileRevalidate(event, request, CACHE);
 });
