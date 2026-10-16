@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-16 12:00">
+  <meta name="app-build" content="2026-10-16 18:30">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -3014,7 +3014,7 @@
        Основа — чистые нейтральные: графит в тёмной теме, фарфор в светлой. Цвет один — «спектр»:
        луч света, разложенный призмой (аква → синий → фиолетовый → орхидея). Он появляется там,
        где что-то происходит: активная вкладка, переключатели, своё место на карте, облака желаний,
-       тонкое кольцо-всплеск из точки каждого нажатия. Главные кнопки — «чернильные»: чёрные
+       кант монеты GroupIS. Главные кнопки — «чернильные»: чёрные
        на светлом, белые на тёмном. Блок стоит последним и переопределяет прежние темы. */
     @property --sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 
@@ -3423,21 +3423,6 @@
     @keyframes chrome-down { from { opacity: 0; transform: translateY(-22px) scale(.96); } }
     @keyframes chrome-up { from { opacity: 0; transform: translateY(40px) scale(.94); } }
     @keyframes chrome-pop { from { opacity: 0; transform: scale(.4); } }
-
-    /* ── Всплеск при нажатии: тонкое спектральное кольцо расходится из точки касания ── */
-    .tap-layer { position: fixed; inset: 0; z-index: 400; pointer-events: none; overflow: hidden; contain: strict; }
-    .tap-ring {
-      position: absolute; width: 78px; height: 78px; margin: -39px 0 0 -39px; border-radius: 50%;
-      background: conic-gradient(from 210deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1));
-      -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 4.2px), #000 calc(100% - 3.2px), #000 calc(100% - .6px), transparent 100%);
-              mask: radial-gradient(closest-side, transparent calc(100% - 4.2px), #000 calc(100% - 3.2px), #000 calc(100% - .6px), transparent 100%);
-      animation: tap-ring .62s cubic-bezier(.2, .8, .25, 1) forwards;
-    }
-    @keyframes tap-ring {
-      0% { transform: scale(.1); opacity: 1; }
-      45% { opacity: .95; }
-      100% { transform: scale(1); opacity: 0; }
-    }
 
     /* ── Экран входа: космос всегда тёмный, спектр — пастельный ── */
     .auth-screen {
@@ -4481,13 +4466,22 @@
     .user-badge:has(> .user-badge-inner.deco-carbon)::after, .user-badge.is-leader:has(> .map-group-chip.deco-carbon)::after { background: #1F2125; border-color: #3A3D44; }
     .user-badge:has(> .user-badge-inner.deco-cosmos)::after, .user-badge.is-leader:has(> .map-group-chip.deco-cosmos)::after { background: #1A1240; border-color: rgba(160, 140, 255, .6); }
 
-    /* ── Монета GroupIS ── */
+    /* ── Монета GroupIS: графитовый диск, кант-спектр, пин из логотипа (рисунок — coinIcon) ── */
     .coin {
-      display: inline-block; flex: none; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.14em; border-radius: 50%;
-      background: radial-gradient(circle at 34% 30%, #FFF6C8 0 12%, transparent 13%), linear-gradient(145deg, #FFD95A, #F2A219 60%, #C97A0A);
-      box-shadow: inset 0 0 0 .09em rgba(120, 70, 0, .35), 0 .05em .15em rgba(0, 0, 0, .25);
+      display: inline-block; flex: none; width: 1.05em; height: 1.05em; margin-right: .3em; vertical-align: -.17em; overflow: visible;
+      filter: drop-shadow(0 .04em .07em rgba(0, 0, 0, .3));
     }
-    .coin.is-big { width: 40px; height: 40px; margin: 0; vertical-align: middle; }
+    .coin.is-big {
+      width: 46px; height: 46px; margin: 0; vertical-align: middle;
+      filter: drop-shadow(0 5px 8px rgba(0, 0, 0, .22)) drop-shadow(-5px 4px 10px color-mix(in srgb, var(--c1) 40%, transparent)) drop-shadow(5px 4px 10px color-mix(in srgb, var(--c4) 34%, transparent));
+    }
+    .coin-glint { animation: coin-glint 5.2s cubic-bezier(.45, 0, .2, 1) 1.4s infinite; }
+    @keyframes coin-glint { 0% { transform: translateX(0); } 24%, 100% { transform: translateX(42px); } }
+    .coin.is-spin { animation: coin-spin 1.25s cubic-bezier(.2, .75, .25, 1); }
+    @keyframes coin-spin { from { transform: perspective(180px) rotateY(0); } to { transform: perspective(180px) rotateY(720deg); } }
+    @media (prefers-reduced-motion: reduce) { .coin-glint, .coin.is-spin { animation: none; } }
+    .coin-stack { display: inline-flex; align-items: center; height: 28px; }
+    .coin-stack .coin + .coin { margin-left: -15px; }
 
     /* ── Groupies Ultra: преимущества с пояснением и срок подписки ── */
     .ux-perk-main { display: grid; gap: 1px; min-width: 0; }
@@ -4547,7 +4541,7 @@
       transition: transform .3s var(--spring);
     }
     .coin-pack:active { transform: scale(.95); transition-duration: .08s; }
-    .coin-pack .coin { width: 26px; height: 26px; margin: 0; }
+    .coin-pack .coin { width: 28px; height: 28px; margin: 0; }
     .coin-pack b { font: 700 17px var(--font-ui); font-variant-numeric: tabular-nums; }
     .coin-pack span { font-size: 12px; color: var(--ink-soft); }
     .coin-pack i { position: absolute; top: -8px; padding: 1px 7px; border-radius: 999px; background: var(--prism); color: var(--prism-ink); font: 700 10px/1.6 var(--font-ui); font-style: normal; }
@@ -4718,6 +4712,24 @@
         <stop offset=".7" style="stop-color: var(--c3)"/>
         <stop offset="1" style="stop-color: var(--c4)"/>
       </linearGradient>
+      <!-- Монета GroupIS (координаты монеты 24×24): графитовое поле, пин из логотипа, световое пятно под ним, блик -->
+      <radialGradient id="coinFace" gradientUnits="userSpaceOnUse" cx="9" cy="6.5" r="15.5">
+        <stop offset="0" stop-color="#30303C"/><stop offset=".55" stop-color="#16161C"/><stop offset="1" stop-color="#09090C"/>
+      </radialGradient>
+      <linearGradient id="coinPin" gradientUnits="userSpaceOnUse" x1="0" y1="6.6" x2="0" y2="15.1">
+        <stop offset="0" style="stop-color: var(--c3)"/><stop offset=".5" style="stop-color: var(--c2)"/><stop offset="1" style="stop-color: var(--c1)"/>
+      </linearGradient>
+      <radialGradient id="coinPad">
+        <stop offset="0" style="stop-color: var(--c1)" stop-opacity=".95"/><stop offset="1" style="stop-color: var(--c1)" stop-opacity=".3"/>
+      </radialGradient>
+      <linearGradient id="coinGlint" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".42"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+      </linearGradient>
+      <mask id="coinCut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+        <rect width="24" height="24" fill="#fff"/>
+        <path d="M12 15.09 9.94 13.81A3.9 3.9 0 1 1 14.06 13.81Z" fill="#000" stroke="#000" stroke-width="1.7" stroke-linejoin="round"/>
+      </mask>
+      <clipPath id="coinClip"><circle cx="12" cy="12" r="12"/></clipPath>
       <linearGradient id="wcPrism" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" style="stop-color: var(--c1)"/>
         <stop offset=".38" style="stop-color: var(--c2)"/>
@@ -6024,9 +6036,11 @@
   }
 
   /* ── Знакомство с приложением ──
-     При первом входе на этом устройстве — пять коротких карточек: где что находится и как всё связано
+     Один раз, сразу после регистрации — пять коротких карточек: где что находится и как всё связано
      (карта, группы, match, желание, аватар). Пропустить можно сразу; открыть заново — «Настройки → Как пользоваться» */
   const TOUR_KEY = 'tour.v1:';
+  const TOUR_NEW_MS = 2 * 24 * 3600 * 1000;   // аккаунт считается новым двое суток: письмо с подтверждением открывают не сразу
+  let tourAfterSignUp = false;                // аккаунт создан только что, на этом устройстве
   const TOUR_STEPS = [
     { ico: '<circle cx="12" cy="12" r="8.75"/><path d="M12 12 18.2 5.8"/><circle class="ic-fill" cx="12" cy="12" r="2.1"/><circle class="ic-fill" cx="15.7" cy="15.4" r="1.3"/>',
       title: 'Карта — главный экран', text: 'Здесь вы, ваши друзья и группы рядом. Нажмите на человека — откроется его профиль, на иконку группы — её карточка.' },
@@ -6080,11 +6094,14 @@
       document.body.appendChild(el);
     });
   }
-  // Первый вход на этом устройстве — показать знакомство (ответ: показали ли)
+  // Первый вход нового аккаунта — показать знакомство (ответ: показали ли). Тем, кто зарегистрировался давно,
+  // оно не показывается ни при входе, ни на новом устройстве
   async function maybeShowTour() {
     if (!currentUser || !authScreen.hidden) return false;
     const key = TOUR_KEY + currentUser.id;
-    try { if (localStorage.getItem(key)) return false; localStorage.setItem(key, '1'); } catch { return false; }
+    const fresh = tourAfterSignUp || Date.now() - Date.parse(currentUser.created_at || '') < TOUR_NEW_MS;
+    tourAfterSignUp = false;
+    try { if (!fresh || localStorage.getItem(key)) return false; localStorage.setItem(key, '1'); } catch { return false; }
     await openTour();
     return true;
   }
@@ -6719,6 +6736,7 @@
         avatarConfig = defaultAvatarFor(draft.gender);
         saveAvatarConfig(avatarConfig);
 
+        tourAfterSignUp = true;   // после входа — знакомство с приложением
         await enterAppAfterLogin();
       });
     }
@@ -6767,7 +6785,7 @@
     });
     if (!returning) openAppFromShortcut();
     setTimeout(prefetchChats, 8000);   // когда интерфейс уже на месте и первые данные загрузились
-    // при первом входе — знакомство с приложением, а уже после него — вопрос про уведомления
+    // после регистрации — знакомство с приложением, а уже после него — вопрос про уведомления
     setTimeout(async () => { const shown = await maybeShowTour(); setTimeout(maybeAskPush, shown ? 800 : 2200); }, 1800);
     loadShopState();   // кошелёк и вещи — для строк профиля и замков в гардеробе
   }
@@ -11876,7 +11894,19 @@
   };
   const ICON_HANGER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7.5a2 2 0 1 1 2-2"/><path d="M12 7.5v1.2L3.6 15a1.4 1.4 0 0 0 .8 2.5h15.2a1.4 1.4 0 0 0 .8-2.5L12 8.7"/></svg>`;
   const ICON_GIFT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v7.5h14V12M12 8v11.5"/><path d="M12 8c-1.5-3.5-5.5-3.6-5.5-1.4C6.5 8 9.5 8 12 8zm0 0c1.5-3.5 5.5-3.6 5.5-1.4C17.5 8 14.5 8 12 8z"/></svg>`;
-  const coinIcon = (cls = '') => `<span class="coin ${cls}" aria-hidden="true"></span>`;
+  /* Монета GroupIS — как настоящая монета с гербом: на графитовом диске с кантом-спектром отчеканен пин из логотипа
+     (буква «i» в GroupIS) со световым пятном у острия. Цвета берутся из темы и палитры, как у иконки приложения;
+     по большой монете в кошельке время от времени пробегает блик, а при пополнении она делает оборот */
+  const COIN_FACE = '<circle cx="12" cy="12" r="12" fill="url(#prismIcon)"/><circle cx="12" cy="12" r="10.6" fill="#000" fill-opacity=".4"/>'
+    + '<circle cx="12" cy="12" r="10.2" fill="url(#coinFace)"/><circle cx="12" cy="12" r="8.7" fill="none" stroke="#fff" stroke-opacity=".13" stroke-width=".45"/>'
+    + '<ellipse cx="12" cy="15.45" rx="3.8" ry="1.15" fill="url(#coinPad)" mask="url(#coinCut)"/>'
+    + '<path d="M12 15.09 9.94 13.81A3.9 3.9 0 1 1 14.06 13.81ZM13.35 10.5a1.35 1.35 0 1 0-2.7 0 1.35 1.35 0 1 0 2.7 0Z" fill="url(#coinPin)" fill-rule="evenodd"/>'
+    + '<ellipse cx="10.55" cy="8.35" rx="1.35" ry=".7" transform="rotate(-32 10.55 8.35)" fill="#fff" fill-opacity=".32"/>'
+    + '<path d="M1.76 7.22A11.3 11.3 0 0 1 7.22 1.76" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width=".6" stroke-linecap="round"/>';
+  const COIN_GLINT = '<g clip-path="url(#coinClip)"><g transform="rotate(24 12 12)"><rect class="coin-glint" x="-10" y="-6" width="5.5" height="36" fill="url(#coinGlint)"/></g></g>';
+  const coinIcon = (cls = '') => `<svg class="coin ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${COIN_FACE}${/\bis-big\b/.test(cls) ? COIN_GLINT : ''}</svg>`;
+  // Набор монет — горка: чем больше набор, тем больше в ней монет
+  const coinStack = (n) => `<span class="coin-stack">${Array.from({ length: n }, () => coinIcon()).join('')}</span>`;
   function fmtNum(n) { return Number(n || 0).toLocaleString('ru-RU'); }
   function coinsWord(n) {
     const m10 = n % 10, m100 = n % 100;
@@ -12283,9 +12313,9 @@
       <div class="modal" role="dialog" aria-modal="true">
         <h3 class="modal-title">Пополнить монеты</h3>
         <p class="modal-text">Монетами GroupIS покупают стили и одежду — себе или в подарок друзьям.</p>
-        <div class="coin-packs">${COIN_PACKS.map((p) => `
+        <div class="coin-packs">${COIN_PACKS.map((p, i) => `
           <button type="button" class="coin-pack" data-pack="${p.id}">
-            ${coinIcon()}<b>${fmtNum(p.coins)}</b>${p.note ? `<i>${p.note}</i>` : ''}<span>${p.price}</span>
+            ${coinStack(i + 1)}<b>${fmtNum(p.coins)}</b>${p.note ? `<i>${p.note}</i>` : ''}<span>${p.price}</span>
           </button>`).join('')}
         </div>
         <p class="pe-note">Оплата подключится позже — сейчас монеты начисляются сразу.</p>
@@ -12305,6 +12335,8 @@
       saveShopState();
       back.remove();
       repaintShop();
+      const coin = winBody.querySelector('.shop-wallet .coin');   // монеты пришли — монета в кошельке делает оборот
+      if (coin) coin.classList.add('is-spin');
       const sheet = win.querySelector('.shop-sheet');
       if (sheet && sheet.repaint) sheet.repaint();
     });
@@ -16515,25 +16547,6 @@
     dockPillLeft = null;
     moveDockPill();
   });
-
-  /* ── Всплеск при нажатии: из точки касания расходится тонкое спектральное кольцо ── */
-  const tapLayer = document.createElement('div');
-  tapLayer.className = 'tap-layer';
-  tapLayer.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(tapLayer);
-  const TAP_TARGETS = 'button, a[href], [role="button"], [data-action], .row, .person-card, .chat-row, .seg-opt, .switch, .user-avatar-wrap, .wish-cloud, .wish-place, .map-group-chip, .grid-cell, .pg-item';
-  document.addEventListener('pointerdown', (e) => {
-    if (reduceMotion || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    const t = e.target.closest && e.target.closest(TAP_TARGETS);
-    if (!t || t.disabled) return;
-    const ring = document.createElement('span');
-    ring.className = 'tap-ring';
-    ring.style.left = e.clientX + 'px';
-    ring.style.top = e.clientY + 'px';
-    tapLayer.appendChild(ring);
-    ring.addEventListener('animationend', () => ring.remove(), { once: true });
-    setTimeout(() => ring.remove(), 1200);   // на случай, если анимация не запустилась
-  }, { passive: true, capture: true });
 
   // Интерфейс «съезжается» к краям — после входа и при запуске с уже открытой сессией
   function playChromeEnter() {
