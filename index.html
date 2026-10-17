@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-16 21:00">
+  <meta name="app-build" content="2026-10-16 23:30">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — карта с друзьями, группами и мессенджером">
 
@@ -4571,24 +4571,70 @@
     /* пункты профиля с пояснением — чуть плотнее, чтобы список помещался под фото */
     .profile-rows .row { padding-top: 10px; padding-bottom: 10px; }
 
-    /* ── Знакомство с приложением (openTour) ── */
-    .tour { position: fixed; inset: 0; z-index: 600; display: grid; place-items: center; padding: 20px; background: rgba(8, 8, 12, .5); animation: fade-in .25s ease both; }
+    /* ── Знакомство с приложением (openTour): снимок приложения со стрелками, ниже — что это и зачем ── */
+    .tour {
+      position: fixed; inset: 0; z-index: 600; display: grid; place-items: center; padding: 16px;
+      background: rgba(8, 8, 12, .38); -webkit-backdrop-filter: blur(14px) saturate(1.15); backdrop-filter: blur(14px) saturate(1.15);
+      animation: fade-in .25s ease both; transition: opacity .22s ease;
+    }
+    .tour.is-out { opacity: 0; }
     .tour-card {
-      width: min(360px, 100%); display: grid; justify-items: center; gap: 10px; padding: 26px 22px 18px; border-radius: 28px;
-      background: var(--win); color: var(--ink); text-align: center;
+      width: min(400px, 100%); display: grid; gap: 12px; padding: 12px 12px 14px; border-radius: 28px;
+      background: var(--win); color: var(--ink); text-align: center; touch-action: pan-y; -webkit-user-select: none; user-select: none;
       box-shadow: 0 40px 90px -20px rgba(0, 0, 0, .5), inset 0 1px 0 var(--rim); animation: modal-in .5s var(--spring) both;
     }
-    .tour-body { display: grid; justify-items: center; gap: 8px; animation: scr-in .35s var(--ease) both; }
-    .tour-ico { width: 64px; height: 64px; margin-bottom: 4px; border-radius: 50%; display: grid; place-items: center; background: var(--field); }
-    .tour-ico svg { width: 32px; height: 32px; stroke: url(#prismIcon); }
-    .tour-ico .ic-fill { fill: url(#prismIcon); stroke: none; }
+    .tour.is-stepped .tour-card { animation: none; }
+    .tour-shot {
+      position: relative; aspect-ratio: 4 / 3; border-radius: 20px; overflow: hidden; background: var(--field);
+      box-shadow: inset 0 0 0 1px var(--win-line);
+    }
+    .tour-shot.is-fwd { animation: tour-in-fwd .4s var(--ease) both; }
+    .tour-shot.is-back { animation: tour-in-back .4s var(--ease) both; }
+    @keyframes tour-in-fwd { from { opacity: .3; transform: translateX(26px); } }
+    @keyframes tour-in-back { from { opacity: .3; transform: translateX(-26px); } }
+    .tour-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.04); transition: opacity .45s var(--ease), transform .7s var(--ease); }
+    .tour-shot.is-ready .tour-img { opacity: 1; transform: none; }
+    .tour-shot.is-broken :is(.tour-marks, .tour-ring, .tour-tag) { display: none; }
+    .tour-marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .tour-arrow, .tour-head {
+      fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .6));
+    }
+    .tour-arrow { stroke-dasharray: 1; stroke-dashoffset: 1; }
+    .tour-head { opacity: 0; }
+    .tour-shot.is-ready .tour-arrow { animation: tour-draw .5s var(--ease) calc(.4s + var(--i) * .2s) forwards; }
+    .tour-shot.is-ready .tour-head { animation: tour-show .18s ease calc(.82s + var(--i) * .2s) forwards; }
+    @keyframes tour-draw { to { stroke-dashoffset: 0; } }
+    @keyframes tour-show { to { opacity: 1; } }
+    /* кольцо вокруг того, о чём речь: появляется и тихо «дышит» */
+    .tour-ring {
+      position: absolute; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%) scale(.55); opacity: 0;
+      border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 18px var(--c2), inset 0 0 10px rgba(255, 255, 255, .35);
+    }
+    .tour-shot.is-ready .tour-ring { animation: tour-ring .55s var(--spring) calc(.3s + var(--i) * .2s) forwards, tour-pulse 2.4s ease-in-out calc(1.3s + var(--i) * .2s) infinite; }
+    @keyframes tour-ring { to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+    @keyframes tour-pulse { 50% { box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 0 7px rgba(255, 255, 255, .2), 0 0 24px var(--c2), inset 0 0 10px rgba(255, 255, 255, .35); } }
+    .tour-tag {
+      position: absolute; transform: translate(-50%, -50%) scale(.75); opacity: 0; padding: 5px 11px; border-radius: 999px; white-space: nowrap;
+      background: var(--prism); color: var(--prism-ink); font: 600 12px/1.2 var(--font-ui); box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .55);
+    }
+    .tour-shot.is-ready .tour-tag { animation: tour-tag .45s var(--spring) calc(.22s + var(--i) * .2s) forwards; }
+    @keyframes tour-tag { to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+    .tour-body { display: grid; gap: 6px; padding: 2px 10px 0; animation: scr-in .35s var(--ease) both; }
     .tour-title { font: 600 17px/1.3 var(--font-ui); letter-spacing: -0.015em; }
     .tour-text { font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
-    .tour-dots { display: flex; gap: 6px; margin: 6px 0 4px; }
+    .tour-dots { display: flex; justify-content: center; gap: 5px; }
     .tour-dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--field); box-shadow: inset 0 0 0 1px var(--win-line); transition: width .3s var(--ease), background .3s; }
     .tour-dots i.is-on { width: 18px; background: var(--prism); box-shadow: none; }
-    .tour-acts { display: flex; gap: 8px; width: 100%; }
+    .tour-acts { display: flex; gap: 8px; padding: 0 2px; }
     .tour-acts .btn { flex: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .tour-shot, .tour-body, .tour-img { animation: none !important; transition: none; }
+      .tour-shot.is-ready :is(.tour-arrow, .tour-head, .tour-ring, .tour-tag) { animation: none !important; opacity: 1; stroke-dashoffset: 0; transform: translate(-50%, -50%); }
+      .tour-shot.is-ready :is(.tour-arrow, .tour-head) { transform: none; }
+    }
+    /* пока открыто знакомство, интерфейс за карточками уходит — остаются размытая карта и сами карточки */
+    body.tour-open :is(#window, .dock-wrap, .menubar, .map-tools, .geo-btn, .match-btn, .mdeck) { opacity: 0 !important; pointer-events: none !important; transition: opacity .25s ease; }
 
     /* ═══════ Типографика ═══════
        Один шрифт (--font-ui) и одна шкала на всё приложение — как в системных мессенджерах:
@@ -6038,23 +6084,63 @@
   }
 
   /* ── Знакомство с приложением ──
-     Один раз, сразу после регистрации — пять коротких карточек: где что находится и как всё связано
-     (карта, группы, match, желание, аватар). Пропустить можно сразу; открыть заново — «Настройки → Как пользоваться» */
-  const TOUR_KEY = 'tour.v1:';
-  const TOUR_NEW_MS = 2 * 24 * 3600 * 1000;   // аккаунт считается новым двое суток: письмо с подтверждением открывают не сразу
-  let tourAfterSignUp = false;                // аккаунт создан только что, на этом устройстве
+     Карточки по главным функциям: сверху — снимок самого приложения (tour/<снимок>-light|dark.webp, по теме), на нём
+     стрелки и подписи, ниже — что это и зачем. Пока карточки открыты, остальной интерфейс уходит — видна только
+     размытая карта. Показывается один раз на устройстве — новым и прежним пользователям (новая версия знакомства —
+     новый TOUR_KEY); открыть заново — «Настройки → Как пользоваться».
+     marks: [x, y, r, подпись, lx, ly] — в процентах кадра: кольцо радиуса r вокруг точки (x, y), подпись в (lx, ly)
+     и стрелка от неё к кольцу; r = 0 — без кольца, подпись в самой точке — без стрелки */
+  const TOUR_KEY = 'tour.v2:';
   const TOUR_STEPS = [
-    { ico: '<circle cx="12" cy="12" r="8.75"/><path d="M12 12 18.2 5.8"/><circle class="ic-fill" cx="12" cy="12" r="2.1"/><circle class="ic-fill" cx="15.7" cy="15.4" r="1.3"/>',
-      title: 'Карта — главный экран', text: 'Здесь вы, ваши друзья и группы рядом. Нажмите на человека — откроется его профиль, на иконку группы — её карточка.' },
-    { ico: '<circle cx="6.9" cy="15.9" r="3.4"/><circle cx="17.1" cy="15.9" r="3.4"/><circle class="ic-fill" cx="12" cy="7.4" r="3.4"/>',
-      title: 'Группы', text: 'Соберите компанию во вкладке «Группы» и пригласите друзей. Группа появится на карте, когда в ней будет хотя бы двое.' },
-    { ico: '<circle cx="9" cy="12" r="5.6"/><circle cx="15" cy="12" r="5.6"/><path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/>',
-      title: 'Match', text: 'Понравилась другая группа? Откройте её карточку и предложите match — у ваших групп появится общий чат.' },
-    { ico: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 7 9.5a4.5 4.5 0 0 0 0 9z"/>',
-      title: 'Желание', text: 'В профиле загадайте желание — оно повиснет облаком над вашей иконкой на 12 часов. Так друзья увидят, чем вы хотите заняться.' },
-    { ico: '<circle class="ic-fill" cx="12" cy="8.6" r="3.5"/><path d="M5.25 19.5c1.15-3.3 3.8-5 6.75-5s5.6 1.7 6.75 5"/>',
-      title: 'Ваш аватар', text: 'Профиль → «Мой аватар»: внешность, одежда и стиль иконки на карте. Новые вещи — в «Магазине», а друзьям их можно подарить.' },
+    { shot: 'map', title: 'Карта — главный экран',
+      text: 'Здесь вы, ваши друзья и группы рядом. Нажмите на человека — откроется его профиль, на значок группы — её карточка.', marks: [[58.5, 88.4, 5.1, 'Это вы', 33.1, 83.7], [82.7, 67.7, 5.1, 'Друг идёт', 83.5, 86], [7.4, 52.2, 4.3, 'Группа', 12.5, 78]] },
+    { shot: 'friends', title: 'Друзья — в реальном времени',
+      text: 'Добавляйте друзей во вкладке «Друзья». Пока у друга открыто приложение, на карте видно, как он идёт.', marks: [[51.9, 56.6, 6.6, 'Идёт прямо сейчас', 63.6, 76]] },
+    { shot: 'wish', title: 'Желание',
+      text: 'Профиль → «Желания»: напишите, чем хотите заняться. Облако повиснет над вашей иконкой на 12 часов — друзья откликнутся.', marks: [[79, 60, 0, 'Ваше желание', 77, 85]] },
+    { shot: 'groups', title: 'Группы',
+      text: 'Соберите компанию во вкладке «Группы» и пригласите друзей. Когда в группе двое и больше, она появляется на карте.', marks: [[20, 81.5, 0, 'Общий чат', 15.5, 71]] },
+    { shot: 'match', title: 'Match между группами',
+      text: 'Понравилась другая группа? Откройте её карточку и предложите match — её лидер получит запрос.', marks: [[73, 81.5, 0, 'Нажмите', 84, 93.5]] },
+    { shot: 'matchfx', title: 'Совпало или нет',
+      text: 'Согласились — значки групп сливаются и открывается общий чат. Нет — разлетаются: «Не в этот раз».', marks: [[25, 12, 0, 'Совпало', 25, 12], [75, 12, 0, 'Не совпало', 75, 12]] },
+    { shot: 'vote', title: 'Голосование о союзе',
+      text: 'В общем чате лидер нажимает «сирены» и запускает голосование. Если большинство за — на карте вы видите только друг друга.', marks: [[20.6, 89.8, 5.3, 'Значок «сирены»', 54.2, 86.4]] },
+    { shot: 'union', title: 'Союз на карте',
+      text: 'Закреплённый союз — один значок «Группа feat Группа», а все его участники стоят рядом.', marks: [[21.6, 29.1, 5.1, 'Союз двух групп', 23, 76]] },
+    { shot: 'chats', title: 'Чаты',
+      text: 'Пишите друзьям и группам, отправляйте голосовые и видеокружки — кнопки рядом с полем ввода.', marks: [[72, 85.8, 9.2, 'Голосовое и кружок', 28.5, 64.8]] },
+    { shot: 'memories', title: 'Воспоминания',
+      text: 'Добавляйте фото с прогулок: они встают на карту там, где сняты, и хранятся в профиле.', marks: [[84.7, 65.2, 7.6, 'Фото там, где снято', 73.5, 35.9]] },
+    { shot: 'avatar', title: 'Ваш аватар',
+      text: 'Профиль → «Мой аватар»: внешность, одежда и стиль иконки на карте.', marks: [[74, 84, 0, 'Вкладки', 84, 69]] },
+    { shot: 'shop', title: 'Магазин и подарки',
+      text: 'За монеты GroupIS — новые стили иконки и одежда. Любую вещь можно подарить другу.', marks: [[15.8, 35.2, 7.6, 'Монеты GroupIS', 61, 51.5]] },
   ];
+  const tourShotSrc = (shot) => `tour/${shot}-${/dark/.test(getComputedStyle(document.documentElement).colorScheme || '') ? 'dark' : 'light'}.webp`;
+  // Стрелки (SVG, кадр 400×300 — как у снимка 4:3), кольца и подписи поверх снимка
+  function tourMarksHtml(marks) {
+    let svg = '', html = '';
+    marks.forEach(([x, y, r, label, lx, ly], i) => {
+      const X = x * 4, Y = y * 3, LX = lx * 4, LY = ly * 3, R = r * 4, d = Math.hypot(X - LX, Y - LY);
+      if (d > 8) {
+        // мягкая дуга: середина отведена вбок, наружу от центра кадра
+        const mx = (X + LX) / 2, my = (Y + LY) / 2;
+        let nx = -(Y - LY) / d, ny = (X - LX) / d;
+        if ((mx + nx - 200) ** 2 + (my + ny - 150) ** 2 < (mx - 200) ** 2 + (my - 150) ** 2) { nx = -nx; ny = -ny; }
+        const bend = Math.min(36, d * 0.26), cx = mx + nx * bend, cy = my + ny * bend;
+        // конец — у кольца (или чуть не доходя до точки), наконечник — по направлению дуги
+        const tl = Math.hypot(X - cx, Y - cy) || 1, ux = (X - cx) / tl, uy = (Y - cy) / tl, gap = R ? R + 5 : 7;
+        const ex = X - ux * gap, ey = Y - uy * gap, s = 8;
+        const f = (n) => n.toFixed(1);
+        svg += `<path class="tour-arrow" style="--i:${i}" pathLength="1" d="M${f(LX)} ${f(LY)}Q${f(cx)} ${f(cy)} ${f(ex)} ${f(ey)}"/>`
+          + `<path class="tour-head" style="--i:${i}" d="M${f(ex - ux * s - uy * s * 0.62)} ${f(ey - uy * s + ux * s * 0.62)}L${f(ex)} ${f(ey)}L${f(ex - ux * s + uy * s * 0.62)} ${f(ey - uy * s - ux * s * 0.62)}"/>`;
+      }
+      if (R) html += `<span class="tour-ring" style="left:${x}%;top:${y}%;width:${r * 2}%;--i:${i}"></span>`;
+      html += `<span class="tour-tag" style="left:${lx}%;top:${ly}%;--i:${i}">${escapeHtml(label)}</span>`;
+    });
+    return `<svg class="tour-marks" viewBox="0 0 400 300" preserveAspectRatio="none" aria-hidden="true">${svg}</svg>${html}`;
+  }
   function openTour() {
     return new Promise((resolve) => {
       document.querySelectorAll('.tour').forEach((el) => el.remove());
@@ -6064,12 +6150,16 @@
       el.setAttribute('role', 'dialog');
       el.setAttribute('aria-modal', 'true');
       el.setAttribute('aria-label', 'Как пользоваться GroupIS');
-      const paint = () => {
+      const preload = (i) => { if (TOUR_STEPS[i]) new Image().src = tourShotSrc(TOUR_STEPS[i].shot); };
+      const paint = (dir = 0) => {
         const s = TOUR_STEPS[step], last = step === TOUR_STEPS.length - 1;
         el.innerHTML = `
           <div class="tour-card">
+            <div class="tour-shot${dir ? (dir > 0 ? ' is-fwd' : ' is-back') : ''}">
+              <img class="tour-img" src="${tourShotSrc(s.shot)}" alt="" decoding="async" draggable="false">
+              ${tourMarksHtml(s.marks)}
+            </div>
             <div class="tour-body">
-              <span class="tour-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${s.ico}</svg></span>
               <div class="tour-title">${s.title}</div>
               <div class="tour-text">${s.text}</div>
             </div>
@@ -6079,31 +6169,58 @@
               <button type="button" class="btn btn-primary" data-tour-next>${last ? 'Начать' : 'Далее'}</button>
             </div>
           </div>`;
+        // снимок проявляется, когда загрузился, — следом рисуются стрелки; не загрузился — остаётся текст
+        const shotEl = el.querySelector('.tour-shot'), img = shotEl.querySelector('img');
+        const ready = () => requestAnimationFrame(() => shotEl.classList.add('is-ready'));
+        if (img.complete && img.naturalWidth) ready();
+        else { img.addEventListener('load', ready, { once: true }); img.addEventListener('error', () => shotEl.classList.add('is-broken'), { once: true }); }
+        preload(step + 1); preload(step - 1);
       };
-      const close = () => { document.removeEventListener('keydown', onKey, true); el.remove(); resolve(true); };
+      const go = (to) => {
+        if (to < 0 || to >= TOUR_STEPS.length || to === step) return;
+        const dir = to > step ? 1 : -1;
+        step = to;
+        el.classList.add('is-stepped');   // карточка уже на месте — дальше меняется только её содержимое
+        paint(dir);
+      };
+      const close = () => {
+        document.removeEventListener('keydown', onKey, true);
+        document.body.classList.remove('tour-open');
+        el.classList.add('is-out');
+        setTimeout(() => el.remove(), 220);
+        resolve(true);
+      };
       const onKey = (e) => {
         if (e.key === 'Escape') { e.stopPropagation(); close(); }
-        else if (e.key === 'ArrowRight' && step < TOUR_STEPS.length - 1) { step++; paint(); }
-        else if (e.key === 'ArrowLeft' && step > 0) { step--; paint(); }
+        else if (e.key === 'ArrowRight') go(step + 1);
+        else if (e.key === 'ArrowLeft') go(step - 1);
       };
       el.addEventListener('click', (e) => {
-        if (e.target.closest('[data-tour-next]')) { if (step < TOUR_STEPS.length - 1) { step++; paint(); } else close(); return; }
-        if (e.target.closest('[data-tour-skip]')) { if (step === TOUR_STEPS.length - 1) { step--; paint(); } else close(); return; }
+        if (e.target.closest('[data-tour-next]')) { if (step < TOUR_STEPS.length - 1) go(step + 1); else close(); return; }
+        if (e.target.closest('[data-tour-skip]')) { if (step === TOUR_STEPS.length - 1) go(step - 1); else close(); return; }
         if (e.target === el) close();
       });
+      // листать пальцем: влево — дальше, вправо — назад
+      let sx = null, sy = 0;
+      el.addEventListener('pointerdown', (e) => { if (e.target.closest('.tour-card') && !e.target.closest('button')) { sx = e.clientX; sy = e.clientY; } });
+      el.addEventListener('pointerup', (e) => {
+        if (sx === null) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        sx = null;
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) go(step + (dx < 0 ? 1 : -1));
+      });
+      el.addEventListener('pointercancel', () => { sx = null; });
       document.addEventListener('keydown', onKey, true);
       paint();
       document.body.appendChild(el);
+      document.body.classList.add('tour-open');   // интерфейс за карточками уходит (окно, панели, кнопки карты)
     });
   }
-  // Первый вход нового аккаунта — показать знакомство (ответ: показали ли). Тем, кто зарегистрировался давно,
-  // оно не показывается ни при входе, ни на новом устройстве
+  // Знакомство ещё не показывали на этом устройстве — показать (ответ: показали ли)
   async function maybeShowTour() {
     if (!currentUser || !authScreen.hidden) return false;
     const key = TOUR_KEY + currentUser.id;
-    const fresh = tourAfterSignUp || Date.now() - Date.parse(currentUser.created_at || '') < TOUR_NEW_MS;
-    tourAfterSignUp = false;
-    try { if (!fresh || localStorage.getItem(key)) return false; localStorage.setItem(key, '1'); } catch { return false; }
+    try { if (localStorage.getItem(key)) return false; localStorage.setItem(key, '1'); } catch { return false; }
     await openTour();
     return true;
   }
@@ -6738,7 +6855,6 @@
         avatarConfig = defaultAvatarFor(draft.gender);
         saveAvatarConfig(avatarConfig);
 
-        tourAfterSignUp = true;   // после входа — знакомство с приложением
         await enterAppAfterLogin();
       });
     }
@@ -6787,7 +6903,7 @@
     });
     if (!returning) openAppFromShortcut();
     setTimeout(prefetchChats, 8000);   // когда интерфейс уже на месте и первые данные загрузились
-    // после регистрации — знакомство с приложением, а уже после него — вопрос про уведомления
+    // знакомство с приложением (один раз на устройстве), а уже после него — вопрос про уведомления
     setTimeout(async () => { const shown = await maybeShowTour(); setTimeout(maybeAskPush, shown ? 800 : 2200); }, 1800);
     loadShopState();   // кошелёк и вещи — для строк профиля и замков в гардеробе
   }
