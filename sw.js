@@ -6,7 +6,7 @@
      качал бы их, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v5.0.0';
+const VERSION = 'v5.1.0';
 const CACHE = `groupis-${VERSION}`;
 const STATIC_VERSION = 's6';   // s6: без 3D-аватаров и снимков знакомства — прежний кеш с ними удаляется
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
