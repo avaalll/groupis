@@ -1,14 +1,14 @@
 /* Service worker: оболочка приложения (app shell) доступна офлайн.
    Два кеша:
    — CACHE (VERSION) — страница и манифесты; при изменении index.html увеличьте VERSION;
-   — STATIC_CACHE (STATIC_VERSION) — тяжёлые файлы, которые меняются редко (3D-модели, three.js, текстуры,
-     иконки, библиотека Supabase, шрифты). Он переживает обновления приложения: иначе каждый выпуск заново
-     качал бы ~4 МБ, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
+   — STATIC_CACHE (STATIC_VERSION) — тяжёлые файлы, которые меняются редко (three.js и текстура глобуса на экране
+     входа, иконки, библиотека Supabase, шрифты). Он переживает обновления приложения: иначе каждый выпуск заново
+     качал бы их, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v4.31.0';
+const VERSION = 'v5.0.0';
 const CACHE = `groupis-${VERSION}`;
-const STATIC_VERSION = 's5';
+const STATIC_VERSION = 's6';   // s6: без 3D-аватаров и снимков знакомства — прежний кеш с ними удаляется
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
 
 const APP_SHELL = [
@@ -22,8 +22,6 @@ const APP_SHELL = [
 const STATIC_FILES = [
   './three.min.js',
   './supabase.min.js',
-  './avatars3d/male.glb',
-  './avatars3d/female.glb',
   './img/earth-dark.jpg',
   './icons/logo.svg',
   './icons/wordmark.svg',
@@ -183,7 +181,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) {
     if (url.origin === FONTS_FILE_ORIGIN) cacheFirst(event, request, STATIC_CACHE);   // файлы шрифтов не меняются
     else if (url.origin === FONTS_CSS_ORIGIN || CACHEABLE_EXTERNAL.includes(request.url)) staleWhileRevalidate(event, request, STATIC_CACHE);
-    // Остальные внешние запросы (Supabase API, 2ГИС и т. д.) пропускаем как есть
+    // Остальные внешние запросы (Supabase API и т. д.) пропускаем как есть
     return;
   }
 
@@ -191,10 +189,8 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate' && isShellPage(url)) { shellPage(event, request); return; }
   if (request.headers.has('range')) return;
 
-  // Модели, three.js, текстуры и иконки — только из кеша: перекачивать их при каждом запуске незачем.
-  // Наряды и вещи гардероба (avatars3d/<…>.glb) и снимки знакомства (tour/<…>.webp) заранее не качаются — только
-  // когда понадобились, и дальше тоже берутся из кеша. Пересобрали модель или переснимали знакомство — увеличьте STATIC_VERSION
-  if (STATIC_PATHS.has(url.pathname) || url.pathname.startsWith(SCOPE_PATH + 'avatars3d/') || url.pathname.startsWith(SCOPE_PATH + 'tour/')) {
+  // three.js, текстура глобуса и иконки — только из кеша: перекачивать их при каждом запуске незачем
+  if (STATIC_PATHS.has(url.pathname)) {
     cacheFirst(event, request, STATIC_CACHE);
     return;
   }
@@ -252,6 +248,8 @@ self.addEventListener('push', (event) => {
       await saveBadgeChats(list);
       await showBadge(list.length);
     }
+    // открытое приложение узнаёт о push сразу (realtime на телефоне мог прерваться)
+    wins.forEach((c) => { try { c.postMessage({ type: 'push-in', tag: data.tag || '' }); } catch {} });
     if (!ios && onScreen) return;
     await self.registration.showNotification(data.title || 'GroupIS', {
       body: data.body || '',
