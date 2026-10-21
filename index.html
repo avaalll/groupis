@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-21 17:32">
+  <meta name="app-build" content="2026-10-21 18:15">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — лента групп, друзья и мессенджер">
 
@@ -5542,6 +5542,7 @@
     unionDetails = null; syncMatchButton(); syncRequestBadges();
     groupStats = new Map();
     membersFullAt = 0;
+    resetBots();
     feedReset();
     updateBadge();
     clearLocalCaches();
@@ -6591,9 +6592,11 @@
     clearTimeout(stateSaveTimer);
     stateSaveTimer = setTimeout(() => whenIdle(() => {
       if (!currentUser || currentUser.id !== uid) return;
+      // группы-боты и всё, что с ними связано, на устройстве не храним — они добавляются при каждом запуске
       KV.set('state:' + uid, {
-        wishes, groups, friends, notifications, groupMatches, groupInvites,
-        groupStats: [...groupStats], at: Date.now(),
+        wishes, friends, notifications, groupInvites,
+        groups: groups.filter((g) => !isBotGroup(g)), groupMatches: groupMatches.filter((m) => !isBotId(m.id)),
+        groupStats: [...groupStats].filter(([id]) => !isBotId(id)), at: Date.now(),
       });
       const ps = postsSig(posts);
       if (ps !== savedPostsSig) { savedPostsSig = ps; KV.set('posts:' + uid, posts); }
@@ -6623,6 +6626,7 @@
     if (!groupInvites.length && Array.isArray(s.groupInvites)) groupInvites = s.groupInvites;
     if (myPhotos === null && Array.isArray(s.myPhotos)) myPhotos = s.myPhotos;
     if (!groupStats.size && Array.isArray(s.groupStats)) groupStats = new Map(s.groupStats);
+    mergeBots();
     syncRequestBadges();
     const chatList = await KV.get('chatlist2:' + uid);
     if (!chatsListShown && typeof chatList === 'string' && currentUser && currentUser.id === uid) chatsListShown = chatList;
@@ -6867,6 +6871,7 @@
       unionWith: g.union_with != null ? String(g.union_with) : null,
     }));
     groupsLoaded = true;
+    mergeBots();   // тестовые группы-боты — к группам с сервера
     cleanupMyExpiredGroupWishes(gr || []);
     scheduleStateSave();
     // приглашения и запросы на match могли загрузиться раньше групп — тогда их ещё не к чему было привязать
@@ -6886,6 +6891,7 @@
     if (error) { console.warn('[group_matches] load:', error.message); return; }
     const accepted = new Set(groupMatches.filter((m) => m.status === 'accepted').map((m) => m.id));
     groupMatches = (data || []).map(mapMatchRow);
+    mergeBots();   // запросы match с группами-ботами живут только в приложении
     scheduleStateSave();
     const fresh = groupMatches.filter((m) => m.status === 'accepted' && !accepted.has(m.id));
     if (fresh.length) onNewMatchChats(fresh);
@@ -7448,6 +7454,7 @@
     }
     joinRequestsMissing = false;
     joinRequests = (data || []).map((r) => ({ id: String(r.id), groupId: String(r.group_id), userId: String(r.user_id), status: r.status, createdAt: r.created_at || null }));
+    mergeBots();   // заявки в группы-боты — только в приложении
     syncRequestBadges();
     scheduleFeedRender();
     // кто просится — имена и фото для заявок в мои группы
@@ -7466,6 +7473,7 @@
   function requestJoinGroup(gid) {
     const g = groupById(gid);
     if (!g || !currentUser) return Promise.resolve(false);
+    if (isBotGroup(g)) return botJoin(gid);   // тестовая группа-бот — только в приложении
     const busy = busyGroupOf(currentUser.id);
     if (busy) { noticeModal({ title: 'Вы уже в группе', text: `Вы в группе «${busy.name || 'Группа'}» — попроситься в другую можно, когда выйдете из неё.` }); return Promise.resolve(false); }
     const tmpId = 'tmp-' + Date.now(), before = joinRequests;
@@ -7588,7 +7596,8 @@
   // Принятые match, где я состою в одной из групп
   function myAcceptedMatches() {
     const myId = currentUser && currentUser.id;
-    return groupMatches.filter((m) => m.status === 'accepted' &&
+    // match с группой-ботом сюда не входит: у него нет совместного чата, союза и голосования на сервере
+    return groupMatches.filter((m) => m.status === 'accepted' && !isBotId(m.id) &&
       (isGroupParticipant(groupById(m.fromGroup), myId) || isGroupParticipant(groupById(m.toGroup), myId)));
   }
 
@@ -7604,6 +7613,7 @@
   }
 
   function respondGroupMatch(matchId, accept) {
+    if (isBotId(matchId)) return botRespondMatch(matchId, accept);   // запрос от группы-бота
     const id = String(matchId);
     const before = { groupMatches, notifications };
     return optimistic({
@@ -7625,6 +7635,7 @@
 
   // Ответ — промис статуса от сервера ('pending' | 'accepted' …) или null, если запрос не ушёл
   function sendGroupMatch(fromGid, toGid) {
+    if (isBotId(toGid) || isBotId(fromGid)) return botSendMatch(fromGid, toGid);   // группа-бот ответит сама
     const a = groupById(fromGid), b = groupById(toGid);
     const tmpId = 'tmp-' + Date.now(), before = groupMatches;
     let status = null;
@@ -7676,6 +7687,7 @@
       avgAge: r.avg_age != null ? Number(r.avg_age) : null,
       males: r.males || 0, females: r.females || 0, total: r.total || 0,
     }]));
+    mergeBots();   // сводка групп-ботов: средний возраст и состав
     scheduleFeedRender();
   }
 
@@ -8032,7 +8044,8 @@
 
   async function loadGroupMemberProfiles() {
     const friendIds = new Set(friends.map((f) => f.id));
-    const ids = [...computeRelevantUserIds()].filter((id) => !friendIds.has(id));
+    // лидеры групп-ботов — не с сервера (их имена и фото в peopleCache, см. mergeBots)
+    const ids = [...computeRelevantUserIds()].filter((id) => !friendIds.has(id) && !isBotId(id));
     if (!ids.length) { groupMemberProfiles = new Map(); return; }
     // Запасной вариант — имя и аватар, сохранённые в составе группы, а если сервер не ответил — то, что уже было
     const next = new Map();
@@ -8086,7 +8099,8 @@
   const peopleCache = new Map();   // id → { id, name, handle, avatar, gender, missing? }
   let peopleGenderMissing = false;
   async function ensurePeople(ids) {
-    const need = [...new Set(ids.map(String))].filter((id) => id && !peopleCache.has(id));
+    // участников групп-ботов на сервере нет: их номер в запросе сломал бы весь запрос
+    const need = [...new Set(ids.map(String))].filter((id) => id && !peopleCache.has(id) && !isBotId(id));
     let got = false;
     for (let i = 0; i < need.length; i += 100) {
       const part = need.slice(i, i + 100);
@@ -9206,6 +9220,7 @@
     });
   }
   async function shareGroupFlow(gid, btn) {
+    if (isBotId(gid)) { botNoChat(); return; }   // группу-бота в настоящий чат не отправляем
     const g = groupById(gid);
     const targets = myGroups().filter((x) => String(x.id) !== String(gid));
     if (!g || !targets.length) return;
@@ -9680,7 +9695,7 @@
         <div class="fd-photo${url ? ' has-photo' : ''}"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : escapeHtml(firstChar((g.name || '?').trim()).toUpperCase() || '?')}</div>
         <div class="fd-shade"></div>
         ${act ? `<span class="fd-stamp is-like">${escapeHtml(act.stamp)}</span><span class="fd-stamp is-nope">Мимо</span>` : ''}
-        ${incoming ? '<div class="fd-badge"><span class="is-hot">Хотят match с вами</span></div>' : ''}
+        ${incoming || isBotGroup(g) ? `<div class="fd-badge">${incoming ? '<span class="is-hot">Хотят match с вами</span>' : ''}${isBotGroup(g) ? '<span>🤖 Тестовая группа</span>' : ''}</div>` : ''}
         <button type="button" class="fd-more" data-fd-act="open" tabindex="-1" aria-label="Открыть группу" title="Открыть группу"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v6M12 7.5v.01"/></svg></button>
         <div class="fd-info">
           <div class="fd-name">${escapeHtml(g.name || 'Группа')}</div>
@@ -9808,14 +9823,19 @@
 
   async function runFeedAction(g, act) {
     const name = ellipsize(g.name || 'Группа', 26);
+    const bot = isBotGroup(g);   // тестовая группа-бот: всё только в приложении (см. «ТЕСТОВЫЕ ГРУППЫ-БОТЫ»)
     if (act.kind === 'join') {
-      if (await requestJoinGroup(g.id)) feedToast(`Заявка в «${name}» отправлена — лидер ответит`);
+      if (await requestJoinGroup(g.id)) feedToast(bot ? `Заявка в тестовую группу «${name}» — бот не ответит` : `Заявка в «${name}» отправлена — лидер ответит`);
       return;
     }
-    if (act.kind === 'chat') { showApp('messenger'); showMatchChatScreen(act.m.id, () => closeApp()); return; }
+    if (act.kind === 'chat') {
+      if (bot) { botNoChat(); return; }
+      showApp('messenger'); showMatchChatScreen(act.m.id, () => closeApp()); return;
+    }
     if (act.kind === 'accept') {
       const done = respondGroupMatch(act.m.id, true);   // экран меняется сразу, у принятого — анимация match
       await matchFxIdle();
+      if (bot) { feedToast(`Match с тестовой группой «${name}» — общего чата у ботов нет`); return; }
       if (await confirmModal({ title: 'Match!', text: 'Общий чат двух групп создан. Открыть его?', confirmLabel: 'Открыть чат', cancelLabel: 'Позже', tone: 'primary' }) && await done) {
         showApp('messenger');
         await showMatchChatScreen(act.m.id, null);
@@ -9823,6 +9843,7 @@
       return;
     }
     if (act.kind === 'share') {
+      if (bot) { feedToast(`«${name}» — тестовая группа, в чат она не отправляется`); return; }
       try {
         for (const t of act.targets) await shareGroupToChat(g, t.id);
         feedToast(act.targets.length === 1 ? `«${name}» — в чате «${ellipsize(act.targets[0].name || 'Группа', 22)}»` : `«${name}» — в чатах ваших групп`);
@@ -9836,7 +9857,7 @@
       const from = act.from[0];
       const status = await sendGroupMatch(from.id, g.id);
       if (status === 'accepted') { await matchFxIdle(); feedToast('У этой группы уже был запрос к вам — match состоялся!'); }
-      else if (status) feedToast(`Запрос на match с «${name}» отправлен`);
+      else if (status) feedToast(bot ? `Запрос отправлен — тестовая группа ответит через пару секунд` : `Запрос на match с «${name}» отправлен`);
     }
   }
 
@@ -9955,6 +9976,181 @@
     e.preventDefault();
     feedDecide(e.key === 'ArrowRight' ? 'like' : 'nope');
   });
+
+  /* ═══════ ТЕСТОВЫЕ ГРУППЫ-БОТЫ ═══════
+     Пока настоящих групп мало, в ленте есть 5 групп-ботов: на них проверяют ленту, карточки, фильтры, заявки и match.
+     Боты живут только в приложении: в базе их нет, на сервер о них ничего не уходит (их номера отсеиваются из всех
+     запросов), другие люди их не видят, на карточке — пометка «Тестовая группа». Что с ними делают, происходит только
+     здесь и забывается при перезапуске:
+     — заявка в группу-бота остаётся «отправленной» (бот не отвечает);
+     — на запрос match бот через пару секунд соглашается — с анимацией match;
+     — «Кофе и разговоры» сами предлагают match группе, которую вы ведёте (кнопка Match сверху, «Хотят match с вами»);
+     — общего чата, профилей участников и «поделиться в чате» у ботов нет — об этом говорит подсказка.
+     Убрать ботов — BOT_GROUPS = false */
+  const BOT_GROUPS = true;
+  const isBotId = (id) => String(id).startsWith('bot-');
+  const isBotGroup = (g) => !!g && isBotId(g.id);
+  const BOT_DEFS = [
+    { name: 'Велосипедисты', emoji: '🚴', hues: [205, 250], wish: 'Покататься по набережной в субботу', age: 24.4,
+      people: [['Артём', 'm'], ['Лиза', 'f'], ['Никита', 'm'], ['Даша', 'f'], ['Илья', 'm']] },
+    { name: 'Настолки по пятницам', emoji: '🎲', hues: [330, 15], wish: '', age: 27.3,
+      people: [['Алина', 'f'], ['Вера', 'f'], ['Соня', 'f']] },
+    { name: 'Бег на рассвете', emoji: '🏃', hues: [135, 175], wish: 'Пробежка 10 км в Парке Горького', age: 21.8,
+      people: [['Максим', 'm'], ['Егор', 'm'], ['Тимур', 'm'], ['Глеб', 'm']] },
+    { name: 'Кино и попкорн', emoji: '🎬', hues: [265, 300], wish: 'Сходить на премьеру в пятницу вечером', age: 30.1,
+      people: [['Олег', 'm'], ['Марина', 'f']] },
+    { name: 'Кофе и разговоры', emoji: '☕', hues: [22, 42], wish: '', age: 26, proposes: true,
+      people: [['Полина', 'f'], ['Кирилл', 'm'], ['Ксюша', 'f'], ['Денис', 'm']] },
+  ];
+  const BOT_FACES = ['😀', '😎', '🙂', '🤓', '😊', '🥳', '😌', '🤠', '😄', '🧐'];
+  let botList = null, botMatches = [], botJoins = [], botSeq = 0, botProposed = false, botArtStarted = false;
+  const botArt = new Map();   // номер группы или человека → фото (data:image/jpeg), рисуются в свободное время
+
+  const botPeople = (k) => BOT_DEFS[k].people.map(([name, sex], i) => ({
+    id: `bot-u-${k}-${i}`, name, handle: `@bot_${k}${i}`, avatar: botArt.get(`bot-u-${k}-${i}`) || '', gender: sex === 'm' ? 'male' : 'female',
+  }));
+  function botGroupsList() {
+    if (botList) return botList;
+    const now = new Date().toISOString();
+    botList = BOT_DEFS.map((d, k) => {
+      const people = botPeople(k);
+      return { id: 'bot-g-' + k, ownerId: people[0].id, name: d.name, photo: '', visibility: 'public',
+        members: people.slice(1).map(({ id, name, handle, avatar }) => ({ id, name, handle, avatar })),
+        wish: d.wish, wishAt: d.wish ? now : null, unionWith: null };
+    });
+    return botList;
+  }
+  /* Подмешать ботов к данным с сервера — после каждой загрузки групп, match, заявок и сводки
+     (сервер присылает списки целиком, и боты из них пропадали бы) */
+  function mergeBots() {
+    if (!BOT_GROUPS || !currentUser) return;
+    const list = botGroupsList();
+    const have = new Set(groups.map((g) => String(g.id)));
+    if (list.some((g) => !have.has(g.id))) groups = [...groups.filter((g) => !isBotGroup(g)), ...list];
+    BOT_DEFS.forEach((d, k) => {
+      const people = botPeople(k);
+      // имена и фото — в справочник людей: лидер на карточке, участники в карточке группы
+      for (const p of people) peopleCache.set(p.id, p);
+      const males = people.filter((p) => p.gender === 'male').length;
+      groupStats.set('bot-g-' + k, { avgAge: d.age, males, females: people.length - males, total: people.length });
+    });
+    // «Кофе и разговоры» предлагают match первой группе, которую вы ведёте (один раз за запуск)
+    if (!botProposed) {
+      const led = groups.find((g) => !isBotGroup(g) && g.ownerId === currentUser.id);
+      const k = BOT_DEFS.findIndex((d) => d.proposes);
+      if (led && k >= 0) {
+        botProposed = true;
+        if (!matchBetween('bot-g-' + k, led.id)) {
+          botMatches.push({ id: `bot-m-${++botSeq}-${Date.now()}`, fromGroup: 'bot-g-' + k, toGroup: String(led.id), fromOwner: `bot-u-${k}-0`,
+            toOwner: currentUser.id, status: 'pending', createdAt: new Date().toISOString(), voteState: 'none', voteStartedBy: null });
+        }
+      }
+    }
+    groupMatches = [...groupMatches.filter((m) => !isBotId(m.id)), ...botMatches];
+    joinRequests = [...joinRequests.filter((r) => !isBotId(r.id)), ...botJoins];
+    if (!botArtStarted) { botArtStarted = true; paintBotArt(); }
+  }
+  function resetBots() { botList = null; botMatches = []; botJoins = []; botProposed = false; }
+
+  // Фото групп и участников рисуются по одному в свободные моменты — запуск и смахивания не ждут их
+  function paintBotArt() {
+    const jobs = [];
+    BOT_DEFS.forEach((d, k) => {
+      jobs.push(() => botArt.set('bot-g-' + k, botPicture(480, 640, d.hues, d.emoji, 200, k * 7 + 3)));
+      d.people.forEach((_, i) => jobs.push(() => {
+        const n = k * 10 + i;
+        botArt.set(`bot-u-${k}-${i}`, botPicture(128, 128, [(n * 47) % 360, (n * 47 + 40) % 360], BOT_FACES[n % BOT_FACES.length], 76, n + 11));
+      }));
+    });
+    const later = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 60));
+    const step = () => {
+      const job = jobs.shift();
+      if (job) { try { job(); } catch (err) { console.warn('[боты] фото:', err); } later(step); return; }
+      // всё нарисовано — ставим фото группам и людям и перерисовываем то, что на экране
+      for (const g of botGroupsList()) {
+        g.photo = botArt.get(g.id) || '';
+        for (const m of g.members) m.avatar = botArt.get(m.id) || '';
+      }
+      if (!currentUser) return;
+      mergeBots();
+      scheduleFeedRender();
+      if (winBody.querySelector('[data-group-card]')) quietly(reopenGroupDetails);
+      syncMatchButton();
+    };
+    later(step);
+  }
+  // Картинка-«фото»: градиент, мягкие блики, как на снимке вне фокуса, и крупный значок по центру
+  function botPicture(w, h, hues, emoji, size, seed) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    const gr = g.createLinearGradient(0, 0, w, h);
+    gr.addColorStop(0, `hsl(${hues[0]} 72% 58%)`);
+    gr.addColorStop(1, `hsl(${hues[1]} 68% 30%)`);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, w, h);
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+    for (let i = 0; i < 12; i++) {
+      const x = rnd() * w, y = rnd() * h, r = (0.08 + rnd() * 0.25) * Math.max(w, h), hue = hues[0] + rnd() * 60;
+      const rg = g.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, `hsla(${hue} 90% 82% / .32)`);
+      rg.addColorStop(1, `hsla(${hue} 90% 82% / 0)`);
+      g.fillStyle = rg;
+      g.fillRect(0, 0, w, h);
+    }
+    g.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(emoji, w / 2, h * (h > w ? 0.42 : 0.54));
+    return c.toDataURL('image/jpeg', 0.82);
+  }
+
+  // Действия с ботами — только здесь, без сервера
+  function botJoin(gid) {
+    const busy = busyGroupOf(currentUser.id);
+    if (busy) { noticeModal({ title: 'Вы уже в группе', text: `Вы в группе «${busy.name || 'Группа'}» — попроситься в другую можно, когда выйдете из неё.` }); return Promise.resolve(false); }
+    if (!myJoinRequest(gid)) botJoins.push({ id: `bot-jr-${++botSeq}`, groupId: String(gid), userId: String(currentUser.id), status: 'pending', createdAt: new Date().toISOString() });
+    mergeBots();
+    repaintGroupsWorld();
+    return Promise.resolve(true);
+  }
+  function botSendMatch(fromGid, toGid) {
+    const from = groupById(fromGid), to = groupById(toGid), uid = currentUser.id;
+    const m = { id: `bot-m-${++botSeq}-${Date.now()}`, fromGroup: String(fromGid), toGroup: String(toGid), fromOwner: from ? from.ownerId : uid,
+      toOwner: to ? to.ownerId : null, status: 'pending', createdAt: new Date().toISOString(), voteState: 'none', voteStartedBy: null };
+    botMatches = [...botMatches.filter((x) => !(x.fromGroup === m.fromGroup && x.toGroup === m.toGroup)), m];
+    mergeBots();
+    repaintGroupsWorld();
+    // бот «думает» пару секунд и соглашается
+    setTimeout(() => {
+      if (!currentUser || currentUser.id !== uid || m.status !== 'pending') return;
+      m.status = 'accepted';
+      mergeBots();
+      botMatchFx(m);
+      repaintGroupsWorld();
+    }, 2600);
+    return Promise.resolve('pending');
+  }
+  function botRespondMatch(matchId, accept) {
+    const m = botMatches.find((x) => x.id === String(matchId));
+    if (!m) return Promise.resolve(false);
+    m.status = accept ? 'accepted' : 'declined';
+    mergeBots();
+    if (accept) botMatchFx(m);
+    repaintGroupsWorld();
+    return Promise.resolve(true);
+  }
+  // Анимация match — сразу; номер запоминается как «увиденный», чтобы она не повторилась при следующей загрузке
+  function botMatchFx(m) {
+    const key = MATCH_FX_KEY + currentUser.id;
+    try {
+      const seen = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify([...(Array.isArray(seen) ? seen : []), m.id].slice(-200)));
+    } catch {}
+    queueMatchFx(m);
+  }
+  function botNoChat() {
+    noticeModal({ title: 'Тестовая группа', text: 'У групп-ботов нет общего чата и профилей участников — они нужны, чтобы проверять ленту, карточки, заявки и match.' });
+  }
 
   /* ═══════ НАСТРОЙКИ (раздел профиля) ═══════ */
   function showSettingsScreen() {
@@ -13670,7 +13866,7 @@
   }
   async function loadPresence(ids) {
     const myId = currentUser && String(currentUser.id);
-    const list = [...new Set(ids.map(String))].filter((id) => id && id !== myId).slice(0, 200);
+    const list = [...new Set(ids.map(String))].filter((id) => id && id !== myId && !isBotId(id)).slice(0, 200);
     if (presenceMissing || !list.length) return;
     try {
       const { data, error } = await supabaseClient.rpc('get_presence', { ids: list });
@@ -13732,6 +13928,7 @@
   /* Чат открывается сразу из переписки, сохранённой на устройстве; свежая версия с сервера
      подтягивается следом и подменяет ленту, только если что-то изменилось */
   async function openChat(spec, backFn) {
+    if (spec.type === 'match' && isBotId(spec.matchId)) { botNoChat(); return; }   // match с группой-ботом — чата нет
     leaveChat();
     const c = { ...spec, messages: [], selected: new Set(), selecting: false, pinIdx: null, backFn };
     // в шапке окна — имя собеседника, название группы или «Группа × Группа»
@@ -15462,6 +15659,7 @@
      следом; экран перерисовывается, только если данные изменились */
   const friendProfileCache = new Map();   // userId → { p, photos }
   function showFriendProfile(userId, personHint = null, backFn = null) {
+    if (isBotId(userId)) { botNoChat(); return; }   // участник группы-бота — профиля на сервере нет
     setScreen(() => {
       winTitle.textContent = 'Профиль';
       winBody.scrollTop = 0;
