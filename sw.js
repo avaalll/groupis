@@ -6,7 +6,7 @@
      качал бы их, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v5.2.0';
+const VERSION = 'v5.3.0';
 const CACHE = `groupis-${VERSION}`;
 const STATIC_VERSION = 's6';   // s6: без 3D-аватаров и снимков знакомства — прежний кеш с ними удаляется
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
@@ -14,6 +14,7 @@ const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
+  './manifest-noir.webmanifest',
   './manifest-acid.webmanifest',
   './manifest-ember.webmanifest',
   './manifest-frost.webmanifest',
@@ -29,7 +30,13 @@ const STATIC_FILES = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
-  // иконки остальных цветовых схем
+  // иконки остальных цветовых схем (Noir — схема по умолчанию)
+  './icons/noir/logo.svg',
+  './icons/noir/wordmark.svg',
+  './icons/noir/icon-192.png',
+  './icons/noir/icon-512.png',
+  './icons/noir/icon-maskable-512.png',
+  './icons/noir/apple-touch-icon.png',
   './icons/acid/logo.svg',
   './icons/acid/wordmark.svg',
   './icons/acid/icon-192.png',
@@ -55,7 +62,7 @@ const STATIC_PATHS = new Set(STATIC_FILES.map((p) => new URL(p, self.location).p
 // рядом (supabase.min.js) — сторонний CDN у части мобильных операторов недоступен
 const CACHEABLE_EXTERNAL = [];
 // Таблица шрифтов — адрес тот же, что в <link> в index.html
-const FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap';
+const FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Jost:wght@300..500&family=Manrope:wght@400..700&display=swap';
 const FONTS_CSS_ORIGIN = 'https://fonts.googleapis.com';
 const FONTS_FILE_ORIGIN = 'https://fonts.gstatic.com';
 const FONT_SUBSETS = ['cyrillic', 'latin'];   // остальные наборы символов кешируются, если понадобятся
@@ -253,8 +260,8 @@ self.addEventListener('push', (event) => {
     if (!ios && onScreen) return;
     await self.registration.showNotification(data.title || 'GroupIS', {
       body: data.body || '',
-      icon: './icons/icon-192.png',
-      badge: './icons/icon-192.png',
+      icon: './icons/noir/icon-192.png',
+      badge: './icons/noir/icon-192.png',
       tag: data.tag || undefined,
       renotify: !!data.tag,
       data: { open: data.open || '', chat: data.chat || '' },
