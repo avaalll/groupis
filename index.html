@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-palette="noir">
 <head>
   <meta charset="utf-8">
   <!-- Три запрета, которые не касаются загрузки скриптов и данных: на странице не может появиться
@@ -8,12 +8,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Метка сборки: год-месяц-день часы:минуты. Меняйте её при каждом изменении страницы — по ней приложение
        узнаёт, что в кеше уже лежит версия новее, и само на неё переключается -->
-  <meta name="app-build" content="2026-10-22 16:30">
+  <meta name="app-build" content="2026-10-23 22:00">
   <title>GroupIS</title>
   <meta name="description" content="GroupIS — лента групп, друзья и мессенджер">
 
   <link rel="manifest" href="manifest.webmanifest" id="link-manifest">
-  <meta name="theme-color" content="#EDECE9" id="meta-theme-color">
+  <meta name="theme-color" content="#0A0A0A" id="meta-theme-color">
   <meta name="color-scheme" content="light dark">
   <script>
     /* iPhone и iPad. Когда фокус попадает в поле ввода, iOS сама приближает страницу и назад уже не отдаляет —
@@ -27,38 +27,18 @@
       var vp = document.querySelector('meta[name="viewport"]');
       if (vp && !/maximum-scale/.test(vp.getAttribute('content'))) vp.setAttribute('content', vp.getAttribute('content') + ', maximum-scale=1');
     })();
-    /* Тема до первой отрисовки, чтобы не мигало: выбор из настроек (auto / light / dark), «авто» — как в системе */
+    /* Тема до первой отрисовки, чтобы не мигало: выбор из настроек (auto / light / dark). Noir задуман тёмным —
+       пока тему не выбирали, она тёмная */
     (function () {
-      var pref = 'auto';
-      try { pref = localStorage.getItem('app.theme') || 'auto'; } catch (e) {}
+      var pref = 'dark';
+      try { pref = localStorage.getItem('app.theme') || 'dark'; } catch (e) {}
       var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      /* Цветовая схема (noir / prism / acid / ember / frost) и её иконки: значок вкладки, значок для «домашнего экрана», манифест.
-         С выпуска Noir это схема по умолчанию: у кого стояла прежняя схема по умолчанию («Призма»), она один раз
-         меняется на Noir (метка app.noir); выбранные вручную «Кислота», «Огонь» и «Иней» остаются */
-      var pal = 'noir';
-      try {
-        pal = localStorage.getItem('app.palette') || 'noir';
-        if (pal === 'prism' && !localStorage.getItem('app.noir')) { pal = 'noir'; localStorage.setItem('app.palette', 'noir'); }
-        localStorage.setItem('app.noir', '1');
-      } catch (e) {}
-      if (!/^(prism|acid|ember|frost)$/.test(pal)) pal = 'noir';
-      document.documentElement.setAttribute('data-palette', pal);
-      /* Цвет системной панели — сразу по фону схемы (--land), а не после загрузки всего скрипта */
-      var land = { noir: ['#F3EFE7', '#0A0A0A'], prism: ['#EDECE9', '#0B0B0E'], acid: ['#EEF1E2', '#070806'], ember: ['#F4E8E0', '#0B0605'], frost: ['#E4EDF7', '#050912'] };
+      /* Схема оформления одна — Noir (data-palette="noir" стоит на <html>); прежний выбор схемы больше не нужен */
+      try { localStorage.removeItem('app.palette'); localStorage.removeItem('app.noir'); } catch (e) {}
+      /* Цвет системной панели — сразу по фону (--land), а не после загрузки всего скрипта */
       var themeMeta = document.getElementById('meta-theme-color');
-      if (themeMeta) themeMeta.setAttribute('content', land[pal][dark ? 1 : 0]);
-      window.__paletteAssets = function (p) {
-        var dir = p === 'prism' ? 'icons/' : 'icons/' + p + '/';
-        var set = function (id, href) { var el = document.getElementById(id); if (el && el.getAttribute('href') !== href) el.setAttribute('href', href); };
-        set('link-manifest', p === 'prism' ? 'manifest.webmanifest' : 'manifest-' + p + '.webmanifest');
-        set('link-icon-svg', dir + 'logo.svg');
-        set('link-icon-png', dir + 'icon-192.png');
-        set('link-icon-apple', dir + 'apple-touch-icon.png');
-        var logo = document.querySelector('.auth-globe-logo');
-        if (logo && logo.getAttribute('src') !== dir + 'wordmark.svg') logo.setAttribute('src', dir + 'wordmark.svg');
-      };
-      window.__palette = pal;
+      if (themeMeta) themeMeta.setAttribute('content', dark ? '#0A0A0A' : '#F3EFE7');
     })();
   </script>
   <!-- Текстура глобуса и логотип экрана входа — загружаем сразу, чтобы сцена появилась без задержки -->
@@ -66,7 +46,6 @@
   <link rel="icon" href="icons/logo.svg" type="image/svg+xml" id="link-icon-svg">
   <link rel="icon" href="icons/icon-192.png" type="image/png" id="link-icon-png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" id="link-icon-apple">
-  <script>window.__paletteAssets(window.__palette);</script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="GroupIS">
@@ -3009,11 +2988,8 @@
     body.app-window .top-tools { opacity: 0; transform: translateY(-8px); pointer-events: none; }
     body.app-window .top-tools #notif-btn, body.app-window .top-tools #filter-btn, body.app-window .top-tools #settings-btn { display: grid !important; }
     body.auth-locked .top-tools { display: none; }
-    /* ── Кнопка «Match»: запрос на match ждёт ответа (syncMatchButton). Капсула с уведомлениями и фильтрами
-       отъезжает влево на ширину кнопки (--mt-shift), а кнопка встаёт на её место и пульсирует «сигналом» ── */
+    /* ── Кнопка «Match»: запрос на match ждёт ответа (syncMatchButton) — пульсирует «сигналом» ── */
     .top-tools { transition: opacity .25s ease, transform .55s var(--spring); }
-    body.has-match-btn .top-tools { transform: translateX(var(--mt-shift, 0px)); }
-    body.app-window.has-match-btn .top-tools { transform: translate(var(--mt-shift, 0px), -8px); }
     .match-btn {
       position: fixed; z-index: 19; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
       display: flex; align-items: center; gap: 7px; height: 48px; padding: 0 18px 0 13px; border: 0; border-radius: 999px; cursor: pointer;
@@ -3049,10 +3025,6 @@
     @media (max-width: 640px) {
       .match-btn { height: 46px; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); padding: 0 15px 0 11px; font-size: 13px; }
     }
-    /* тесно — только значок, а если и так не помещается — прячется «Установить» (fitMatchButton) */
-    .match-btn.is-compact .match-btn-label { display: none; }
-    .match-btn.is-compact { padding: 0 12px; }
-    body.match-tight #install-btn { display: none !important; }
     @media (max-height: 480px) and (orientation: landscape) { .match-btn { top: calc(8px + env(safe-area-inset-top, 0px)); height: 42px; } }
     @media (prefers-reduced-motion: reduce) { .match-btn::before, .match-btn::after { animation: none; } }
     /* облака желаний: кант-спектр (у групп — аква → синий) */
@@ -3666,47 +3638,14 @@
       #install-btn { padding: 5px 8px; font-size: 11px; }
     }
 
-    /* ═══════════════════ ЦВЕТОВЫЕ СХЕМЫ ═══════════════════
-       Кроме «Призмы» есть ещё три: «Кислота» (кисло-зелёный с чёрным или светлым), «Огонь» (красно-оранжевый)
-       и «Иней» (тёмно-синий или ярко-светлый); схема по умолчанию, Noir, — в разделе «ДИЗАЙН NOIR» в конце стилей.
-       Схему задаёт data-palette на <html>, светлый или тёмный
-       вариант — data-theme. Меняются только переменные, вся вёрстка общая.
-       --a* и --wm* — цвета экрана входа и метки в логотипе (экран входа всегда тёмный). */
+    /* ═══════════════════ ЦВЕТА ЭКРАНА ВХОДА ═══════════════════
+       --a* и --wm* — цвета экрана входа и метки в логотипе (экран входа всегда тёмный); значения Noir —
+       в разделе «ДИЗАЙН NOIR» в конце стилей. */
     :root {
       --a1: #4FE3EE; --a2: #7C9CFF; --a3: #A98CFF; --a4: #FF8FD8;
       --a-bg: #07070A; --a-card: rgba(13, 13, 17, .94); --a-act: #F3F3F5; --a-act-ink: #0B0B0E;
       --wm1: #B57BFF; --wm2: #5B7CFF; --wm3: #22D3EE;
     }
-    :root[data-palette="acid"] {
-      color-scheme: light; --act: #C6FF1A; --act-ink: #0B1400; --c1: #A6DB00; --c2: #7CC400; --c3: #3DAE2B; --c4: #0FA36B; --field: rgba(16, 20, 8, .055); --glass: rgba(251, 252, 244, .82); --bar: rgba(251, 252, 244, .82); --glass-edge: rgba(16, 20, 8, .08); --glass-shadow: rgba(24, 30, 10, .16); --hot: #E5354F; --ink: #10140A; --ink-soft: #687058; --land: #EEF1E2; --lime: #12A86A; --lime-deep: #0B7F4F; --lime-ink: #00210F; --lime-rgb: 18, 168, 106; --me-card: rgba(0, 0, 0, .08); --prism-ink: #0B1400; --rim: rgba(255, 255, 255, .95); --row-hover: rgba(16, 20, 8, .05); --tip: rgba(16, 20, 8, .92); --tip-ink: #F4F7EA; --win: #FBFCF4; --win-2: #F2F4E8; --win-line: rgba(16, 20, 8, .09); --you: #4F8A00; --you-2: #A6DB00; --you-deep: #3F7000; --you-rgb: 79, 138, 0; --you-soft: #B7DE6A;
-      --a1: #EAFF61; --a2: #C6FF1A; --a3: #7DFF3A; --a4: #2EFFA0;
-      --a-bg: #060705; --a-card: rgba(13, 15, 10, .94); --a-act: #C6FF1A; --a-act-ink: #0A0B08; --wm1: #EAFF61; --wm2: #C6FF1A; --wm3: #4FE66A;
-    }
-    :root[data-palette="acid"][data-theme="dark"] {
-      color-scheme: dark; --act: #C6FF1A; --act-ink: #0A0B08; --c1: #EAFF61; --c2: #C6FF1A; --c3: #7DFF3A; --c4: #2EFFA0; --field: rgba(255, 255, 255, .06); --glass: rgba(18, 20, 14, .82); --bar: rgba(18, 20, 14, .82); --glass-edge: rgba(255, 255, 255, .08); --glass-shadow: rgba(0, 0, 0, .6); --hot: #FF5C7A; --ink: #F4F7EA; --ink-soft: #8C937C; --land: #070806; --lime: #2EFFA0; --lime-deep: #14C878; --lime-ink: #00210F; --lime-rgb: 46, 255, 160; --me-card: rgba(0, 0, 0, .1); --prism-ink: #0A0B08; --rim: rgba(255, 255, 255, .07); --row-hover: rgba(255, 255, 255, .05); --tip: rgba(244, 247, 234, .94); --tip-ink: #070806; --win: #0E100B; --win-2: #151810; --win-line: rgba(255, 255, 255, .075); --you: #C6FF1A; --you-2: #EAFF61; --you-deep: #A8E600; --you-rgb: 198, 255, 26; --you-soft: #E2FF8A;
-    }
-    :root[data-palette="ember"] {
-      color-scheme: light; --act: #F04A1E; --act-ink: #FFFFFF; --c1: #FF9A1F; --c2: #FF6A1A; --c3: #F0421E; --c4: #D4183F; --field: rgba(40, 18, 8, .055); --glass: rgba(255, 250, 246, .84); --bar: rgba(255, 250, 246, .84); --glass-edge: rgba(40, 18, 8, .08); --glass-shadow: rgba(60, 24, 8, .16); --hot: #D11A45; --ink: #21130D; --ink-soft: #84695C; --land: #F4E8E0; --lime: #E08A00; --lime-deep: #B36B00; --lime-ink: #2A1600; --lime-rgb: 224, 138, 0; --me-card: rgba(255, 255, 255, .16); --prism-ink: #FFFFFF; --rim: rgba(255, 255, 255, .95); --row-hover: rgba(40, 18, 8, .05); --tip: rgba(33, 19, 13, .92); --tip-ink: #FBF1EA; --win: #FFFAF6; --win-2: #F8EDE6; --win-line: rgba(40, 18, 8, .09); --you: #E0441A; --you-2: #FF9A1F; --you-deep: #C2360F; --you-rgb: 224, 68, 26; --you-soft: #FFB79F;
-      --a1: #FFB347; --a2: #FF7A2F; --a3: #FF4B2B; --a4: #FF2E63;
-      --a-bg: #090504; --a-card: rgba(20, 12, 9, .94); --a-act: #FF6A3D; --a-act-ink: #180904; --wm1: #FFB347; --wm2: #FF6A2F; --wm3: #F0342B;
-    }
-    :root[data-palette="ember"][data-theme="dark"] {
-      color-scheme: dark; --act: #FF6A3D; --act-ink: #180904; --c1: #FFB347; --c2: #FF7A2F; --c3: #FF4B2B; --c4: #FF2E63; --field: rgba(255, 255, 255, .06); --glass: rgba(26, 17, 13, .84); --bar: rgba(26, 17, 13, .84); --glass-edge: rgba(255, 255, 255, .08); --glass-shadow: rgba(0, 0, 0, .6); --hot: #FF4D6D; --ink: #FBF1EA; --ink-soft: #A08C82; --land: #0B0605; --lime: #FFB347; --lime-deep: #E0912A; --lime-ink: #2A1600; --lime-rgb: 255, 179, 71; --me-card: rgba(0, 0, 0, .1); --prism-ink: #180904; --rim: rgba(255, 255, 255, .07); --row-hover: rgba(255, 255, 255, .05); --tip: rgba(251, 241, 234, .94); --tip-ink: #0B0605; --win: #140D0A; --win-2: #1C1310; --win-line: rgba(255, 255, 255, .075); --you: #FF7A4D; --you-2: #FFB347; --you-deep: #F0502A; --you-rgb: 255, 122, 77; --you-soft: #FFC2A8;
-    }
-    :root[data-palette="frost"] {
-      color-scheme: light; --act: #0B1830; --act-ink: #FFFFFF; --c1: #22C3E6; --c2: #2F8DF0; --c3: #3D63E0; --c4: #8A7CF5; --field: rgba(11, 24, 48, .055); --glass: rgba(250, 253, 255, .8); --bar: rgba(250, 253, 255, .8); --glass-edge: rgba(11, 24, 48, .08); --glass-shadow: rgba(20, 40, 80, .16); --hot: #E53E6B; --ink: #0B1830; --ink-soft: #5F7190; --land: #E4EDF7; --lime: #14B0D4; --lime-deep: #0C8AA8; --lime-ink: #022730; --lime-rgb: 20, 176, 212; --me-card: rgba(255, 255, 255, .12); --prism-ink: #FFFFFF; --rim: rgba(255, 255, 255, .95); --row-hover: rgba(11, 24, 48, .05); --tip: rgba(11, 24, 48, .92); --tip-ink: #EEF6FF; --win: #FAFDFF; --win-2: #EEF4FB; --win-line: rgba(11, 24, 48, .09); --you: #2F74E0; --you-2: #22C3E6; --you-deep: #2459B8; --you-rgb: 47, 116, 224; --you-soft: #A9C8FF;
-      --a1: #C8F4FF; --a2: #8FD3FF; --a3: #6FA4FF; --a4: #B3BEFF;
-      --a-bg: #040811; --a-card: rgba(9, 15, 28, .94); --a-act: #EAF4FF; --a-act-ink: #060B16; --wm1: #E3FAFF; --wm2: #8FD3FF; --wm3: #4F8DFF;
-    }
-    :root[data-palette="frost"][data-theme="dark"] {
-      color-scheme: dark; --act: #EAF4FF; --act-ink: #060B16; --c1: #C8F4FF; --c2: #8FD3FF; --c3: #6FA4FF; --c4: #B3BEFF; --field: rgba(255, 255, 255, .06); --glass: rgba(14, 22, 40, .82); --bar: rgba(14, 22, 40, .82); --glass-edge: rgba(255, 255, 255, .08); --glass-shadow: rgba(0, 0, 0, .6); --hot: #FF6B8E; --ink: #EAF4FF; --ink-soft: #8799B8; --land: #050912; --lime: #9EEBFF; --lime-deep: #5CC6E0; --lime-ink: #04202A; --lime-rgb: 158, 235, 255; --me-card: rgba(0, 0, 0, .07); --prism-ink: #060B16; --rim: rgba(255, 255, 255, .07); --row-hover: rgba(255, 255, 255, .05); --tip: rgba(234, 244, 255, .94); --tip-ink: #050912; --win: #0A1222; --win-2: #101A2E; --win-line: rgba(255, 255, 255, .075); --you: #8FC8FF; --you-2: #C8F4FF; --you-deep: #5F9BF0; --you-rgb: 143, 200, 255; --you-soft: #C9E2FF;
-    }
-    /* выбор схемы в настройках */
-    .pal-seg { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-    .pal-opt { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px; font-size: 13px; }
-    .pal-dot { width: 32px; height: 32px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .35); transition: transform .4s var(--spring); }
-    .pal-opt[aria-pressed="true"] .pal-dot { transform: scale(1.12); box-shadow: 0 0 0 2.5px var(--win), 0 0 0 4.5px var(--ink); }
-    @media (max-width: 420px) { .pal-seg { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
     /* ── Сообщения в цвете схемы: свои — градиент акцента, чужие — его мягкий оттенок ── */
     .chat-msg.me { background: linear-gradient(135deg, var(--c2), var(--c3)); color: var(--prism-ink); }
@@ -4261,7 +4200,7 @@
     /* ── кнопки, вкладки, меню ── */
     .btn { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
     .auth-btn { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-    .chat-tab, .seg-opt, .pe-seg-opt, .flt-chip, .theme-opt, .pal-opt, .wa-btn, .friend-add-btn, #install-btn, .mv-btn {
+    .chat-tab, .seg-opt, .pe-seg-opt, .flt-chip, .theme-opt, .wa-btn, .friend-add-btn, #install-btn, .mv-btn {
       font-size: 13px; font-weight: 600; letter-spacing: 0;
     }
     .flt-opt { font-size: 12px; font-weight: 600; letter-spacing: 0; }   /* четыре плитки в ряд — на узком телефоне им нужен размер поменьше */
@@ -4353,10 +4292,10 @@
     }
 
     /* ═══════════════════ ДИЗАЙН NOIR ═══════════════════
-       Схема по умолчанию (data-palette="noir"): ночной чёрный, слоновая кость и одна нота шампанского вместо
+       Единственная схема (data-palette="noir" на <html>): ночной чёрный, слоновая кость и одна нота шампанского вместо
        радужного спектра. Заголовки и имена групп — Jost, весь интерфейс — Manrope; формы мягкие и круглые.
-       Тёмный вариант — основной, светлый — та же кость на бумаге. Блок стоит последним и переопределяет «Призму»;
-       остальные схемы его не видят. Спектральные переменные (--c1…--c4, --prism) здесь — оттенки шампанского,
+       Тёмный вариант — основной, светлый — та же кость на бумаге. Блок (и раскладка по макету за ним) стоит последним
+       и переопределяет прежние слои стилей. Спектральные переменные (--c1…--c4, --prism) здесь — оттенки шампанского,
        поэтому всё, что было «в спектре» (метки, счётчики, переключатели, анимация match), становится золотистым. */
     .fd-btn-label { display: none; }
     .menubar .brand .brand-wordmark svg.brand-noir { display: none; }
@@ -4430,67 +4369,6 @@
     :root[data-palette="noir"] :is(.match-btn, .fd-toast) { box-shadow: 0 16px 36px -14px var(--glass-shadow); }
     :root[data-palette="noir"] .auth-card { border-radius: 28px; }
 
-    /* ── Логотип «Кольца» в капсуле сверху ── */
-    :root[data-palette="noir"] .menubar .brand .brand-wordmark svg { display: none; }
-    :root[data-palette="noir"] .menubar .brand .brand-wordmark svg.brand-noir { display: block; width: auto; height: 21px; }
-    @media (max-width: 640px) { :root[data-palette="noir"] .menubar .brand .brand-wordmark svg.brand-noir { height: 19px; } }
-
-    /* ── Панель вкладок: только значки; у выбранной — залитая форма и точка шампанского под ней ── */
-    :root[data-palette="noir"] .dock-label { display: none; }
-    :root[data-palette="noir"] .dock-item { width: 64px; }
-    :root[data-palette="noir"] :is(.dock-btn, .dock-item[data-open="true"] .dock-btn) { height: 52px; gap: 0; border-radius: 26px; }
-    :root[data-palette="noir"] .dock-btn svg { width: 24px; height: 24px; }
-    :root[data-palette="noir"] .dock-item[data-open="true"] .dock-btn svg { stroke: currentColor; }
-    :root[data-palette="noir"] .dock-item[data-open="true"] .dock-btn .ic-solid { fill: currentColor; }
-    :root[data-palette="noir"] .dock-pill { border-radius: 26px; background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: none; }
-    :root[data-palette="noir"] .dock-pill::after { width: 4px; height: 4px; margin-left: -2px; bottom: 4px; border-radius: 50%; background: var(--c2); box-shadow: none; }
-    @media (max-width: 350px) { :root[data-palette="noir"] .dock-item { width: 56px; } }
-    @media (max-height: 480px) and (orientation: landscape) { :root[data-palette="noir"] :is(.dock-btn, .dock-item[data-open="true"] .dock-btn) { height: 42px; } }
-
-    /* ── Лента: тёплое свечение сверху и карточка с крупным именем, подписью капителью и желанием в мягкой плашке ── */
-    :root[data-palette="noir"] .feed-app { background: radial-gradient(70vmax 50vmax at 50% 0%, rgba(201, 179, 126, .06), transparent 64%), var(--land); }
-    :root[data-palette="noir"] :is(.fd-card, .fd-skeleton) { border-radius: 34px; }
-    :root[data-palette="noir"] .fd-card { background: #141414; box-shadow: 0 30px 60px -28px rgba(0, 0, 0, .7), 0 0 0 1px rgba(236, 231, 222, .05); }
-    :root[data-palette="noir"] .fd-photo { background: radial-gradient(120% 90% at 30% 18%, #2B2721, #121212 72%); font: 300 120px/1 var(--font-display); color: rgba(236, 231, 222, .82); text-shadow: none; }
-    :root[data-palette="noir"] .fd-photo.has-photo { background-color: #141414; filter: saturate(.86); }
-    :root[data-palette="noir"] .fd-shade { background: linear-gradient(to bottom, rgba(8, 8, 8, .36), transparent 20%, transparent 40%, rgba(8, 8, 8, .62) 62%, rgba(8, 8, 8, .95)); }
-    :root[data-palette="noir"] .fd-info { left: 20px; right: 20px; bottom: 20px; gap: 12px; }
-    :root[data-palette="noir"] .fd-name { font-size: 42px; line-height: 1; text-shadow: none; }
-    :root[data-palette="noir"] .fd-chips { gap: 0; }
-    :root[data-palette="noir"] .fd-chips span { padding: 0; border-radius: 0; background: none; font: 600 11px/1.4 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: rgba(236, 231, 222, .82); }
-    :root[data-palette="noir"] .fd-chips span:not(:last-child)::after { content: "·"; margin: 0 .55em; }   /* точка — в конце подписи, чтобы перенос не начинал строку с неё */
-    :root[data-palette="noir"] .fd-wish {
-      justify-self: stretch; display: grid; gap: 4px; padding: 12px 16px 13px; border-radius: 20px;
-      background: rgba(236, 231, 222, .1); color: #ECE7DE; font: 300 19px/1.3 var(--font-display); box-shadow: none;
-    }
-    :root[data-palette="noir"] .fd-wish::before {
-      content: "Хотим"; position: static; width: auto; height: auto; background: none; -webkit-mask: none; mask: none;
-      font: 600 10.5px/1.2 var(--font-ui); letter-spacing: .18em; text-transform: uppercase; color: #C9B37E;
-    }
-    :root[data-palette="noir"] .fd-people .avatar { box-shadow: 0 0 0 2px #0E0E0E; }
-    :root[data-palette="noir"] .fd-more-people { background: rgba(48, 46, 42, .92); box-shadow: 0 0 0 2px #0E0E0E; }
-    :root[data-palette="noir"] .fd-people-cap { color: rgba(236, 231, 222, .75); }
-    :root[data-palette="noir"] .fd-badge span.is-hot { background: rgba(10, 10, 10, .6); color: #C9B37E; box-shadow: inset 0 0 0 1px rgba(201, 179, 126, .55); }
-    :root[data-palette="noir"] .fd-stamp { font: 500 22px/1.1 var(--font-display); letter-spacing: .12em; border-width: 1.5px; border-radius: 999px; padding: 8px 18px; }
-    :root[data-palette="noir"] .fd-stamp.is-like { color: #E2D3AE; }
-    :root[data-palette="noir"] .fd-stamp.is-nope { color: #ECE7DE; }
-    /* под колодой: круглое «Мимо» и широкая капсула главного действия с подписью; «подробнее» — нажатием на карточку */
-    :root[data-palette="noir"] .fd-acts { width: min(420px, 100%); gap: 10px; }
-    :root[data-palette="noir"] .fd-btn { width: 58px; height: 58px; }
-    :root[data-palette="noir"] .fd-btn svg { stroke-width: 1.7; }
-    :root[data-palette="noir"] .fd-btn.is-nope { color: var(--ink); }
-    :root[data-palette="noir"] .fd-btn.is-info { display: none; }
-    :root[data-palette="noir"] .fd-btn.is-like {
-      flex: 1; min-width: 0; width: auto; height: 58px; padding: 0 22px; border-radius: 29px;
-      display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 18px 36px -20px rgba(0, 0, 0, .55);
-    }
-    :root[data-palette="noir"] .fd-btn.is-like svg { flex: none; width: 24px; height: 24px; }
-    :root[data-palette="noir"] .fd-btn-label { display: inline; min-width: 0; font: 600 15.5px/1.2 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    @media (max-height: 480px) and (orientation: landscape) {
-      :root[data-palette="noir"] .fd-acts { width: auto; }
-      :root[data-palette="noir"] .fd-btn.is-like { flex: none; width: 168px; }
-    }
-
     /* ── Чаты: свои сообщения — костью, чужие — графитом; непрочитанное — без переливов ── */
     :root[data-palette="noir"] .chat-msg.me { background: var(--act); color: var(--act-ink); }
     :root[data-palette="noir"] .chat-msg.me .chat-msg-author { color: var(--act-ink); }
@@ -4498,6 +4376,302 @@
     :root[data-palette="noir"] .chat-msg.them .chat-file { background: color-mix(in srgb, var(--ink) 8%, transparent); }
     :root[data-palette="noir"] .chat-msg.them .chat-file:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
     :root[data-palette="noir"] .chat-row.has-unread .chat-last { background: none; -webkit-text-fill-color: currentColor; color: var(--ink); animation: none; }
+
+    /* ═══════════════════ NOIR: РАСКЛАДКА ПО МАКЕТУ ═══════════════════
+       Экран как в макете «GroupIS Noir — лента»: сверху капсула «ищем для» и круглые кнопки, ниже — карточка группы
+       во всю ширину колонки, под ней круглое «Мимо» и широкая капсула главного действия, внизу — капсула вкладок
+       с круглой подложкой у выбранной. На телефоне колонка — весь экран с полями 12 px, на планшете и компьютере —
+       колонка 440 px по центру (логотип — слева сверху, когда хватает ширины). Окна разделов на телефоне —
+       целые страницы с крупным заголовком, на широком экране — панель по центру.
+       --n-* — цвета деталей интерфейса (в тёмной теме — как в макете), --n-side — поле колонки слева и справа */
+    :root[data-palette="noir"] {
+      --n-surface: #FBF9F5; --n-nav: #FBF9F5; --n-on: #ECE5D8; --n-line: rgba(20, 20, 20, .09); --n-line-2: rgba(20, 20, 20, .16);
+      --n-mute: #8A857D; --n-cta: #141414; --n-cta-ink: #F3EFE7; --n-nav-shadow: 0 18px 40px -20px rgba(30, 24, 12, .3);
+      --n-top: calc(12px + env(safe-area-inset-top, 0px));
+      --n-side: max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px), calc(50% - 220px));
+      --n-nav-h: 68px;
+      --n-nav-gap: max(14px, env(safe-area-inset-bottom, 0px));
+    }
+    :root[data-palette="noir"][data-theme="dark"] {
+      --n-surface: #141414; --n-nav: #161616; --n-on: #262626; --n-line: rgba(236, 231, 222, .1); --n-line-2: rgba(236, 231, 222, .18);
+      --n-mute: #8A857D; --n-cta: #ECE7DE; --n-cta-ink: #0A0A0A; --n-nav-shadow: 0 18px 40px -18px rgba(0, 0, 0, .7);
+    }
+
+    /* ── Логотип «Кольца»: на широком экране слева сверху, без капсулы; на телефоне и планшете места нет ── */
+    :root[data-palette="noir"] .menubar {
+      top: var(--n-top); left: max(18px, env(safe-area-inset-left, 0px)); right: auto; height: 52px; padding: 0 6px 0 0;
+      background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    :root[data-palette="noir"] .menubar .brand .brand-wordmark svg { display: none; }
+    :root[data-palette="noir"] .menubar .brand .brand-wordmark svg.brand-noir { display: block; width: auto; height: 24px; }
+    @media (max-width: 999px) { :root[data-palette="noir"] .menubar { display: none; } }
+    body.app-window .menubar { opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+
+    /* ── Шапка ленты: «ищем для» слева, круглые кнопки справа ── */
+    :root[data-palette="noir"] .feed-top {
+      position: fixed; z-index: 19; top: var(--n-top); left: var(--n-side); right: var(--n-side); height: 52px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      transition: opacity .25s ease, transform .35s var(--ease);
+    }
+    body.app-window .feed-top { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+    body.app-window .feed-top * { pointer-events: none; }
+    body.auth-locked .feed-top { display: none; }
+    body.chrome-enter .feed-top { animation: chrome-down .8s var(--ease) .05s both; }
+    .ff-pill {
+      flex: 0 1 auto; min-width: 0; height: 52px; padding: 0 18px 0 5px; border-radius: 26px; cursor: pointer;
+      border: 1px solid var(--n-line); background: var(--n-surface); color: var(--ink); font: inherit; text-align: left;
+      display: flex; align-items: center; gap: 10px; -webkit-tap-highlight-color: transparent;
+      transition: transform .35s var(--spring), background .2s;
+    }
+    .ff-pill:active { transform: scale(.96); transition-duration: .08s; }
+    .ff-pill:focus-visible { outline: 2px solid var(--c2); outline-offset: 2px; }
+    .ff-ava {
+      flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+      background: radial-gradient(120% 90% at 30% 18%, #3A3227, #151413 72%) center / cover no-repeat;
+      color: #ECE7DE; font: 400 17px/1 var(--font-display);
+    }
+    .ff-text { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+    .ff-cap { font: 500 11px/1.25 var(--font-ui); color: var(--ink-soft); }
+    .ff-name { display: flex; align-items: center; gap: 6px; max-width: 100%; font: 400 19px/1.15 var(--font-display); }
+    .ff-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ff-chev { display: none; flex: none; width: 14px; height: 14px; color: var(--c2); }
+    .ff-pill.has-choice .ff-chev { display: block; }
+    .fwd-list .person-card.is-on .person-name { color: var(--c2); }
+    .ff-check { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--c2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    :root[data-palette="noir"] .top-tools {
+      position: static; flex: none; height: auto; padding: 0; gap: 10px; border: 0; border-radius: 0;
+      background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    :root[data-palette="noir"] body.app-window .top-tools { opacity: 1; transform: none; }
+    :root[data-palette="noir"] .top-tools :is(#notif-btn, #filter-btn, #match-btn) {
+      position: relative; inset: auto; width: 52px; height: 52px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+      border: 1px solid var(--n-line); background: var(--n-surface); color: var(--ink); box-shadow: none;
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    :root[data-palette="noir"] .top-tools :is(#notif-btn, #filter-btn):hover { background: var(--n-on); }
+    :root[data-palette="noir"] .top-tools :is(#notif-btn, #filter-btn).is-active { background: var(--n-cta); color: var(--n-cta-ink); border-color: transparent; }
+    :root[data-palette="noir"] .top-tools svg { width: 22px; height: 22px; }
+    :root[data-palette="noir"] #notif-btn .badge {
+      top: 7px; right: 7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; line-height: 17px; font-size: 10px;
+      background: var(--c2); color: #0A0A0A; box-shadow: 0 0 0 2px var(--n-surface);
+    }
+    :root[data-palette="noir"] #filter-btn .filter-dot { top: 12px; right: 12px; width: 7px; height: 7px; background: var(--c2); box-shadow: 0 0 0 2px var(--n-surface); }
+    /* «Match»: светлый круг с кольцами и счётчиком — запрос ждёт ответа */
+    :root[data-palette="noir"] .top-tools #match-btn { background: var(--n-cta); color: var(--n-cta-ink); border-color: transparent; }
+    :root[data-palette="noir"] #match-btn svg { width: 24px; height: 24px; }
+    :root[data-palette="noir"] #match-btn .match-btn-label { display: none; }
+    :root[data-palette="noir"] #match-btn .match-btn-count { top: -3px; right: -3px; background: var(--c2); color: #0A0A0A; box-shadow: 0 0 0 2px var(--land); }
+    :root[data-palette="noir"] #match-btn::before, :root[data-palette="noir"] #match-btn::after { animation-name: noir-ring-wave; }
+    @keyframes noir-ring-wave { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.38); opacity: 0; } }
+    /* видна кнопка «Match» — три круга справа: они чуть меньше, чтобы название группы слева помещалось */
+    :root[data-palette="noir"] .feed-top:has(#match-btn:not([hidden])), :root[data-palette="noir"] .feed-top:has(#match-btn:not([hidden])) .top-tools { gap: 8px; }
+    :root[data-palette="noir"] .feed-top:has(#match-btn:not([hidden])) .top-tools :is(#notif-btn, #filter-btn, #match-btn) { width: 46px; height: 46px; }
+    :root[data-palette="noir"] .feed-top:has(#match-btn:not([hidden])) .ff-pill { padding-right: 14px; }
+    @media (max-width: 400px) { .ff-name { font-size: 18px; } }
+
+    /* нет сети — плашка под шапкой */
+    :root[data-palette="noir"] #offline-badge {
+      position: fixed; z-index: 21; top: calc(var(--n-top) + 60px); left: 50%; transform: translateX(-50%);
+      padding: 6px 12px; border-radius: 999px; border: 1px solid var(--n-line); background: var(--n-surface); color: var(--ink-soft);
+      font: 600 10.5px/1.2 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; pointer-events: none;
+    }
+    body.auth-locked #offline-badge { display: none; }
+
+    /* ── Вкладки: капсула 68 px, круглые кнопки 52 px, у выбранной — подложка и залитый значок, у профиля — фото ── */
+    :root[data-palette="noir"] .dock-wrap { bottom: var(--n-nav-gap); padding: 0 var(--n-side); }
+    :root[data-palette="noir"] .dock, :root[data-palette="noir"][data-theme="dark"] .dock {
+      width: min(420px, 100%); height: var(--n-nav-h); box-sizing: border-box; padding: 0 8px; gap: 0;
+      align-items: center; justify-content: space-around; border-radius: 34px;
+      background: var(--n-nav); border: 1px solid var(--n-line); box-shadow: var(--n-nav-shadow);
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    :root[data-palette="noir"] .dock-item { flex: none; width: 52px; height: 52px; }
+    :root[data-palette="noir"] :is(.dock-btn, .dock-item[data-open="true"] .dock-btn) {
+      width: 52px; height: 52px; padding: 0; gap: 0; border-radius: 26px; background: transparent; color: var(--n-mute);
+    }
+    :root[data-palette="noir"] .dock-btn:hover { color: var(--ink); }
+    :root[data-palette="noir"] .dock-item[data-open="true"] .dock-btn { color: var(--ink); }
+    :root[data-palette="noir"] .dock-btn svg { width: 24px; height: 24px; }
+    :root[data-palette="noir"] .dock-item[data-open="true"] .dock-btn svg { stroke: currentColor; }
+    :root[data-palette="noir"] .dock-item[data-open="true"] .dock-btn .ic-solid { fill: currentColor; }
+    :root[data-palette="noir"] .dock-label { display: none; }
+    :root[data-palette="noir"] .dock-pill { top: 7px; bottom: 7px; border-radius: 26px; background: var(--n-on); box-shadow: none; }
+    :root[data-palette="noir"] .dock-pill::after { content: none; }
+    /* непрочитанное и заявки — точка шампанского у значка */
+    :root[data-palette="noir"] .dock-badge {
+      top: 12px; right: 12px; left: auto; margin: 0; width: 8px; min-width: 0; height: 8px; padding: 0; border-radius: 50%;
+      background: var(--c2); color: transparent; font-size: 0; box-shadow: 0 0 0 2px var(--n-nav);
+    }
+    .dock-ava { display: none; width: 28px; height: 28px; border-radius: 50%; background: center / cover no-repeat; filter: saturate(.85); }
+    .dock-btn.has-ava svg { display: none; }
+    .dock-btn.has-ava .dock-ava { display: block; }
+    .dock-item[data-open="true"] .dock-btn.has-ava .dock-ava { box-shadow: 0 0 0 2px var(--n-on), 0 0 0 3.5px var(--ink); }
+
+    /* ── Лента ── */
+    :root[data-palette="noir"] .feed-app { background: var(--land); }
+    :root[data-palette="noir"] .feed-stage {
+      top: calc(var(--n-top) + 66px); bottom: calc(var(--n-nav-gap) + var(--n-nav-h) + 20px);
+      left: var(--n-side); right: var(--n-side); gap: 14px;
+    }
+    :root[data-palette="noir"] .fd-deck { width: 100%; }
+    :root[data-palette="noir"] :is(.fd-card, .fd-skeleton) { border-radius: 34px; }
+    :root[data-palette="noir"] .fd-card { background: #141414; color: #ECE7DE; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .75), 0 0 0 1px rgba(236, 231, 222, .05); }
+    :root[data-palette="noir"]:not([data-theme="dark"]) .fd-card { box-shadow: 0 30px 60px -30px rgba(30, 24, 12, .45); }
+    /* следующая карточка чуть выглядывает снизу, третья ждёт за ней — обе не заходят на кнопки под колодой */
+    :root[data-palette="noir"] .fd-card.is-back1 { transform: translateY(8px) scale(.95); }
+    :root[data-palette="noir"] .fd-card.is-back2 { transform: translateY(8px) scale(.95); opacity: 0; }
+    :root[data-palette="noir"] .fd-acts { position: relative; z-index: 4; }
+    :root[data-palette="noir"] .fd-photo { background: radial-gradient(120% 90% at 30% 18%, #2B2721, #121212 72%); font: 300 120px/1 var(--font-display); color: rgba(236, 231, 222, .82); text-shadow: none; }
+    :root[data-palette="noir"] .fd-photo.has-photo { background: #141414 center / cover no-repeat; filter: saturate(.75) contrast(1.04) brightness(.93); }
+    :root[data-palette="noir"] .fd-shade {
+      background: linear-gradient(to top, rgba(10, 10, 10, .94) 0%, rgba(10, 10, 10, .7) 34%, rgba(10, 10, 10, 0) 64%),
+        linear-gradient(to bottom, rgba(10, 10, 10, .4), rgba(10, 10, 10, 0) 20%);
+    }
+    :root[data-palette="noir"] .fd-more { display: none; }
+    :root[data-palette="noir"] .fd-badge { top: 16px; left: 16px; right: 16px; gap: 8px; }
+    :root[data-palette="noir"] .fd-badge span {
+      height: 32px; padding: 0 14px; gap: 7px; border-radius: 16px; box-sizing: border-box;
+      background: rgba(10, 10, 10, .55); color: rgba(236, 231, 222, .88); border: 1px solid rgba(236, 231, 222, .16);
+      font: 600 12px/1 var(--font-ui); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    :root[data-palette="noir"] .fd-badge span.is-hot { padding-left: 8px; color: #C9B37E; border-color: rgba(201, 179, 126, .5); background: rgba(10, 10, 10, .55); }
+    :root[data-palette="noir"] .fd-badge span.is-hot::before { content: none; }
+    :root[data-palette="noir"] .fd-badge svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    :root[data-palette="noir"] .fd-info { left: 22px; right: 22px; bottom: 22px; gap: 14px; }
+    .fd-head { display: grid; gap: 8px; min-width: 0; }
+    :root[data-palette="noir"] .fd-name { font: 400 50px/.98 var(--font-display); letter-spacing: -0.005em; text-shadow: none; }
+    :root[data-palette="noir"] .fd-name.is-long { font-size: 38px; line-height: 1.02; }
+    :root[data-palette="noir"] .fd-chips { gap: 0; }
+    :root[data-palette="noir"] .fd-chips span { padding: 0; border-radius: 0; background: none; font: 600 11px/1.45 var(--font-ui); letter-spacing: .18em; text-transform: uppercase; color: rgba(236, 231, 222, .82); white-space: nowrap; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    :root[data-palette="noir"] .fd-chips span:not(:last-child)::after { content: "·"; margin: 0 .55em; }   /* точка — в конце подписи, чтобы перенос не начинал строку с неё */
+    :root[data-palette="noir"] .fd-wish {
+      justify-self: stretch; display: grid; gap: 4px; padding: 13px 16px; border-radius: 20px;
+      background: rgba(236, 231, 222, .09); color: #ECE7DE; font: 300 20px/1.3 var(--font-display); box-shadow: none;
+    }
+    :root[data-palette="noir"] .fd-wish::before {
+      content: "Хотим"; position: static; width: auto; height: auto; background: none; -webkit-mask: none; mask: none;
+      font: 600 11px/1.2 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: #C9B37E;
+    }
+    :root[data-palette="noir"] .fd-people .avatar { width: 32px !important; height: 32px !important; font-size: 12px; box-shadow: 0 0 0 2px #0E0E0E; filter: saturate(.8); }
+    :root[data-palette="noir"] .fd-more-people { min-width: 32px; height: 32px; background: rgba(48, 46, 42, .92); box-shadow: 0 0 0 2px #0E0E0E; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    :root[data-palette="noir"] .fd-people-cap { margin-left: 12px; display: inline-flex; align-items: center; gap: 6px; font: 400 13px/1.3 var(--font-ui); color: rgba(236, 231, 222, .75); }
+    :root[data-palette="noir"] .fd-people-cap span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    :root[data-palette="noir"] .fd-people-cap svg { flex: none; width: 16px; height: 16px; fill: none; stroke: #C9B37E; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    :root[data-palette="noir"] .fd-stamp { font: 500 22px/1.1 var(--font-display); letter-spacing: .12em; border-width: 1.5px; border-radius: 999px; padding: 8px 18px; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    :root[data-palette="noir"] .fd-stamp.is-like { color: #E2D3AE; }
+    :root[data-palette="noir"] .fd-stamp.is-nope { color: #ECE7DE; }
+    :root[data-palette="noir"] .fd-hint { display: none; }
+    /* под колодой: круглое «Мимо» 60 px и капсула главного действия во всю оставшуюся ширину */
+    :root[data-palette="noir"] .fd-acts { width: 100%; height: 60px; gap: 10px; }
+    :root[data-palette="noir"] .fd-btn { box-shadow: none; }
+    :root[data-palette="noir"] .fd-btn svg { width: 22px; height: 22px; stroke-width: 1.7; }
+    :root[data-palette="noir"] .fd-btn.is-nope { flex: none; width: 60px; height: 60px; border: 1px solid var(--n-line-2); background: var(--n-surface); color: var(--ink); }
+    :root[data-palette="noir"] .fd-btn.is-like {
+      flex: 1; min-width: 0; width: auto; height: 60px; padding: 0 22px; border-radius: 30px;
+      display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--n-cta); color: var(--n-cta-ink);
+    }
+    :root[data-palette="noir"] .fd-btn-label { display: inline; min-width: 0; font: 600 16px/1.2 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* главные кнопки в карточке группы и в колоде запросов — как «Предложить match» под лентой: кость, без градиента */
+    :root[data-palette="noir"] .gx-cta { background: radial-gradient(130% 90% at 50% 0%, #1E1B16 0%, #121212 62%); box-shadow: 0 26px 50px -26px rgba(0, 0, 0, .7); color: #ECE7DE; }
+    :root[data-palette="noir"] .gx-cta::after { display: none; }
+    :root[data-palette="noir"] .gx-cta.is-soft { background: var(--field); color: var(--ink); box-shadow: none; }
+    :root[data-palette="noir"] .gx-cta-btn { background: #ECE7DE; color: #0A0A0A; box-shadow: none; }
+    :root[data-palette="noir"] .gx-cta.is-soft .gx-cta-btn, :root[data-palette="noir"] .mdeck-open { background: var(--n-cta); color: var(--n-cta-ink); box-shadow: none; }
+    :root[data-palette="noir"] .fd-empty { border-radius: 34px; background: var(--n-surface); box-shadow: none; border: 1px solid var(--n-line); }
+    :root[data-palette="noir"] .fd-toast { bottom: calc(var(--n-nav-gap) + var(--n-nav-h) + 92px); background: var(--n-cta); color: var(--n-cta-ink); }
+
+    /* невысокий экран — карточка ниже, текст на ней компактнее */
+    @media (max-height: 760px) {
+      :root[data-palette="noir"] .fd-info { left: 18px; right: 18px; bottom: 18px; gap: 12px; }
+      :root[data-palette="noir"] .fd-name { font-size: 42px; }
+      :root[data-palette="noir"] .fd-name.is-long { font-size: 33px; }
+      :root[data-palette="noir"] .fd-wish { padding: 11px 14px; font-size: 18px; }
+    }
+    @media (max-height: 680px) {
+      :root[data-palette="noir"] .feed-stage { bottom: calc(var(--n-nav-gap) + var(--n-nav-h) + 14px); gap: 12px; }
+      :root[data-palette="noir"] .fd-name { font-size: 36px; }
+      :root[data-palette="noir"] .fd-name.is-long { font-size: 29px; }
+      :root[data-palette="noir"] .fd-wish { font-size: 17px; }
+      :root[data-palette="noir"] .fd-wish span { -webkit-line-clamp: 2; line-clamp: 2; }
+      :root[data-palette="noir"] .fd-acts { height: 56px; }
+      :root[data-palette="noir"] .fd-btn.is-nope { width: 56px; height: 56px; }
+      :root[data-palette="noir"] .fd-btn.is-like { height: 56px; }
+    }
+    /* узкий телефон */
+    @media (max-width: 360px) {
+      :root[data-palette="noir"] .feed-top, :root[data-palette="noir"] .top-tools { gap: 8px; }
+      :root[data-palette="noir"] .top-tools :is(#notif-btn, #filter-btn, #match-btn) { width: 48px; height: 48px; }
+      .ff-pill { height: 48px; padding-right: 14px; gap: 8px; }
+      .ff-ava { width: 36px; height: 36px; }
+      .ff-name { font-size: 17px; }
+      :root[data-palette="noir"] .dock { padding: 0 4px; }
+      :root[data-palette="noir"] .fd-name { font-size: 40px; }
+      :root[data-palette="noir"] .fd-name.is-long { font-size: 31px; }
+    }
+    /* телефон боком: шапка и вкладки ниже, кнопки — столбиком справа от карточки */
+    @media (max-height: 480px) and (orientation: landscape) {
+      :root[data-palette="noir"] {
+        --n-top: calc(8px + env(safe-area-inset-top, 0px)); --n-nav-h: 56px; --n-nav-gap: max(8px, env(safe-area-inset-bottom, 0px));
+        --n-side: max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px), calc(50% - 320px));
+      }
+      :root[data-palette="noir"] .feed-top { height: 44px; }
+      .ff-pill { height: 44px; }
+      .ff-ava { width: 34px; height: 34px; }
+      :root[data-palette="noir"] .top-tools :is(#notif-btn, #filter-btn, #match-btn) { width: 44px; height: 44px; }
+      :root[data-palette="noir"] .feed-stage {
+        top: calc(var(--n-top) + 54px); bottom: calc(var(--n-nav-gap) + var(--n-nav-h) + 10px);
+        flex-direction: row; justify-content: center;
+      }
+      :root[data-palette="noir"] .fd-deck { flex: 0 1 440px; width: auto; height: 100%; }
+      :root[data-palette="noir"] .fd-acts { flex-direction: column; width: auto; height: auto; }
+      :root[data-palette="noir"] .fd-btn.is-nope { width: 52px; height: 52px; }
+      :root[data-palette="noir"] .fd-btn.is-like { flex: none; width: 176px; height: 52px; }
+      :root[data-palette="noir"] .fd-name { font-size: 30px; }
+      :root[data-palette="noir"] .fd-name.is-long { font-size: 26px; }
+      :root[data-palette="noir"] .fd-info { gap: 8px; }
+      :root[data-palette="noir"] .dock-item, :root[data-palette="noir"] :is(.dock-btn, .dock-item[data-open="true"] .dock-btn) { width: 44px; height: 44px; }
+      :root[data-palette="noir"] .dock-pill { top: 5px; bottom: 5px; }
+      :root[data-palette="noir"] .dock-badge { top: 8px; right: 8px; }
+    }
+
+    /* ── Окна разделов ──
+       Шапка: корневой экран раздела — крупный заголовок Jost слева (стрелка «назад» не нужна — есть вкладки),
+       вложенный — стрелка в круге и заголовок по центру */
+    :root[data-palette="noir"] .window::after { display: none; }
+    :root[data-palette="noir"] .win-back { width: 44px; height: 44px; border: 1px solid var(--n-line); background: var(--n-surface); color: var(--ink); }
+    :root[data-palette="noir"] .win-back:hover { background: var(--n-on); color: var(--ink); }
+    :root[data-palette="noir"] .win-back svg { width: 22px; height: 22px; }
+    :root[data-palette="noir"] .win-title { font: 400 20px/1.2 var(--font-display); letter-spacing: 0; }
+    :root[data-palette="noir"] .win-title.has-sub .win-title-name { font: 400 18px/1.2 var(--font-display); }
+    :root[data-palette="noir"] .window:not(.is-sub) .win-head { grid-template-columns: 44px 1fr 44px; }
+    /* планшет и компьютер: панель по центру от шапки до вкладок — лента под ней не выглядывает */
+    @media (min-width: 641px) {
+      :root[data-palette="noir"] .window {
+        inset: var(--n-top) 0 calc(var(--n-nav-gap) + var(--n-nav-h) + 12px) 0; height: auto; max-height: none;
+        width: min(580px, calc(100% - 24px)); border-radius: 34px; border-color: var(--n-line);
+      }
+    }
+    @media (max-width: 640px) {
+      /* окно — целая страница: фон экрана, без рамки; лента под ним скрыта сплошным фоном */
+      :root[data-palette="noir"] .window {
+        inset: 0 0 calc(var(--n-nav-gap) + var(--n-nav-h) + 6px) 0; margin: 0; width: 100%; height: auto; max-height: none;
+        padding-top: env(safe-area-inset-top, 0px); box-sizing: border-box;
+        border: 0; border-radius: 0; background: var(--land); box-shadow: none; transform: translateY(14px);
+      }
+      :root[data-palette="noir"] .window.is-open { transform: none; }
+      :root[data-palette="noir"] .scrim, :root[data-palette="noir"][data-theme="dark"] .scrim { background: var(--land); }
+      :root[data-palette="noir"] .window .sub-toolbar { background: var(--land); }
+      :root[data-palette="noir"] .win-head { height: 64px; padding: 0 12px; }
+      :root[data-palette="noir"] .window:not(.is-sub) .win-head { grid-template-columns: 1fr auto; padding: 0 16px 0 20px; height: 72px; }
+      :root[data-palette="noir"] .window:not(.is-sub) .win-back { display: none; }
+      :root[data-palette="noir"] .window:not(.is-sub) .win-title { text-align: left; font: 300 34px/1.1 var(--font-display); letter-spacing: -0.01em; }
+    }
+    @media (max-height: 480px) and (orientation: landscape) {
+      :root[data-palette="noir"] .window:not(.is-sub) .win-head { height: 56px; }
+      :root[data-palette="noir"] .window:not(.is-sub) .win-title { font-size: 26px; }
+    }
+
   </style>
 </head>
 <body class="auth-locked">
@@ -4505,7 +4679,6 @@
   <section id="auth-screen" class="auth-screen" aria-label="Вход в приложение">
     <canvas id="globe-canvas" class="globe-canvas" aria-hidden="true"></canvas>
     <img class="auth-globe-logo" src="icons/wordmark.svg" alt="GroupIS" draggable="false">
-    <script>window.__paletteAssets(window.__palette);</script>
     <div class="auth-card" id="auth-card"></div>
   </section>
 
@@ -4544,9 +4717,27 @@
   <!-- Затемнение ленты под открытым окном; клик по нему закрывает окно -->
   <div id="scrim" class="scrim" aria-hidden="true"></div>
 
-  <!-- Иконки: тонкая линия + одна «заливка» (ic-fill), которая у активного элемента окрашивается спектром -->
-  <!-- Уведомления и фильтры ленты — одна капсула справа сверху -->
+  <!-- Шапка ленты. Слева — для какой из моих групп ищем (syncFeedFor): её фото и название, нажатие — выбрать другую
+       или открыть её. Справа — круглые кнопки: запросы на match (видна, пока запрос ждёт ответа), уведомления и фильтры -->
+  <div class="feed-top" id="feed-top">
+    <button id="feed-for" class="ff-pill" type="button">
+      <span class="ff-ava" id="ff-ava" aria-hidden="true"></span>
+      <span class="ff-text">
+        <span class="ff-cap" id="ff-cap">ищем для</span>
+        <span class="ff-name"><span class="ff-name-text" id="ff-name">себя</span><svg class="ff-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></svg></span>
+      </span>
+    </button>
   <div class="top-tools" id="top-tools">
+    <!-- Запрос на match ждёт ответа — кнопка видна и пульсирует (syncMatchButton), нажатие открывает колоду запросов -->
+    <button id="match-btn" class="match-btn" type="button" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="9" cy="12" r="5.75"/>
+        <circle cx="15" cy="12" r="5.75"/>
+      </svg>
+      <span class="match-btn-label">Match</span>
+      <span class="match-btn-count" hidden></span>
+    </button>
+
     <button id="notif-btn" class="round-btn" type="button" aria-label="Уведомления" title="Уведомления">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path class="ic-solid" d="M6.25 16.5v-5a5.75 5.75 0 0 1 11.5 0v5l1.5 1.75H4.75Z"/>
@@ -4564,19 +4755,11 @@
       <span class="filter-dot" id="filter-dot" hidden></span>
     </button>
   </div>
+  </div>
+  <!-- Нет сети — плашка под шапкой -->
+  <span id="offline-badge" hidden>Офлайн</span>
 
-  <!-- Запрос на match ждёт ответа — кнопка встаёт справа сверху, капсула с инструментами отъезжает влево (syncMatchButton) -->
-  <button id="match-btn" class="match-btn" type="button" hidden>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="9" cy="12" r="5.6"/>
-      <circle cx="15" cy="12" r="5.6"/>
-      <path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/>
-    </svg>
-    <span class="match-btn-label">Match</span>
-    <span class="match-btn-count" hidden></span>
-  </button>
-
-  <!-- Плавающая «таблетка» с логотипом -->
+  <!-- Логотип — на широком экране, слева сверху (на телефоне шапку занимают кнопки ленты) -->
   <header class="menubar">
     <strong class="brand"><span class="brand-wordmark" role="img" aria-label="GroupIS"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="-60 -885 5195 1185"><g transform="scale(1 -1)">
     <defs><mask id="wmiCut" maskUnits="userSpaceOnUse" x="1261" y="-571" width="1279" height="1713"><rect x="1261" y="-571" width="1279" height="1713" fill="#fff"/><path d="M1901.0 -11.4 L1731.8 94.1 A319.8 319.8 0 1 0 2070.2 94.1 Z" fill="#000" stroke="#000" stroke-width="225.5" stroke-linejoin="round"/></mask>
@@ -4594,7 +4777,6 @@
 <circle cx="34" cy="32" r="24" fill="none" stroke="currentColor" stroke-width="3.4" mask="url(#bna)"/>
 <circle cx="66" cy="32" r="24" fill="none" style="stroke: var(--noir-gold, #C9B37E)" stroke-width="3.4" mask="url(#bnb)"/></g><path fill="currentColor" d="M1713 30Q1713 89 1740 134.5Q1767 180 1815.5 205Q1864 230 1927 230Q1985 230 2035 203Q2085 176 2116 122.5Q2147 69 2147 -10V-460H2095V-10Q2095 56 2070.5 98.5Q2046 141 2008 161Q1970 181 1927 181Q1879 181 1842.5 161Q1806 141 1786 107Q1766 73 1766 30ZM1702 -230Q1702 -156 1732 -102Q1762 -48 1812.5 -19Q1863 10 1924 10Q1984 10 2027 -21.5Q2070 -53 2094.5 -107.5Q2119 -162 2119 -230Q2119 -299 2094.5 -353Q2070 -407 2027 -438.5Q1984 -470 1924 -470Q1863 -470 1812.5 -441Q1762 -412 1732 -358.5Q1702 -305 1702 -230ZM1755 -230Q1755 -290 1778.5 -333Q1802 -376 1842.5 -398.5Q1883 -421 1931 -421Q1963 -421 1992.5 -406.5Q2022 -392 2045.5 -366Q2069 -340 2082 -306Q2095 -272 2095 -232Q2095 -176 2072 -132.5Q2049 -89 2011.5 -64Q1974 -39 1931 -39Q1883 -39 1842.5 -61.5Q1802 -84 1778.5 -127Q1755 -170 1755 -230ZM2364 -460H2312V0H2364ZM2517 -399 2546 -442Q2530 -457 2510.5 -463.5Q2491 -470 2469 -470Q2433 -470 2403.5 -445Q2374 -420 2357 -377.5Q2340 -335 2340 -280H2364Q2364 -319 2373 -351Q2382 -383 2402.5 -402Q2423 -421 2457 -421Q2475 -421 2488.5 -415.5Q2502 -410 2517 -399ZM2606 -230Q2606 -161 2637 -106.5Q2668 -52 2721.5 -21Q2775 10 2842 10Q2909 10 2962.5 -21Q3016 -52 3047 -106.5Q3078 -161 3078 -230Q3078 -300 3047 -354Q3016 -408 2962.5 -439Q2909 -470 2842 -470Q2775 -470 2721.5 -439Q2668 -408 2637 -354Q2606 -300 2606 -230ZM2659 -230Q2659 -286 2683 -329Q2707 -372 2748.5 -396.5Q2790 -421 2842 -421Q2894 -421 2935.5 -396.5Q2977 -372 3001 -328.5Q3025 -285 3025 -230Q3025 -174 3001 -131Q2977 -88 2935.5 -63.5Q2894 -39 2842 -39Q2790 -39 2748.5 -63.5Q2707 -88 2683 -131Q2659 -174 2659 -230ZM3260 -168V-460H3208V-162Q3208 -83 3246 -36.5Q3284 10 3356 10Q3408 10 3446 -18Q3484 -46 3503 -96V0H3555V-460H3503V-180Q3503 -141 3485.5 -109Q3468 -77 3437.5 -58Q3407 -39 3368 -39Q3312 -39 3286 -73.5Q3260 -108 3260 -168ZM3772 220V-460H3720V220ZM4165 -230Q4165 -305 4135.5 -358.5Q4106 -412 4055.5 -441Q4005 -470 3943 -470Q3885 -470 3841 -438.5Q3797 -407 3772.5 -353Q3748 -299 3748 -230Q3748 -162 3772.5 -107.5Q3797 -53 3841 -21.5Q3885 10 3943 10Q4005 10 4055.5 -19Q4106 -48 4135.5 -102Q4165 -156 4165 -230ZM4113 -230Q4113 -170 4089 -127Q4065 -84 4025 -61.5Q3985 -39 3936 -39Q3894 -39 3856 -64Q3818 -89 3795 -132Q3772 -175 3772 -230Q3772 -285 3795 -328Q3818 -371 3856 -396Q3894 -421 3936 -421Q3985 -421 4025 -398.5Q4065 -376 4089 -333Q4113 -290 4113 -230Z"/><path style="fill: var(--noir-gold, #C9B37E)" d="M4295 -668Q4295 -653 4306 -642Q4317 -631 4332 -631Q4348 -631 4358.5 -642Q4369 -653 4369 -668Q4369 -684 4358.5 -694.5Q4348 -705 4332 -705Q4317 -705 4306 -694.5Q4295 -684 4295 -668ZM4306 -460V0H4358V-460ZM4538 -131 4496 -107Q4506 -78 4527.5 -51Q4549 -24 4584.5 -7Q4620 10 4668 10Q4734 10 4775.5 -27.5Q4817 -65 4817 -125Q4817 -164 4797.5 -189Q4778 -214 4746.5 -231Q4715 -248 4678 -262Q4650 -272 4625 -283Q4600 -294 4585 -311.5Q4570 -329 4570 -356Q4570 -389 4593.5 -406Q4617 -423 4651 -423Q4697 -423 4726 -401Q4755 -379 4771 -349L4814 -375Q4802 -401 4780 -422Q4758 -443 4727 -456Q4696 -469 4657 -469Q4621 -469 4589.5 -456.5Q4558 -444 4538.5 -418Q4519 -392 4519 -353Q4519 -312 4538.5 -286.5Q4558 -261 4588 -246Q4618 -231 4650 -219Q4680 -209 4706 -196.5Q4732 -184 4748 -165.5Q4764 -147 4764 -119Q4764 -81 4738.5 -59.5Q4713 -38 4671 -38Q4635 -38 4608.5 -51Q4582 -64 4565 -85Q4548 -106 4538 -131Z"/></svg></span></strong>
     <div class="menubar-right">
-      <span id="offline-badge" hidden>Офлайн</span>
       <button id="install-btn" type="button" hidden>Установить</button>
       <button id="fs-btn" type="button" aria-label="Полноэкранный режим" title="Полноэкранный режим">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -4622,9 +4804,10 @@
     <div id="win-body" class="win-body"></div>
   </section>
 
-  <!-- Таб-панель: мягкие линейные иконки (круглые концы и стыки) и «жидкая» капсула, которая перетекает к выбранной вкладке.
-       Лента — карточка со следующей за ней, чаты — облачко, группы — компания из трёх, друзья — двое, профиль — человек в круге.
-       ic-solid — основная форма значка: у выбранной вкладки в Noir она заливается -->
+  <!-- Таб-панель: мягкие линейные иконки (круглые концы и стыки) и круглая подложка, которая перетекает к выбранной вкладке.
+       Лента — карточка со следующей за ней, чаты — облачко, группы — компания из трёх, друзья — двое, профиль — фото
+       (нет фото — человек в круге). ic-solid — основная форма значка: у выбранной вкладки она заливается -->
+
   <nav class="dock-wrap" aria-label="Разделы">
     <ul class="dock" id="dock">
       <li class="dock-pill is-hidden" aria-hidden="true"></li>
@@ -4675,6 +4858,8 @@
             <circle class="ic-solid" cx="12" cy="10.25" r="2.75"/>
             <path d="M7 17.6c1.2-1.7 2.9-2.6 5-2.6s3.8.9 5 2.6"/>
           </svg>
+          <!-- есть фото профиля — вместо значка (syncDockAvatar) -->
+          <span class="dock-ava" id="dock-ava" aria-hidden="true"></span>
           <span class="dock-label">Профиль</span>
         </button>
       </li>
@@ -4814,14 +4999,10 @@
       if (!running && renderer) renderer.render(scene, camera);
     }
 
-    /* Сама планета — в цвете схемы. У «Призмы» текстура как есть (сине-фиолетовая); для остальных схем
-       берётся её чёрно-белая копия, а оттенок задают цвет материала, его свечение и основной свет. */
+    /* Сама планета — в цвете Noir: берётся чёрно-белая копия текстуры, а оттенок шампанского задают цвет
+       материала, его свечение и основной свет. */
     const EARTH_LOOK = {
       noir:  { gray: true,  color: 0xE4D5B4, emissive: 0x0E0B06, specular: 0x5E4C2A, key: 0xFFF2DA },
-      prism: { gray: false, color: 0xC2C8F2, emissive: 0x10122A, specular: 0x343A70, key: 0xDCE4FF },
-      acid:  { gray: true,  color: 0xD2F56E, emissive: 0x0C1603, specular: 0x4A6A14, key: 0xF2FFD0 },
-      ember: { gray: true,  color: 0xFF9A66, emissive: 0x200A04, specular: 0x703418, key: 0xFFE4D0 },
-      frost: { gray: true,  color: 0xA8D8FF, emissive: 0x06142A, specular: 0x2C5C90, key: 0xE4F4FF },
     };
     let earthTex = null, earthTexGray = null, keyLight = null;
     function grayTexture(tex) {
@@ -4844,7 +5025,7 @@
     }
     function tintEarth() {
       if (!earth) return;
-      const look = EARTH_LOOK[document.documentElement.getAttribute('data-palette')] || EARTH_LOOK.prism;
+      const look = EARTH_LOOK.noir;
       if (keyLight) keyLight.color.setHex(look.key);
       const m = earth.material;
       if (!earthTex) { m.emissive.setHex(look.gray ? look.emissive : 0x2A2F6B); return; }   // текстура ещё не загружена
@@ -5626,11 +5807,7 @@
   function isValidUsername(raw) { return USERNAME_RE_AUTH.test(normalizeUsername(raw)); }
 
   function applyUserToProfileFromRow(row, fallbackEmail) {
-    if (!row) {
-      profile = { name: fallbackEmail ? fallbackEmail.split('@')[0] : 'Пользователь', handle: '@user', bio: '', avatar: '' };
-      return;
-    }
-    profile = {
+    profile = !row ? { name: fallbackEmail ? fallbackEmail.split('@')[0] : 'Пользователь', handle: '@user', bio: '', avatar: '' } : {
       name: row.name || (fallbackEmail ? fallbackEmail.split('@')[0] : 'Пользователь'),
       handle: '@' + (row.username || 'user'),
       bio: row.bio || '',
@@ -5638,6 +5815,7 @@
       gender: row.gender || '',
       age: row.age || null,
     };
+    syncFeedChrome();   // фото на вкладке «Профиль» и в «ищем для»
   }
 
   /* Сохранить профиль. Если в таблице ещё нет колонок gender/age
@@ -6217,7 +6395,7 @@
       // данные не успели — лента всё равно открывается (с тем, что уже есть) и обновится на месте
       document.body.classList.remove('auth-locked');
       // панель вкладок и кнопку Match мерили, пока они были скрыты, — перемеряем
-      setDots(); fitMatchButton();
+      setDots();
       renderFeed();
       await nextFrames();
       playChromeEnter();                           // капсулы интерфейса съезжаются к краям, пока экран входа тает
@@ -6638,9 +6816,10 @@
     await playAuthExit(async () => {
       await Promise.all([loading, profileReady]);
       document.body.classList.remove('auth-locked');
-      setDots(); fitMatchButton();
+      setDots();
       updateFilterDot();
       subscribeRealtime();
+      loadHeardVoices();   // какие голосовые уже прослушаны на других моих устройствах
       updateBadge();
       await loadGroupMemberProfiles();   // имена и фото лидеров на карточках ленты
       renderFeed();
@@ -7084,7 +7263,7 @@
   /* ── Кнопка «Match» ──
      Пока запрос на match ждёт ответа, у лидеров обеих групп справа сверху пульсирует кнопка «Match»: у того, кому
      прислали запрос, — открыть группу, которая его прислала, и ответить; у того, кто отправил, — посмотреть, кому
-     он отправлен (там пульс спокойнее). Капсула с уведомлениями и фильтрами отъезжает влево и уступает ей место. */
+     он отправлен (там пульс спокойнее). Кнопка стоит в шапке ленты перед уведомлениями и фильтрами. */
   const matchBtn = document.getElementById('match-btn');
   let matchBtnGroup = null;   // чью карточку открыть по нажатию
   let matchBtnItems = [];     // все запросы, которые показывает кнопка: [{ m, other, mine, incoming }]
@@ -7116,27 +7295,7 @@
     const label = incoming.length ? 'Вашей группе предлагают match' : 'Запрос на match ждёт ответа';
     matchBtn.setAttribute('aria-label', label);
     matchBtn.title = label;
-    document.body.classList.toggle('has-match-btn', on);
-    fitMatchButton();
     scheduleFeedRender();   // у карточек ленты меняются «Хотят match с вами» и действие смахивания
-  }
-  /* Капсула отъезжает ровно на ширину кнопки и не должна наехать на логотип слева. Тесно — у кнопки остаётся только
-     значок; всё ещё тесно (узкий экран и кнопка «Установить» рядом с логотипом) — «Установить» прячется, пока кнопка видна */
-  function fitMatchButton() {
-    const body = document.body;
-    body.classList.remove('match-tight');
-    matchBtn.classList.remove('is-compact');
-    if (matchBtn.hidden) return;
-    const logo = document.querySelector('.menubar'), tools = document.getElementById('top-tools');
-    // offsetLeft/offsetWidth — без сдвига капсулы, который ещё может анимироваться
-    const fits = () => logo.offsetLeft + logo.offsetWidth + 8 <= tools.offsetLeft - matchBtn.offsetWidth - 6;
-    if (!fits()) matchBtn.classList.add('is-compact');
-    if (!fits()) {
-      body.classList.add('match-tight');
-      matchBtn.classList.remove('is-compact');   // «Установить» спрятана — может, теперь хватит места и для подписи
-      if (!fits()) matchBtn.classList.add('is-compact');
-    }
-    body.style.setProperty('--mt-shift', -(matchBtn.offsetWidth + 6) + 'px');
   }
   matchBtn.addEventListener('click', () => {
     if (!matchBtnGroup) return;
@@ -7280,9 +7439,6 @@
     card.querySelector('[data-mdeck-open]').click();
   }
   // другой размер экрана, появилась или пропала кнопка «Установить», догрузился шрифт — подгоняем заново
-  addEventListener('resize', fitMatchButton);
-  ['beforeinstallprompt', 'appinstalled'].forEach((type) => addEventListener(type, () => setTimeout(fitMatchButton, 0)));
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitMatchButton).catch(() => {});
 
   /* ═══════ АНИМАЦИЯ MATCH ═══════
      Группы сделали match — у всех участников обеих групп, а не только у лидеров, на пару секунд: знаки групп съезжаются
@@ -8125,6 +8281,11 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reads' }, (payload) => onChatReadRow(payload.new)).subscribe();
     rtChannels.push(chReads);
 
+    // Голосовые, прослушанные на другом моём устройстве (RLS отдаёт только мои строки)
+    const chHeard = chan('rt:voice_listens')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'voice_listens' }, (payload) => onHeardRow(payload.new)).subscribe();
+    rtChannels.push(chHeard);
+
     // Голоса в совместном чате — счётчик обновляется у всех сразу
     const chMatchVotes = chan('rt:match_votes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_votes' }, (payload) => {
@@ -8444,7 +8605,7 @@
   // Начальную тему ставит скрипт в <head> (до отрисовки), здесь — переключение из настроек и смена системной
   const THEME_KEY = 'app.theme';
   const themeMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
-  function getThemePref() { try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch { return 'auto'; } }
+  function getThemePref() { try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch { return 'dark'; } }
   function resolvedTheme(pref = getThemePref()) {
     return pref === 'dark' || (pref !== 'light' && themeMq && themeMq.matches) ? 'dark' : 'light';
   }
@@ -8468,28 +8629,6 @@
     if (themeMq.addEventListener) themeMq.addEventListener('change', onSystemTheme); else if (themeMq.addListener) themeMq.addListener(onSystemTheme);
   }
   applyTheme();
-
-  /* ═══════ ЦВЕТОВАЯ СХЕМА ═══════
-     Пять схем, у каждой светлый и тёмный вариант (его выбирает «Тема»); по умолчанию — Noir. Вместе со схемой
-     меняются значок вкладки, значок для «домашнего экрана» и манифест. */
-  const PALETTE_KEY = 'app.palette';
-  const PALETTES = { noir: { label: 'Noir', a: '#C9B37E', b: '#0A0A0A' }, prism: { label: 'Призма', a: '#7B4DFF', b: '#00B3C7' }, acid: { label: 'Кислота', a: '#C6FF1A', b: '#0A0B08' }, ember: { label: 'Огонь', a: '#FF5B2E', b: '#2A130B' }, frost: { label: 'Иней', a: '#9EDCFF', b: '#0A1A38' } };
-  function getPalette() { try { const p = localStorage.getItem(PALETTE_KEY); return PALETTES[p] ? p : 'noir'; } catch { return 'noir'; } }
-  function applyPalette() {
-    const p = getPalette();
-    document.documentElement.setAttribute('data-palette', p);
-    if (window.__paletteAssets) window.__paletteAssets(p);
-    applyTheme();     // цвет системной панели браузера — по фону схемы
-    Globe.tint();
-  }
-  function setPalette(p) {
-    if (!PALETTES[p]) return;
-    try { localStorage.setItem(PALETTE_KEY, p); } catch {}
-    document.documentElement.classList.add('theme-switching');
-    applyPalette();
-    setTimeout(() => document.documentElement.classList.remove('theme-switching'), 450);
-    document.querySelectorAll('[data-palette-pref]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.palettePref === p)));
-  }
 
   function syncSettingsUi() {
     document.querySelectorAll('.switch[data-setting]').forEach((el) => {
@@ -9803,53 +9942,71 @@
     if (led.length) {
       const free = led.filter((x) => { const m = matchBetween(x.id, gid); return !m || m.status === 'declined'; });
       if (!free.length) return { kind: 'skip', label: 'Дальше', stamp: 'Дальше', hint: 'С этой группой match больше невозможен' };
+      // в шапке выбрано, для какой группы ищем, — match предлагается от неё, без вопроса «от какой»
+      const pref = feedForGroup(), own = pref && free.find((x) => x.id === pref.id);
+      if (own) return { kind: 'match', from: [own], label: 'Предложить match', stamp: 'Match', hint: `Вправо — предложить match от «${ellipsize(own.name || 'Группа', 24)}»` };
       return { kind: 'match', from: free, label: 'Предложить match', stamp: 'Match',
         hint: free.length > 1 ? 'Вправо — предложить match от одной из ваших групп' : `Вправо — предложить match от «${ellipsize(free[0].name || 'Группа', 24)}»` };
     }
     return { kind: 'share', label: 'Показать своим', stamp: 'В чат', hint: 'Match предлагает лидер — вправо, чтобы показать группу в чате своей' };
   }
 
-  const FD_ICON_NOPE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
-  const FD_ICON_INFO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></svg>';
+  // Значки ленты — из набора Noir «Мягкие линии» (сетка 24, линия 1,6–1,7, круглые концы)
+  const FD_ICON_NOPE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+  const FD_ICON_RINGS = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="5.75"/><circle cx="15" cy="12" r="5.75"/></svg>';
+  const FD_ICON_CROWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 17.5 4.25 9l4.5 3.25L12 6.5l3.25 5.75L19.75 9 18.5 17.5Z"/></svg>';
   const FD_ICON_LIKE = {
-    match: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="5.6"/><circle cx="15" cy="12" r="5.6"/><path class="ic-fill" d="M12 7.27A5.6 5.6 0 0 1 12 16.73A5.6 5.6 0 0 1 12 7.27Z"/></svg>',
-    join: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-fill" d="M12 20.3c-4.6-3.4-8.3-6.6-8.3-10.4A4.4 4.4 0 0 1 12 7.4a4.4 4.4 0 0 1 8.3 2.5c0 3.8-3.7 7-8.3 10.4z"/></svg>',
-    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 11.6 19.5 4.5l-5 15.2-3.2-6.4z"/><path d="M11.3 13.3 19.5 4.5"/></svg>',
-    chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 17.06 4.2 18.6 4.42 13.39A7 7 0 1 1 7.5 17.06Z"/></svg>',
+    match: FD_ICON_RINGS,
+    join: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V4.5M8.25 8.25 12 4.5l3.75 3.75"/><path d="M6.5 11.5v5.25a3 3 0 0 0 3 3h5a3 3 0 0 0 3-3V11.5"/></svg>',
+    chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.25c4.56 0 7.75 3.02 7.75 7s-3.19 7-7.75 7c-1.02 0-1.98-.15-2.86-.43L5 19.5l1.02-3.37C4.93 14.92 4.25 13.2 4.25 11.25c0-3.98 3.19-7 7.75-7Z"/></svg>',
     skip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   };
   FD_ICON_LIKE.accept = FD_ICON_LIKE.match;
+  // Склонение по числу: plural(4, ['человек', 'человека', 'человек'])
+  function plural(n, forms) {
+    const m10 = n % 10, m100 = n % 100;
+    return forms[m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2];
+  }
 
   function feedCardKey(g) {
     return [g.id, g.name, (g.photo || '').length, g.wish, groupStatsText(g), feedIncomingMatch(g) ? 1 : 0,
       groupPeople(g).map((p) => (p.name || '') + ':' + (p.avatar || '').length).join(',')].join('|');
   }
-  // Карточка группы: фото во весь размер (нет фото — спектр и первая буква), название, сведения, желание и кто в ней.
-  // i — место в колоде: 0 — сверху, 1 и 2 — выглядывают снизу
+  /* Карточка группы — как в макете Noir: фото во весь размер (нет фото — тёплый градиент и первая буква), крупное
+     название, строка «4 человека · 26 лет · смешанный», желание в мягкой плашке «Хотим», лица участников и лидер с короной.
+     Сверху — «Хотят match с вами», пометка тестовой группы и пояснение, если смахнуть вправо можно только «дальше».
+     i — место в колоде: 0 — сверху, 1 и 2 — выглядывают снизу */
   function feedCardHtml(g, i, act) {
     const url = safeUrl(g.photo);
     const people = groupPeople(g);
     const st = groupStats.get(String(g.id));
     const comp = groupComposition(st);
-    const chips = [membersLabel(people.length),
-      st && st.avgAge != null ? `ср. возраст ${Math.round(st.avgAge)}` : '',
-      comp ? { male: 'парни', female: 'девушки', mixed: 'смешанный состав' }[comp] : ''].filter(Boolean);
+    const age = st && st.avgAge != null ? Math.round(st.avgAge) : null;
+    const chips = [`${people.length} ${plural(people.length, ['человек', 'человека', 'человек'])}`,
+      age != null ? `${age} ${plural(age, ['год', 'года', 'лет'])}` : '',
+      comp ? { male: 'парни', female: 'девушки', mixed: 'смешанный' }[comp] : ''].filter(Boolean);
     const incoming = feedIncomingMatch(g);
     const leader = people[0];
-    const cap = leader && leader.name && leader.name !== 'Лидер группы' ? `лидер — ${leader.name}` : '';
+    const leaderName = leader && leader.name && leader.name !== 'Лидер группы' ? leader.name : '';
+    const name = g.name || 'Группа';
     const top = i === 0;
+    const badges = [incoming ? `<span class="is-hot">${FD_ICON_RINGS}Хотят match с вами</span>` : '',
+      act && act.kind === 'skip' ? `<span class="is-note" title="${escapeHtml(act.hint)}">${escapeHtml(act.hint)}</span>` : '',
+      isBotGroup(g) ? '<span>Тестовая группа</span>' : ''].filter(Boolean);
     return `<article class="fd-card ${top ? 'is-top' : 'is-back' + i}" data-fd-group="${escapeHtml(g.id)}"${top
-        ? ` tabindex="0" role="button" aria-label="${escapeHtml('Группа «' + (g.name || 'Группа') + '» — открыть')}"` : ' aria-hidden="true"'}>
-        <div class="fd-photo${url ? ' has-photo' : ''}"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : escapeHtml(firstChar((g.name || '?').trim()).toUpperCase() || '?')}</div>
+        ? ` tabindex="0" role="button" aria-label="${escapeHtml('Группа «' + name + '» — открыть')}"` : ' aria-hidden="true"'}>
+        <div class="fd-photo${url ? ' has-photo' : ''}"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : escapeHtml(firstChar(name.trim()).toUpperCase() || '?')}</div>
         <div class="fd-shade"></div>
         ${act ? `<span class="fd-stamp is-like">${escapeHtml(act.stamp)}</span><span class="fd-stamp is-nope">Мимо</span>` : ''}
-        ${incoming || isBotGroup(g) ? `<div class="fd-badge">${incoming ? '<span class="is-hot">Хотят match с вами</span>' : ''}${isBotGroup(g) ? '<span>🤖 Тестовая группа</span>' : ''}</div>` : ''}
-        <button type="button" class="fd-more" data-fd-act="open" tabindex="-1" aria-label="Открыть группу" title="Открыть группу"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v6M12 7.5v.01"/></svg></button>
+        ${badges.length ? `<div class="fd-badge">${badges.join('')}</div>` : ''}
         <div class="fd-info">
-          <div class="fd-name">${escapeHtml(g.name || 'Группа')}</div>
-          <div class="fd-chips">${chips.map((c) => `<span>${escapeHtml(c)}</span>`).join('')}</div>
+          <div class="fd-head">
+            <div class="fd-name${Array.from(name).length > 12 ? ' is-long' : ''}">${escapeHtml(name)}</div>
+            <div class="fd-chips">${chips.map((c) => `<span>${escapeHtml(c)}</span>`).join('')}</div>
+          </div>
           ${g.wish ? `<div class="fd-wish"><span>${escapeHtml(g.wish)}</span></div>` : ''}
-          <div class="fd-people">${people.slice(0, 5).map((p) => avatarCircleHtml(p, 34)).join('')}${people.length > 5 ? `<span class="fd-more-people">+${people.length - 5}</span>` : ''}${cap ? `<span class="fd-people-cap">${escapeHtml(cap)}</span>` : ''}</div>
+          <div class="fd-people">${people.slice(0, 5).map((p) => avatarCircleHtml(p, 32)).join('')}${people.length > 5 ? `<span class="fd-more-people">+${people.length - 5}</span>` : ''}${leaderName ? `<span class="fd-people-cap">${FD_ICON_CROWN}<span>${escapeHtml(leaderName)}</span></span>` : ''}</div>
         </div>
       </article>`;
   }
@@ -9887,6 +10044,7 @@
   }
   function renderFeed() {
     if (!feedStage) return;
+    syncFeedChrome();
     if (document.body.classList.contains('auth-locked')) { feedDirty = true; return; }
     feedDirty = false;
     if (!currentUser) { feedStage.innerHTML = ''; feedShown = ''; return; }
@@ -9896,13 +10054,12 @@
       const top = queue.slice(0, 3), act = feedAction(top[0]);
       key = 'q§' + top.map(feedCardKey).join('¦') + '§' + act.kind + '§' + act.hint;
       if (key === feedShown) return;
+      // под колодой: круглое «Мимо» и широкая капсула главного действия с подписью; «подробнее» — нажатием на карточку
       html = `<div class="fd-deck">${top.map((g, i) => feedCardHtml(g, i, i ? null : act)).reverse().join('')}</div>
         <div class="fd-acts">
           <button type="button" class="fd-btn is-nope" data-fd-act="nope" aria-label="Мимо" title="Мимо">${FD_ICON_NOPE}</button>
-          <button type="button" class="fd-btn is-info" data-fd-act="open" aria-label="Открыть группу" title="Открыть группу">${FD_ICON_INFO}</button>
-          <button type="button" class="fd-btn is-like" data-fd-act="like" aria-label="${escapeHtml(act.label)}" title="${escapeHtml(act.label)}">${FD_ICON_LIKE[act.kind] || FD_ICON_LIKE.skip}<span class="fd-btn-label" aria-hidden="true">${escapeHtml(act.label)}</span></button>
-        </div>
-        <div class="fd-hint">${escapeHtml(act.hint)}</div>`;
+          <button type="button" class="fd-btn is-like" data-fd-act="like" title="${escapeHtml(act.hint)}">${FD_ICON_LIKE[act.kind] || FD_ICON_LIKE.skip}<span class="fd-btn-label">${escapeHtml(act.label)}</span></button>
+        </div>`;
     } else {
       const kind = !groupsLoaded ? 'loading' : !all.length ? 'none' : !passed.length ? 'filtered' : 'seen';
       key = 'e§' + kind;
@@ -10056,6 +10213,91 @@
     if (!groupById(gid)) { feedShown = ''; renderFeed(); return; }
     showApp('groups');
     showGroupDetailsScreen(gid, () => closeApp());
+  }
+
+  /* ── «Ищем для»: капсула слева в шапке ленты ──
+     Для какой из моих групп лента подбирает компанию: её фото и название. Выбор помнится на устройстве; лидер
+     нескольких групп предлагает match от выбранной (feedAction) — без вопроса «от какой». Нажатие: групп несколько —
+     выбрать другую, одна — открыть её, групп нет («ищем для себя», смахивание вправо просит принять в группу) —
+     создать свою. Тут же — фото профиля на вкладке «Профиль» нижней панели */
+  const FEED_FOR_KEY = 'feed.for.v1:';
+  const feedForBtn = document.getElementById('feed-for');
+  let feedChromeShown = '';
+  function feedForGroup() {
+    const mine = myGroups();
+    if (!mine.length) return null;
+    let id = null;
+    try { id = localStorage.getItem(FEED_FOR_KEY + currentUser.id); } catch {}
+    return mine.find((g) => String(g.id) === id) || mine.find((g) => g.ownerId === currentUser.id) || mine[0];
+  }
+  function syncFeedChrome() {
+    const mine = currentUser ? myGroups() : [];
+    const g = currentUser ? feedForGroup() : null;
+    const photo = safeUrl(g ? g.photo : profile.avatar);
+    const name = g ? g.name || 'Группа' : 'себя';
+    const letter = firstChar((g ? name : profile.name || '?').trim()).toUpperCase() || '?';
+    const me = safeUrl(profile.avatar);
+    const key = [g ? g.id : '', name, photo.length, photo.slice(-24), mine.length, letter, me.length, me.slice(-24)].join('|');
+    if (key === feedChromeShown) return;
+    feedChromeShown = key;
+    const ava = document.getElementById('ff-ava');
+    ava.style.backgroundImage = photo ? `url('${photo}')` : '';
+    ava.textContent = photo ? '' : letter;
+    document.getElementById('ff-name').textContent = name;
+    feedForBtn.classList.toggle('has-choice', mine.length > 1);
+    feedForBtn.setAttribute('aria-label', !g ? 'Ищем для себя — создать свою группу'
+      : `Ищем для группы «${name}» — ${mine.length > 1 ? 'выбрать другую' : 'открыть группу'}`);
+    // вкладка «Профиль»: фото вместо значка
+    const dockAva = document.getElementById('dock-ava');
+    dockAva.style.backgroundImage = me ? `url('${me}')` : '';
+    dockAva.closest('.dock-btn').classList.toggle('has-ava', !!me);
+  }
+  feedForBtn.addEventListener('click', async () => {
+    if (!currentUser) return;
+    const mine = myGroups(), g = feedForGroup();
+    if (!g) { showApp('groups'); showCreateGroupScreen(); return; }
+    if (mine.length === 1) { openFeedGroup(g.id); return; }
+    const pick = await pickFeedFor(mine, g);
+    if (!pick || !currentUser) return;
+    try { localStorage.setItem(FEED_FOR_KEY + currentUser.id, String(pick.id)); } catch {}
+    feedShown = '';
+    renderFeed();
+  });
+  // Список моих групп: выбранная отмечена, нажатие — выбрать
+  function pickFeedFor(list, current) {
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'modal-backdrop';
+      back.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ff-pick-title">
+          <h3 class="modal-title" id="ff-pick-title">Ищем для</h3>
+          <p class="modal-text">Для какой группы подбирать компанию в ленте</p>
+          <ul class="fwd-list">${list.map((x, i) => {
+            const url = safeUrl(x.photo), on = x.id === current.id;
+            return `
+            <li class="person-card is-link${on ? ' is-on' : ''}" data-ff-pick="${i}" role="button" tabindex="0" aria-current="${on}">
+              <span class="group-avatar" style="width:40px;height:40px;font-size:16px;${url ? `background-image:url('${url}')` : ''}">${url ? '' : escapeHtml(firstChar(x.name || '?').toUpperCase())}</span>
+              <div class="person-main"><div class="person-name">${escapeHtml(x.name || 'Группа')}</div><div class="person-handle">${escapeHtml(membersLabel(groupPeople(x).length))}${x.ownerId === currentUser.id ? ' · вы лидер' : ''}</div></div>
+              ${on ? '<svg class="ff-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2L18.5 8"/></svg>' : ''}
+            </li>`;
+          }).join('')}</ul>
+          <div class="modal-actions"><button type="button" class="btn" data-cancel>Отмена</button></div>
+        </div>`;
+      document.body.appendChild(back);
+      const done = (v) => { back.remove(); resolve(v); };
+      back.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-ff-pick]');
+        if (row) { done(list[Number(row.dataset.ffPick)]); return; }
+        if (e.target === back || e.target.closest('[data-cancel]')) done(null);
+      });
+      back.addEventListener('keydown', (e) => {
+        const row = e.target.closest && e.target.closest('[data-ff-pick]');
+        if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); done(list[Number(row.dataset.ffPick)]); }
+        if (e.key === 'Escape') done(null);
+      });
+      const first = back.querySelector('[data-ff-pick]');
+      if (first) first.focus({ preventScroll: true });
+    });
   }
 
   // ── Перетаскивание верхней карточки: пальцем или мышью ──
@@ -13111,9 +13353,10 @@
   }
   /* ── Прослушано или нет ──
      Чужое голосовое, которое ещё не включали, горит ярко (.is-unheard); после первого нажатия «играть» (или когда
-     до него дошла очередь) — обычное. Что прослушано, помнит устройство, отдельно для каждого аккаунта.
-     Голосовые, пришедшие до первого запуска этой версии, считаются прослушанными — иначе после обновления
-     загорелась бы вся старая переписка */
+     до него дошла очередь) — обычное. Что прослушано, помнит устройство, отдельно для каждого аккаунта, и таблица
+     voice_listens (supabase_voice_listens.sql) — тогда прослушанное на телефоне не горит и на компьютере.
+     Голосовые, пришедшие до первого запуска этой версии на устройстве, считаются прослушанными — иначе после
+     обновления загорелась бы вся старая переписка */
   const HEARD_MAX = 3000;
   let heardVoices = null;   // { uid, base, ids }
   const heardStoreKey = (uid) => 'chat.heard.v1:' + uid;
@@ -13143,8 +13386,68 @@
     box.classList.remove('is-unheard');
     const msgEl = box.closest('.chat-msg[data-msg-id]');
     if (!msgEl) return;
-    heardStore().ids.add(heardKey(msgEl.dataset.msgId));
+    const key = heardKey(msgEl.dataset.msgId);
+    heardStore().ids.add(key);
     saveHeard();
+    pushHeard([key]);
+  }
+
+  /* Прослушанное — на сервер и с сервера. Ключ «вид чата:номер сообщения» — как в heardStore.
+     Первая загрузка на устройстве заодно отправляет на сервер то, что прослушали здесь раньше, до таблицы */
+  let heardSynced = '', heardMissing = false, heardLoadedAt = 0;
+  function heardError(error) {
+    if (isMissingTableError(error) || /schema cache|does not exist|could not find/i.test(error.message || '')) {
+      if (!heardMissing) console.warn('[voice heard] нет таблицы — выполните supabase_voice_listens.sql в Supabase');
+      heardMissing = true;
+    } else console.warn('[voice heard]', error.message);
+  }
+  function pushHeard(keys) {
+    if (heardMissing || !currentUser || !keys.length) return Promise.resolve();
+    const rows = keys.map((k) => { const i = k.indexOf(':'); return { user_id: currentUser.id, chat_kind: k.slice(0, i), msg_id: k.slice(i + 1) }; })
+      .filter((r) => r.chat_kind && r.msg_id);
+    return supabaseClient.from('voice_listens').upsert(rows, { onConflict: 'user_id,chat_kind,msg_id', ignoreDuplicates: true })
+      .then(({ error }) => { if (error) heardError(error); }, (err) => console.warn('[voice heard] save:', err));
+  }
+  async function loadHeardVoices() {
+    if (heardMissing || !currentUser) return;
+    const uid = String(currentUser.id);
+    heardLoadedAt = Date.now();
+    try {
+      const { data, error } = await supabaseClient.from('voice_listens').select('chat_kind, msg_id')
+        .eq('user_id', uid).order('heard_at', { ascending: false }).limit(HEARD_MAX);
+      if (error) { heardError(error); return; }
+      if (!currentUser || String(currentUser.id) !== uid) return;
+      const h = heardStore(), server = new Set((data || []).map((r) => r.chat_kind + ':' + r.msg_id));
+      let added = false;
+      for (const k of server) if (!h.ids.has(k)) { h.ids.add(k); added = true; }
+      if (added) { saveHeard(); syncHeardMarks(); }
+      if (heardSynced !== uid) {
+        heardSynced = uid;
+        const local = [...h.ids].filter((k) => !server.has(k));
+        for (let i = 0; i < local.length; i += 500) await pushHeard(local.slice(i, i + 500));
+      }
+    } catch (err) { console.warn('[voice heard] load:', err); }
+  }
+  // Вернулись в приложение (телефон мог «усыпить» realtime) — сверяемся с сервером, не чаще раза в минуту
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentUser && Date.now() - heardLoadedAt > 60 * 1000) loadHeardVoices();
+  });
+  // Realtime: голосовое прослушали на другом моём устройстве
+  function onHeardRow(r) {
+    if (!currentUser || !r || String(r.user_id) !== String(currentUser.id)) return;
+    const h = heardStore(), key = r.chat_kind + ':' + r.msg_id;
+    if (h.ids.has(key)) return;
+    h.ids.add(key);
+    saveHeard();
+    syncHeardMarks();
+  }
+  // В открытом чате гаснут голосовые, которые уже прослушаны
+  function syncHeardMarks() {
+    if (!chat) return;
+    const h = heardStore();
+    winBody.querySelectorAll('.chat-msg[data-msg-id] .chat-voice.is-unheard').forEach((box) => {
+      if (h.ids.has(heardKey(box.closest('.chat-msg').dataset.msgId))) box.classList.remove('is-unheard');
+    });
   }
   function seekVoice(box, clientX) {
     const a = box.querySelector('audio'), wave = box.querySelector('.cv-wave'), dur = voiceDuration(box);
@@ -14362,18 +14665,15 @@
           <div class="theme-head"><span class="row-name">Тема</span><span class="row-sub">Оформление приложения</span></div>
           <div class="seg theme-seg">${themeOpt('auto', 'Авто', auto)}${themeOpt('light', 'Светлая', sun)}${themeOpt('dark', 'Тёмная', moon)}</div>
         </div>
-        <div class="theme-block">
-          <div class="theme-head"><span class="row-name">Цвета</span><span class="row-sub">Схема оформления и значок приложения</span></div>
-          <div class="seg pal-seg">${Object.entries(PALETTES).map(([key, p]) => `
-            <button type="button" class="seg-opt pal-opt" data-palette-pref="${key}" aria-pressed="${getPalette() === key}">
-              <span class="pal-dot" style="background:linear-gradient(135deg, ${p.a} 0 50%, ${p.b} 50% 100%)"></span><span>${p.label}</span>
-            </button>`).join('')}</div>
-        </div>
         <ul class="rows">
           <li class="row">
             <div class="row-main"><div class="row-name">Уведомления</div><div class="row-sub">Сообщения и приглашения — на это устройство</div></div>
             <button class="switch" type="button" role="switch" data-setting="notifications" aria-checked="${pushOn()}"></button>
           </li>
+          ${installEvent ? `<li class="row" data-action="install-app" role="button" tabindex="0">
+            <div class="row-main"><div class="row-name">Установить приложение</div><div class="row-sub">Значок GroupIS на главном экране</div></div>
+            <span class="chev">›</span>
+          </li>` : ''}
           <li class="row" data-action="open-tour" role="button" tabindex="0">
             <div class="row-main"><div class="row-name">Как пользоваться</div><div class="row-sub">Коротко о ленте, группах, match и желаниях</div></div>
             <span class="chev">›</span>
@@ -14740,10 +15040,12 @@
     animateScreen(navDir === 'back' ? 'back' : 'fwd');
     syncWinClear();
   }
-  // «Метла» в шапке — только на самом списке уведомлений и только когда есть что очищать
+  // «Метла» в шапке — только на самом списке уведомлений и только когда есть что очищать.
+  // is-sub — открыт вложенный экран (есть куда «назад»): у корневого экрана раздела на телефоне крупный заголовок без стрелки
   function syncWinClear() {
     const btn = document.getElementById('win-clear');
     if (btn) btn.hidden = !(openApp === 'notifications' && !currentBackHandler && shownNotifications().length);
+    win.classList.toggle('is-sub', !!currentBackHandler);
   }
   function goBack() {
     if (typeof currentBackHandler === 'function') {
@@ -15421,6 +15723,7 @@
     const { error } = await supabaseClient.from('profiles').update({ avatar: thumb }).eq('id', currentUser.id);
     if (error) throw error;
     profile.avatar = thumb;
+    syncFeedChrome();
   }
   // Миниатюра для чатов и списков — выбранная область главного фото
   async function syncMyAvatar() {
@@ -16040,6 +16343,7 @@
         }
         // Локальный профиль меняем только после успешного сохранения
         profile = { ...profile, name: newName, handle: '@' + uname, bio: newBio, avatar: newAvatar, gender: editGender, age: editAge };
+        syncFeedChrome();
         loadGroupStats(); // мой пол и возраст влияют на сводку моих групп
         showProfileScreen();
       });
@@ -16149,8 +16453,6 @@
     // ── тема оформления ──
     const themeBtn = e.target.closest('[data-theme-pref]');
     if (themeBtn) { setThemePref(themeBtn.dataset.themePref); return; }
-    const palBtn = e.target.closest('[data-palette-pref]');
-    if (palBtn) { setPalette(palBtn.dataset.palettePref); return; }
     // ── фильтры групп ──
     if (e.target.closest('[data-flt-age-toggle]')) {
       e.stopImmediatePropagation(); // общий обработчик .switch не должен переключить его второй раз
@@ -16421,6 +16723,7 @@
     if (e.target.closest('[data-action="back-to-groups"]')) { goBack(); return; }
     if (e.target.closest('[data-action="open-rules"]')) { showRulesScreen(); return; }
     if (e.target.closest('[data-action="open-tour"]')) { openTour(); return; }
+    if (e.target.closest('[data-action="install-app"]')) { installBtn.click(); return; }
     if (e.target.closest('[data-action="open-support"]')) { showSupportChatScreen(); return; }
     if (e.target.closest('[data-action="logout"]')) {
       if (await confirmModal({ title: 'Выйти из аккаунта?', text: 'На этом устройстве нужно будет войти заново.', confirmLabel: 'Выйти' })) logout();
@@ -16913,7 +17216,7 @@
         if (row) { applyUserToProfileFromRow(row, currentUser.email); KV.set('profile:' + uid, row); }
         await Promise.all([
           loadHiddenMessages(), loadPostsFromDB(), loadWishesFromDB(), loadGroupsFromDB(),
-          loadNotificationsFromDB(), loadFriendsFromDB(), loadGroupStats(),
+          loadNotificationsFromDB(), loadFriendsFromDB(), loadGroupStats(), loadHeardVoices(),
         ]);
         if (!same()) return;
         subscribeRealtime();
