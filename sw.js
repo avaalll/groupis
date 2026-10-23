@@ -6,18 +6,14 @@
      качал бы их, и первый запуск после обновления тормозил. Поменяли один из этих файлов — увеличьте
      STATIC_VERSION. */
 
-const VERSION = 'v5.3.0';
+const VERSION = 'v6.0.0';
 const CACHE = `groupis-${VERSION}`;
-const STATIC_VERSION = 's6';   // s6: без 3D-аватаров и снимков знакомства — прежний кеш с ними удаляется
+const STATIC_VERSION = 's7';   // s7: одна схема (Noir) — её значки лежат прямо в icons/, значки остальных схем удалены
 const STATIC_CACHE = `groupis-static-${STATIC_VERSION}`;
 
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
-  './manifest-noir.webmanifest',
-  './manifest-acid.webmanifest',
-  './manifest-ember.webmanifest',
-  './manifest-frost.webmanifest',
 ];
 
 const STATIC_FILES = [
@@ -30,31 +26,6 @@ const STATIC_FILES = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
-  // иконки остальных цветовых схем (Noir — схема по умолчанию)
-  './icons/noir/logo.svg',
-  './icons/noir/wordmark.svg',
-  './icons/noir/icon-192.png',
-  './icons/noir/icon-512.png',
-  './icons/noir/icon-maskable-512.png',
-  './icons/noir/apple-touch-icon.png',
-  './icons/acid/logo.svg',
-  './icons/acid/wordmark.svg',
-  './icons/acid/icon-192.png',
-  './icons/acid/icon-512.png',
-  './icons/acid/icon-maskable-512.png',
-  './icons/acid/apple-touch-icon.png',
-  './icons/ember/logo.svg',
-  './icons/ember/wordmark.svg',
-  './icons/ember/icon-192.png',
-  './icons/ember/icon-512.png',
-  './icons/ember/icon-maskable-512.png',
-  './icons/ember/apple-touch-icon.png',
-  './icons/frost/logo.svg',
-  './icons/frost/wordmark.svg',
-  './icons/frost/icon-192.png',
-  './icons/frost/icon-512.png',
-  './icons/frost/icon-maskable-512.png',
-  './icons/frost/apple-touch-icon.png',
 ];
 const STATIC_PATHS = new Set(STATIC_FILES.map((p) => new URL(p, self.location).pathname));
 
@@ -260,8 +231,8 @@ self.addEventListener('push', (event) => {
     if (!ios && onScreen) return;
     await self.registration.showNotification(data.title || 'GroupIS', {
       body: data.body || '',
-      icon: './icons/noir/icon-192.png',
-      badge: './icons/noir/icon-192.png',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
       tag: data.tag || undefined,
       renotify: !!data.tag,
       data: { open: data.open || '', chat: data.chat || '' },
