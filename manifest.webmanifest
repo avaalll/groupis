@@ -1,0 +1,54 @@
+{
+  "id": "./",
+  "name": "GroupIS",
+  "short_name": "GroupIS",
+  "description": "GroupIS — лента групп, друзья и мессенджер",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "categories": [
+    "social"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Сообщения",
+      "url": "./?open=messenger"
+    },
+    {
+      "name": "Профиль",
+      "url": "./?open=profile"
+    },
+    {
+      "name": "Настройки",
+      "url": "./?open=settings"
+    }
+  ]
+}
